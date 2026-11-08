@@ -17,7 +17,6 @@ export function YoutubePackage({ id }: { id: string }) {
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [thumbs, setThumbs] = useState<{ file: string; t: number }[]>([]);
-  const [exportFiles, setExportFiles] = useState<string[]>([]);
   const [showPaste, setShowPaste] = useState(false);
 
   useEffect(() => {
@@ -116,25 +115,9 @@ export function YoutubePackage({ id }: { id: string }) {
           </div>
           <p className="small muted">Fertige Thumbnails mit Text in deinem Stil kommen im nächsten Meilenstein.</p>
 
-          <h3 style={{ marginTop: 24 }}>Schnittliste für DaVinci</h3>
-          <p className="small muted">
-            Zum Feinschneiden in DaVinci Resolve: Datei → Importieren → Timeline → die .fcpxml-Datei wählen. Die Schnitte verweisen auf das Original-Video.
-            (CapCut kann das leider nicht lesen, dafür das gerenderte MP4 + SRT nehmen.)
+          <p className="small muted" style={{ marginTop: 16 }}>
+            Für CapCut: das gerenderte MP4 und die Untertitel-Datei (.srt) aus dem Export-Ordner nehmen.
           </p>
-          <button className="btn ghost" disabled={!!busy} onClick={() => act("export", async () => setExportFiles((await api.exportCutlist(id)).files))}>
-            FCPXML + EDL erstellen
-          </button>
-          {!!exportFiles.length && (
-            <ul className="exports small">
-              {exportFiles.map((f) => (
-                <li key={f}>
-                  <a href={api.exportUrl(id, f)} download>
-                    ⬇ {f}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          )}
         </div>
       </div>
     </section>

@@ -1,8 +1,4 @@
-import xml.etree.ElementTree as ET
-from fractions import Fraction
-from pathlib import Path
-
-from editor_app import export, meta
+from editor_app import meta
 
 
 def test_meta_parse_rules():
@@ -31,15 +27,3 @@ def test_meta_parse_rejects_garbage():
 def test_prompt_contains_guardrails_and_times():
     p = meta.build_prompt([(0.0, "Hallo."), (75.0, "Stress ist ein Signal.")], "de", 120)
     assert "keine Heilversprechen" in p and "[1:15] Stress ist ein Signal." in p and "Genau 3 Titel" in p
-
-
-def test_fcpxml_and_edl(tmp_path):
-    info = {"width": 1080, "height": 1920, "duration": 20.0, "fps": 29.97, "fps_rational": "30000/1001"}
-    fps = Fraction(30000, 1001)
-    frames = [(0, 90), (150, 300)]
-    xml = export.fcpxml("Test", Path(tmp_path / "original.mp4"), info, frames, fps)
-    root = ET.fromstring(xml.split("\n", 2)[2])
-    clips = root.findall(".//asset-clip")
-    assert len(clips) == 2 and clips[1].get("offset") == "3003/1000s" and clips[1].get("start") == "1001/200s"
-    edl = export.edl("Test", "original.mp4", frames, fps)
-    assert "DROP FRAME" in edl and "00:00:05;00 00:00:10;00 00:00:03;00 00:00:08;00" in edl

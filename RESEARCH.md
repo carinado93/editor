@@ -26,7 +26,7 @@ Unsere Lösung (drei Ebenen, damit nichts verloren geht):
 2. **Lücken-Prüfung:** Wenn zwischen zwei Wörtern Ton zu hören ist, aber kein Wort erkannt wurde, ist das sehr wahrscheinlich ein Füllwort oder Atmer. Wird als **"Vorschlag"** markiert, nicht automatisch geschnitten.
 3. Pro Füllwort ein Schalter (z. B. "also" bleibt an, weil es oft echt gemeint ist).
 
-**Empfehlung:** faster-whisper (+ optional WhisperX) als Basis, Schnitt-Logik selbst bauen (auf Wort-Ebene, damit die Review-Ansicht funktioniert), Export-Formate (FCPXML/EDL) nach dem Vorbild von auto-editor.
+**Empfehlung:** faster-whisper (+ optional WhisperX) als Basis, Schnitt-Logik selbst bauen (auf Wort-Ebene, damit die Review-Ansicht funktioniert), (Update 8.11.: kein DaVinci-/Premiere-Export, Carina nutzt nur CapCut → MP4 + SRT.)
 
 Quellen: [auto-editor Überblick](https://knightli.com/en/2026/04/23/auto-editor-auto-cut-silence-premiere-resolve-workflow/), [auto-editor auf PyPI](https://pypi.org/project/auto-editor/21.39.1), [jumpcutter](https://alternativeto.net/software/carykh-jumpcutter/about), [av_slice](https://pypi.org/project/av-slice), [CrisperWhisper (Lizenz, Füllwörter)](https://huggingface.co/nyrahealth/faster_CrisperWhisper), [Studie: Whisper entfernt Füllwörter](https://aphasia.talkbank.org/publications/2024/Wagner24.pdf), [WhisperX](https://www.sourcepulse.org/projects/1473319), [Smart Cut](https://github.com/qkirara/Smart-Cut), [Cadence Lab](https://cadence-lab-marketing-site.pages.dev/)
 

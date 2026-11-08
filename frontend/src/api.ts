@@ -187,7 +187,6 @@ export const api = {
     }),
   thumbnails: (id: string) => call<{ thumbnails: { file: string; t: number }[] }>(`/api/projects/${id}/thumbnails`, { method: "POST" }),
   thumbnailUrl: (id: string, file: string) => `/api/projects/${id}/thumbnails/${encodeURIComponent(file)}`,
-  exportCutlist: (id: string) => call<{ files: string[] }>(`/api/projects/${id}/export-schnittliste`, { method: "POST" }),
   render: (id: string, quality: string) => call<Project>(`/api/projects/${id}/render`, json({ quality })),
   openFolder: (id: string) => call<{ ok: boolean }>(`/api/projects/${id}/open-folder`, { method: "POST" }),
   exportUrl: (id: string, file: string) => `/api/projects/${id}/export/${encodeURIComponent(file)}`,

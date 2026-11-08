@@ -90,7 +90,6 @@
   bisherigen. Beispiele erhalten (8.11.), Stil festgehalten in `docs/THUMBNAIL_STIL.md`.
 
 - [x] **Meilenstein 4** (YouTube-Paket)
-  - `export.py`: FCPXML 1.9 (DaVinci/Final Cut) + EDL CMX3600 (Drop-Frame bei 29,97/59,94), verweisen aufs Original
   - `meta.py`: Auftrag mit Leitplanken (Prävention, keine Heilversprechen, Hinweis „keine Diagnose oder Therapie“),
     Zeiten im geschnittenen Video; Ollama oder claude.ai-Kopierweg; Prüfung: 3 Titel, Kapitel ab 0:00 mit ≥ 10 s
     Abstand, Warnung bei Heilversprechen-Wörtern; Beschreibung + Kapitel + Hashtags zum Kopieren
@@ -103,6 +102,8 @@
 M4b Thumbnail-/Cover-Generator (Beispiele da) oder M5 Reel-Modus – Carina entscheidet die Reihenfolge.
 
 ### Entscheidungen
+- 8.11.: **Keine Programme, die Carina nicht schon hat** (kein DaVinci). DaVinci-Export (FCPXML/EDL) wieder entfernt.
+  Nachbearbeitung nur in CapCut (MP4 + SRT). Vorhanden: CapCut, Canva, Ollama, claude.ai-Abo, Metricool.
 - 8.11.: **So wenig bezahlen wie möglich.** Keine kostenpflichtigen Dienste einbauen.
 - 8.11.: **Ollama ist installiert (Modell `gemma3:12b`).** Ollama automatisch für einfache Texte (Kapitel, Tags,
   Beschreibung, Caption-Entwurf, Retake-Zweitmeinung); für Hooks und Reel-Skripte zusätzlich „in claude.ai

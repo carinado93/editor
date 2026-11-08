@@ -26,7 +26,7 @@ Browser (dein Chrome/Edge)            Dein PC im Hintergrund
 - Python, weil Whisper, MediaPipe und DeepFilterNet nur dort richtig gut laufen.
 - React im Browser, weil du dann nichts installieren musst außer dem Start-Skript, und es später leicht online geht.
 - Remotion für Reels, weil deine Animations-Bausteine Web-Optik sind (Schriften, Schatten, Karten) und es für dich kostenlos ist.
-- Schnittliste als JSON, damit alles nicht-destruktiv ist und wir FCPXML/EDL für DaVinci/CapCut daraus machen können.
+- Schnittliste als JSON, damit alles nicht-destruktiv ist.
 
 ## Meilensteine
 
@@ -60,7 +60,7 @@ Nach jedem Meilenstein bekommst du: **Screenshots der App + Vorschau-Bilder/Vide
 - **Demo:** Blick-Markierungen im Transkript, Frames mit Zoom und Untertiteln
 
 ### M4 – Exporte & YouTube-Extras (ca. 1 Sitzung)
-- Export MP4 + SRT + FCPXML (DaVinci, Final Cut) + EDL. CapCut kann FCPXML nicht zuverlässig lesen → für CapCut: MP4 mit Schnitten + SRT (ich teste, was geht, und sage es dir ehrlich)
+- Export MP4 + SRT (für CapCut). Keine Schnittlisten für DaVinci & Co. (Carina nutzt nur Programme, die sie hat.)
 - Kapitel mit Zeitstempeln, 3 Titel, Beschreibung, Tags (Claude, mit deinen Leitplanken)
 - Thumbnail-Vorschläge: Frames mit offenen Augen, Blick in Kamera, Lächeln, scharf
 - **Demo:** Export-Ordner, Beispiel-Texte, 6 Thumbnail-Kandidaten

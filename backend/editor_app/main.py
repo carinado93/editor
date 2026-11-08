@@ -331,18 +331,6 @@ def _meta_file(pid: str):
     return projects.path(pid, "youtube_texte.json")
 
 
-@app.post("/api/projects/{pid}/export-schnittliste")
-def export_cutlist(pid: str):
-    from . import export
-
-    p = projects.load(pid)
-    _, v, _ = _cut_context(pid)
-    stem = render.safe_name(p["name"])
-    files = export.write_all(p["name"], projects.path(pid, p["original_file"]), p["info"], v["evaluation"]["keep"],
-                             projects.path(pid, "export"), stem)
-    return {"files": files}
-
-
 @app.get("/api/projects/{pid}/youtube-texte")
 def get_meta(pid: str):
     from . import meta
