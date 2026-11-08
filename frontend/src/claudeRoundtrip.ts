@@ -63,10 +63,12 @@ export function useClaudeRoundtrip(keys: string[], onAnswer: (text: string) => P
     const encoded = encodeURIComponent(prompt);
     // Sehr lange Adressen lehnen Browser/claude.ai ab → dann ohne Auftrag in der Adresse (Strg+V aus der Zwischenablage)
     const url = encoded.length < 7000 ? "https://claude.ai/new?q=" + encoded : "https://claude.ai/new";
-    window.open(url, "_blank");
+    // ZUERST kopieren (solange die App das aktive Fenster ist), DANN claude.ai öffnen –
+    // sonst verbietet der Browser das Kopieren.
     navigator.clipboard.writeText(prompt).catch(() => {
-      /* Zwischenablage nicht erlaubt: Auftrag steht im Feld bzw. unter "Auftrag anzeigen" */
+      setHint("Kopieren hat der Browser nicht erlaubt – bitte unten „Auftrag kopieren“ klicken.");
     });
+    window.open(url, "_blank");
     setWaiting(true);
     setHint(encoded.length < 7000 ? null : "Der Auftrag ist lang – bitte in claude.ai mit Strg+V einfügen.");
   }, []);
@@ -79,15 +81,21 @@ export function useClaudeRoundtrip(keys: string[], onAnswer: (text: string) => P
     setHint("Auftrag wird vorbereitet …");
     const prompt = await getPrompt();
     lastPrompt.current = prompt;
-    try {
-      await navigator.clipboard.writeText(prompt);
-      setHint("Bitte in claude.ai ins Eingabefeld klicken, Strg+V drücken und Enter.");
-    } catch {
-      setHint("Bitte unten „Auftrag anzeigen“ öffnen, alles markieren (Strg+A), kopieren (Strg+C) und in claude.ai einfügen.");
-    }
+    // claude.ai hat jetzt den Fokus → der Browser erlaubt kein Kopieren. Deshalb: Knopf "Auftrag kopieren" in der App.
+    setHint("Bitte unten auf „Auftrag kopieren“ klicken, dann in claude.ai Strg+V und Enter.");
     return prompt;
   }, []);
 
+  const copyAgain = useCallback(async (prompt: string) => {
+    lastPrompt.current = prompt;
+    try {
+      await navigator.clipboard.writeText(prompt);
+      setHint("Auftrag kopiert ✓ – jetzt in claude.ai Strg+V und Enter.");
+    } catch {
+      setHint("Kopieren ging nicht – bitte „Auftrag anzeigen“ öffnen, Strg+A und Strg+C.");
+    }
+  }, []);
+
   const cancel = useCallback(() => setWaiting(false), []);
-  return { waiting, hint, start, startLate, cancel, check };
+  return { waiting, hint, start, startLate, copyAgain, cancel, check };
 }

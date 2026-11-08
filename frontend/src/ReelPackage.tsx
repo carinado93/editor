@@ -208,7 +208,7 @@ export function ReelPackage({
           </div>
           <Status busy={busy} err={err} msg={msg} />
           {claude.waiting && (
-            <ClaudeWaiting hint={claude.hint} promptText={promptText} onCancel={claude.cancel}
+            <ClaudeWaiting hint={claude.hint} promptText={promptText} onCancel={claude.cancel} onCopy={() => claude.copyAgain(promptText)}
               onPaste={(text) => act("import", async () => { await onClaudeAnswer(text); claude.cancel(); })} />
           )}
           {!!texts?.scenes?.length && (
@@ -283,8 +283,8 @@ export function Status({ busy, err, msg }: { busy: string | null; err: string | 
 }
 
 /** Anleitung, solange die App auf die Antwort von claude.ai wartet (mit Einfügen als Notlösung). */
-export function ClaudeWaiting({ hint, promptText, onCancel, onPaste }: {
-  hint: string | null; promptText: string; onCancel: () => void; onPaste: (text: string) => void;
+export function ClaudeWaiting({ hint, promptText, onCancel, onPaste, onCopy }: {
+  hint: string | null; promptText: string; onCancel: () => void; onPaste: (text: string) => void; onCopy: () => void;
 }) {
   const [paste, setPaste] = useState("");
   return (
@@ -295,7 +295,10 @@ export function ClaudeWaiting({ hint, promptText, onCancel, onPaste }: {
         Die App übernimmt die Antwort dann von selbst.
       </p>
       <p className="small muted">⏳ Warte auf die Antwort von Claude …</p>
-      {hint && <p className="small error-text">{hint}</p>}
+      {hint && <p className="small"><strong>{hint}</strong></p>}
+      <button className="btn ghost" disabled={!promptText} onClick={onCopy}>
+        Auftrag kopieren
+      </button>
       <details className="small">
         <summary>Klappt nicht? Antwort hier einfügen</summary>
         <textarea rows={4} value={paste} onChange={(e) => setPaste(e.target.value)} placeholder='{"…": … }' />

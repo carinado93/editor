@@ -103,7 +103,7 @@ export function YoutubePackage({ id }: { id: string }) {
           </div>
           <Status busy={busy} err={err} msg={msg} />
           {claude.waiting && (
-            <ClaudeWaiting hint={claude.hint} promptText={prompt} onCancel={claude.cancel}
+            <ClaudeWaiting hint={claude.hint} promptText={prompt} onCancel={claude.cancel} onCopy={() => claude.copyAgain(prompt)}
               onPaste={(text) => act("import", async () => { await onClaudeAnswer(text); claude.cancel(); })} />
           )}
           {meta && (
