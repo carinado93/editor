@@ -71,6 +71,23 @@ export function useClaudeRoundtrip(keys: string[], onAnswer: (text: string) => P
     setHint(encoded.length < 7000 ? null : "Der Auftrag ist lang – bitte in claude.ai mit Strg+V einfügen.");
   }, []);
 
+  /** Falls der Auftrag noch nicht fertig ist: claude.ai trotzdem sofort öffnen (ohne leeren Tab),
+   * den Auftrag danach in die Zwischenablage legen → in claude.ai mit Strg+V einfügen. */
+  const startLate = useCallback(async (getPrompt: () => Promise<string>) => {
+    window.open("https://claude.ai/new", "_blank");
+    setWaiting(true);
+    setHint("Auftrag wird vorbereitet …");
+    const prompt = await getPrompt();
+    lastPrompt.current = prompt;
+    try {
+      await navigator.clipboard.writeText(prompt);
+      setHint("Bitte in claude.ai ins Eingabefeld klicken, Strg+V drücken und Enter.");
+    } catch {
+      setHint("Bitte unten „Auftrag anzeigen“ öffnen, alles markieren (Strg+A), kopieren (Strg+C) und in claude.ai einfügen.");
+    }
+    return prompt;
+  }, []);
+
   const cancel = useCallback(() => setWaiting(false), []);
-  return { waiting, hint, start, cancel, check };
+  return { waiting, hint, start, startLate, cancel, check };
 }

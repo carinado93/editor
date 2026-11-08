@@ -44,7 +44,18 @@ export function ReelPackage({
     }
     let alive = true;
     const t = setTimeout(() => {
-      api.reelPrompt(id, idea, lang).then((r) => alive && setPromptText(r.prompt)).catch(() => alive && setPromptText(""));
+      api
+        .reelPrompt(id, idea, lang)
+        .then((r) => {
+          if (!alive) return;
+          setPromptText(r.prompt);
+          setErr((e) => (e && e.startsWith("Auftrag konnte nicht") ? null : e));
+        })
+        .catch((e) => {
+          if (!alive) return;
+          setPromptText("");
+          setErr("Auftrag konnte nicht vorbereitet werden: " + (e as Error).message);
+        });
     }, 400);
     return () => {
       alive = false;
@@ -177,8 +188,20 @@ export function ReelPackage({
               if (silent && !idea.trim()) { setErr("Bitte zuerst oben deine Idee eintragen (in diesem Clip wird nicht gesprochen)."); return; }
               setErr(null);
               setMsg(null);
-              if (!promptText) { setErr("Der Auftrag wird noch vorbereitet – bitte in 1–2 Sekunden nochmal klicken."); return; }
-              claude.start(promptText);
+              if (promptText) {
+                claude.start(promptText);
+              } else {
+                claude
+                  .startLate(async () => {
+                    const r = await api.reelPrompt(id, idea, lang);
+                    setPromptText(r.prompt);
+                    return r.prompt;
+                  })
+                  .catch((e) => {
+                    claude.cancel();
+                    setErr((e as Error).message);
+                  });
+              }
             }}>
               Mit Claude erstellen (claude.ai)
             </button>
