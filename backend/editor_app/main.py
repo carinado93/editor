@@ -171,6 +171,20 @@ class SettingsBody(BaseModel):
     fillers: dict[str, bool] | None = None
 
 
+class RenderOptionsBody(BaseModel):
+    zoom: bool | None = None
+    loudness: bool | None = None
+    denoise: bool | None = None
+    subtitles: str | None = None
+    karaoke: bool | None = None
+
+
+class BuzzBody(BaseModel):
+    start: int
+    end: int
+    on: bool
+
+
 class RenderBody(BaseModel):
     quality: str = "1080"
 
@@ -214,6 +228,33 @@ def cut_reset(pid: str):
 @app.post("/api/projects/{pid}/cuts/undo")
 def cut_undo(pid: str):
     return cutstore.undo(pid)
+
+
+@app.put("/api/projects/{pid}/cuts/render-options")
+def render_options(pid: str, body: RenderOptionsBody):
+    return cutstore.set_render_options(pid, {k: v for k, v in body.model_dump().items() if v is not None})
+
+
+@app.post("/api/projects/{pid}/cuts/buzzword")
+def buzzword(pid: str, body: BuzzBody):
+    return cutstore.set_buzzword(pid, body.start, body.end, body.on)
+
+
+@app.post("/api/projects/{pid}/cuts/buzzwords-suggest")
+def buzzwords_suggest(pid: str):
+    return cutstore.suggest_buzzwords(pid)
+
+
+@app.get("/api/projects/{pid}/blick")
+def get_gaze_events(pid: str):
+    """Blick-Ereignisse und Gesichtsbereich (für die Vorschau der Text-Platzierung)."""
+    from . import gaze
+
+    f = projects.path(pid, "blick.json")
+    if not f.exists():
+        return {"events": [], "face_box": None, "ready": False}
+    data = json.loads(f.read_text(encoding="utf-8"))
+    return {"events": gaze.away_events(data), "face_box": gaze.face_box(data), "ready": True}
 
 
 @app.post("/api/projects/{pid}/render")

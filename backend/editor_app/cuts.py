@@ -42,6 +42,7 @@ REASON_TEXT = {
     "doppelt": "Doppeltes Wort",
     "fragment": "Abgebrochenes Wort",
     "fuellwort": "Füllwort",
+    "blick": "Blick weg von der Kamera",
     "anfang": "Stille am Anfang",
     "ende": "Stille am Ende",
 }
@@ -171,7 +172,7 @@ def _signal_positions(words: list[dict], tokens: list[str], signal_words: list[s
     return out
 
 
-def detect(transcript: dict, settings: dict) -> list[Detection]:
+def detect(transcript: dict, settings: dict, gaze_events: list[dict] | None = None) -> list[Detection]:
     words = flat_words(transcript)
     tokens = [norm(w["w"]) for w in words]
     lang = transcript.get("language", "de")
@@ -218,6 +219,12 @@ def detect(transcript: dict, settings: dict) -> list[Detection]:
                 i += len(ph) - 1
                 break
         i += 1
+
+    # 5. Blick weg (nur Vorschlag: Carina entscheidet)
+    for ev in gaze_events or []:
+        inside = [k for k, w in enumerate(words) if ev["start"] <= (w["s"] + w["e"]) / 2 <= ev["end"]]
+        if inside:
+            add("blick", inside[0], inside[-1] + 1, False, f"{ev['length']:.1f} s, {ev['reason']}".replace(".", ",", 1))
 
     # Doppelte Treffer zusammenfassen: gleiche Wörter nur einmal (der erste Grund gewinnt)
     seen: set[str] = set()
@@ -299,9 +306,10 @@ def default_settings(language: str) -> dict:
     }
 
 
-def build(transcript: dict, settings: dict, manual: dict | None = None, pause_keep: list[int] | None = None) -> dict:
+def build(transcript: dict, settings: dict, manual: dict | None = None, pause_keep: list[int] | None = None,
+          gaze_events: list[dict] | None = None) -> dict:
     """Komplette Schnittliste (wird als schnitte.json gespeichert)."""
-    dets = [asdict(d) for d in detect(transcript, settings)]
+    dets = [asdict(d) for d in detect(transcript, settings, gaze_events)]
     return {"version": 1, "settings": settings, "detections": dets,
             "manual": manual or {"cut": [], "keep": []}, "pause_keep": pause_keep or []}
 

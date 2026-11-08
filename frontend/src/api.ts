@@ -32,7 +32,7 @@ export interface Project {
   exports?: { file: string; duration: number; segments: number; size: number; quality: string; created: number }[];
 }
 
-export type CutType = "retake" | "signal" | "doppelt" | "fragment" | "fuellwort" | "manuell";
+export type CutType = "retake" | "signal" | "doppelt" | "fragment" | "fuellwort" | "blick" | "manuell";
 
 export interface Detection {
   id: string;
@@ -51,6 +51,14 @@ export interface CutSettings {
   fillers: Record<string, boolean>;
 }
 
+export interface RenderOptions {
+  zoom: boolean;
+  loudness: boolean;
+  denoise: boolean;
+  subtitles: "aus" | "srt" | "einbrennen";
+  karaoke: boolean;
+}
+
 export interface Pause {
   after: number;
   start: number;
@@ -60,7 +68,14 @@ export interface Pause {
 }
 
 export interface CutView {
-  cutlist: { settings: CutSettings; detections: Detection[]; manual: { cut: number[]; keep: number[] }; pause_keep: number[] };
+  cutlist: {
+    settings: CutSettings;
+    detections: Detection[];
+    manual: { cut: number[]; keep: number[] };
+    pause_keep: number[];
+    buzzwords: { start: number; end: number }[];
+    render_options: RenderOptions;
+  };
   evaluation: { flags: (CutType | null)[]; keep: [number, number][]; pauses: Pause[]; new_duration: number; old_duration: number };
   can_undo: boolean;
 }
@@ -143,6 +158,11 @@ export const api = {
     call<CutView>(`/api/projects/${id}/cuts/settings`, { ...json(settings), method: "PUT" }),
   resetCuts: (id: string) => call<CutView>(`/api/projects/${id}/cuts/reset`, { method: "POST" }),
   undo: (id: string) => call<CutView>(`/api/projects/${id}/cuts/undo`, { method: "POST" }),
+  renderOptions: (id: string, o: Partial<RenderOptions>) =>
+    call<CutView>(`/api/projects/${id}/cuts/render-options`, { ...json(o), method: "PUT" }),
+  buzzword: (id: string, start: number, end: number, on: boolean) => call<CutView>(`/api/projects/${id}/cuts/buzzword`, json({ start, end, on })),
+  suggestBuzz: (id: string) => call<CutView>(`/api/projects/${id}/cuts/buzzwords-suggest`, { method: "POST" }),
+  blick: (id: string) => call<{ events: { start: number; end: number }[]; face_box: number[] | null; ready: boolean }>(`/api/projects/${id}/blick`),
   render: (id: string, quality: string) => call<Project>(`/api/projects/${id}/render`, json({ quality })),
   openFolder: (id: string) => call<{ ok: boolean }>(`/api/projects/${id}/open-folder`, { method: "POST" }),
   exportUrl: (id: string, file: string) => `/api/projects/${id}/export/${encodeURIComponent(file)}`,

@@ -8,7 +8,7 @@ import traceback
 
 import time
 
-from . import cutstore, media, projects, render, transcribe
+from . import cutstore, gaze, media, projects, render, transcribe
 from .errors import UserError, explain
 
 _queue: "queue.Queue[tuple[str, str, dict]]" = queue.Queue()
@@ -53,8 +53,19 @@ def _render(pid: str, quality: str) -> None:
     segments = v["evaluation"]["keep"]
     name = render.safe_name(p["name"])
     out = projects.path(pid, "export") / f"{name}_schnitt_{time.strftime('%Y%m%d-%H%M%S')}.mp4"
+    tf = projects.path(pid, "transkript.json")
+    gf = projects.path(pid, "blick.json")
+    from . import config, cuts
+    options = {
+        **v["cutlist"]["render_options"],
+        "words": cuts.flat_words(json.loads(tf.read_text(encoding="utf-8"))),
+        "flags": v["evaluation"]["flags"],
+        "buzzwords": v["cutlist"].get("buzzwords", []),
+        "gaze": json.loads(gf.read_text(encoding="utf-8")) if gf.exists() else None,
+        "fonts_dir": str(config.ROOT / "assets" / "fonts"),
+    }
     result = render.render(projects.path(pid, p["original_file"]), p["info"], segments, out,
-                           projects.path(pid, "cache"), quality, rep)
+                           projects.path(pid, "cache"), quality, rep, options)
     # Schnittliste zum fertigen Video dazulegen (zum Nachvollziehen)
     (out.with_suffix(".schnitte.json")).write_text(
         json.dumps({"keep": segments, "settings": v["cutlist"]["settings"]}, ensure_ascii=False, indent=1),
@@ -146,9 +157,28 @@ def _process(pid: str) -> None:
     words = sum(len(s["words"]) for s in result["segments"])
     if p["mode"] == "youtube":
         cutstore.create(pid, result)  # Schnittvorschläge gleich mit berechnen
+        projects.update(pid, status="arbeitet", step="blick", progress=0.97, message="Blick-Erkennung …")
+        _gaze(pid)
     projects.update(pid, status="fertig", step="", progress=1.0, message="Fertig",
                     transcript={"language": result["language"], "model": result["model"],
                                 "device": result["device"], "words": words})
+
+
+def _gaze(pid: str) -> None:
+    """Blick-Erkennung auf dem Vorschau-Video. Fehler hier stoppen nichts (ist nur ein Zusatz)."""
+    out = projects.path(pid, "blick.json")
+    if out.exists():
+        return
+    try:
+        def rep(f: float):
+            p = projects.load(pid)
+            if p["status"] == "arbeitet":
+                projects.update(pid, message=f"Blick-Erkennung ({f:.0%})")
+        data = gaze.analyze(projects.path(pid, "vorschau.mp4"), rep)
+        out.write_text(json.dumps(data), encoding="utf-8")
+        cutstore.refresh(pid)
+    except Exception:  # noqa: BLE001
+        traceback.print_exc()
 
 
 def _worker() -> None:
@@ -157,6 +187,8 @@ def _worker() -> None:
         try:
             if kind == "rendern":
                 _render(pid, opts["quality"])
+            elif kind == "blick":
+                _gaze(pid)
             else:
                 _process(pid)
         except Exception as exc:  # noqa: BLE001 – alles abfangen und verständlich anzeigen
@@ -183,6 +215,8 @@ def start() -> None:
     for p in reversed(projects.list_all()):
         if p["status"] in ("warteschlange", "arbeitet"):
             enqueue(p["id"])
+        elif p["status"] == "fertig" and p["mode"] == "youtube" and not projects.path(p["id"], "blick.json").exists():
+            _queue.put((p["id"], "blick", {}))  # ältere Projekte bekommen die Blick-Erkennung nachträglich
         elif (p.get("render") or {}).get("status") in ("warteschlange", "arbeitet"):
             projects.update(p["id"], render={**p["render"], "status": "fehler",
                                              "error": "Das Rendern wurde unterbrochen (App beendet). Bitte nochmal starten."})

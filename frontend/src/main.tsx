@@ -4,6 +4,7 @@ import "@fontsource/cormorant-garamond/600.css";
 import "@fontsource/cormorant-garamond/600-italic.css";
 import "@fontsource/jost/400.css";
 import "@fontsource/jost/500.css";
+import "@fontsource/poppins/latin-600.css";
 import "./styles.css";
 import { api, type SystemInfo } from "./api";
 import { ProjectList } from "./ProjectList";

@@ -49,10 +49,23 @@ Im Transkript ist alles **durchgestrichen**, was geschnitten wird. Die Farbe zei
 **Retake-Regel:** Wenn du dieselben Wörter innerhalb von **5 Sekunden Sprechen** nochmal sagst
 (Denkpausen zählen nicht), wird der erste Versuch geschnitten. Bei mehreren Anläufen bleibt nur der letzte.
 
+### Blick, Zoom, Ton, Untertitel, Buzzwords
+
+- **Blick weg (lila, gestrichelt):** Die App erkennt, wenn du länger als 1,5 s nicht in die Kamera schaust
+  (z. B. ins Script). Das ist nur ein **Vorschlag**, ein Klick auf „Vorschlag übernehmen“ schneidet die Stelle.
+- **★ Buzzwords:** Wort(e) anklicken → **„★ Als Buzzword“**. Im Video poppt das Wort dann in einer Flieder-Box auf,
+  nie über deinem Gesicht. Unter „Final rendern“ kannst du dir Buzzwords auch von der lokalen KI (Ollama)
+  **vorschlagen lassen** und danach einzeln entfernen oder ergänzen.
+- **Vorschau:** Buzzwords und (wenn eingeschaltet) Untertitel siehst du schon im Vorschau-Player.
+- **Beim Rendern wählbar:** Zoom-Wechsel bei Schnitten (100/108/115 %, Gesicht bleibt im Bild),
+  Lautstärke angleichen (−14 LUFS, Standard bei YouTube), Rauschen mindern, Untertitel
+  (keine / nur SRT-Datei / ins Video einbrennen, optional Karaoke).
+
 ### Final rendern
 
 Erst wenn du links auf **„Final rendern“** klickst, entsteht das fertige Video (MP4, H.264, sehr gute Qualität).
-Es liegt dann zum Herunterladen in der Liste darunter und im Export-Ordner des Projekts.
+Es liegt dann zum Herunterladen in der Liste darunter und im Export-Ordner des Projekts,
+zusammen mit der Untertitel-Datei (`.srt`, z. B. zum Hochladen bei YouTube oder für CapCut).
 **Dein Original wird nie verändert.** Die App arbeitet mit einer Kopie im Ordner `projekte`.
 
 ## Wie lange dauert das?

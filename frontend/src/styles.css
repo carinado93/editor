@@ -637,6 +637,16 @@ kbd {
   border-color: var(--c-fuellwort);
 }
 
+.chip.cut-blick {
+  border-color: var(--lila);
+}
+
+.word.cut-blick {
+  color: var(--lila);
+  text-decoration-color: var(--lila);
+  background: #ece4f6;
+}
+
 .chip.cut-pause {
   border-color: var(--c-pause);
 }
@@ -874,4 +884,85 @@ kbd {
   gap: 16px;
   align-items: center;
   margin-top: 12px;
+}
+
+/* ---------- Meilenstein 3: Texte, Buzzwords ---------- */
+.video-wrap {
+  position: relative;
+  container-type: inline-size;
+}
+
+.text-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  border-radius: 10px;
+}
+
+.ov-sub,
+.ov-buzz {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  white-space: nowrap;
+}
+
+.ov-sub {
+  left: 50%;
+  background: rgba(244, 238, 228, 0.92);
+  color: var(--braun);
+  font-family: "Poppins", "Jost", sans-serif;
+  font-weight: 600;
+  font-size: 5cqw;
+  padding: 0.3em 0.6em;
+  border-radius: 0.3em;
+}
+
+.ov-buzz {
+  background: var(--flieder);
+  color: var(--lila-tief);
+  font-family: "Cormorant Garamond", serif;
+  font-weight: 600;
+  font-size: 9cqw;
+  padding: 0.05em 0.35em;
+  border-radius: 0.2em;
+  animation: buzz-pop 0.26s ease-out;
+}
+
+@keyframes buzz-pop {
+  0% {
+    transform: translate(-50%, -50%) scale(0.4);
+  }
+  60% {
+    transform: translate(-50%, -50%) scale(1.12);
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+.word.buzz {
+  font-weight: 600;
+  color: var(--lila-tief);
+  background: var(--flieder);
+}
+
+.render-options {
+  display: grid;
+  gap: 6px;
+  margin: 8px 0 12px;
+}
+
+.render-options label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.buzz-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding-top: 4px;
 }

@@ -2,7 +2,7 @@
 
 ## Stand: 8. November 2026
 
-**Phase:** Meilenstein 2 fertig (Rohschnitt). Wartet auf Carinas Test und ihr OK für Meilenstein 3.
+**Phase:** Meilenstein 3 fertig (Blick, Zoom, Ton, Untertitel, Buzzwords). Wartet auf Carinas Test und OK für Meilenstein 4.
 
 ### Erledigt
 - [x] Recherche → `RESEARCH.md`
@@ -39,15 +39,36 @@
     keine Knackser an 17 Schnittkanten, erneute Transkription des Ergebnisses: kein angeschnittenes Wort
   - 17 automatische Tests
 
+- [x] Carina hat getestet (8.11.): Grafikkarte wird genutzt, Schnitte passen bei eigenem Video.
+- [x] **Meilenstein 3**
+  - `gaze.py`: MediaPipe Face Landmarker (Blendshapes + Kopfhaltung), 5 Bilder/s auf dem Vorschau-Video,
+    Kalibrierung per Median, Ereignisse ≥ 1,5 s → Erkennung „blick“ (immer nur Vorschlag). Speichert auch
+    Gesichtsposition (Zoom-Ausschnitt, Text-Platzierung) und Lächeln/Augen zu (für Thumbnails in M4).
+    Test: 2:44-Video in 16 s analysiert, 4 Stellen gefunden (3 klar richtig, 1 grenzwertig).
+    Ältere Projekte bekommen die Analyse beim App-Start nachträglich.
+  - Render: Zoom-Wechsel per `zoompan` (pro Abschnitt 100/108/115 %, Gesicht als Mittelpunkt), Ton: Kompressor +
+    `loudnorm` 2-Pass auf −14 LUFS (gemessen: −14,0 LUFS, −1,3 dBTP), optional `afftdn`
+  - `subtitles.py`: SRT (immer bei „srt“/„einbrennen“), eingebrannt per ASS/libass mit Poppins SemiBold auf Creme-Box,
+    Karaoke optional; Buzzwords als Pop-Animation (Cormorant Garamond Bold, tiefes Lila auf Flieder),
+    Hochformat: Untertitel 70 % Höhe, Buzzwords unter dem Gesicht; Querformat: Buzzwords neben dem Gesicht
+  - `llm.py`: Ollama (gemma3:12b) schlägt Buzzwords vor (ca. eins pro 15 s), verständliche Meldung, wenn Ollama nicht läuft
+  - Schriften in `assets/fonts` (OFL-Lizenzen liegen bei)
+  - UI: Buzzword-Knopf, lila Blick-Vorschläge, Render-Optionen, Text-Vorschau direkt über dem Video
+  - 20 automatische Tests
+
 ### Wartet auf Carina
-- [ ] `start.bat` auf dem eigenen PC ausprobieren (erster Versuch scheiterte an cuBLAS ohne Windows-Version → behoben)
-  und sagen, ob oben rechts „Spracherkennung: Grafikkarte“ steht
-- [ ] Schnitte an einem eigenen Video prüfen, OK für Meilenstein 3
+- [ ] Neue Version holen (Git: Pull), ein Video mit Buzzwords + eingebrannten Untertiteln rendern und sagen, ob Stil,
+  Größe und Position passen
+- [ ] OK für Meilenstein 4
 - [ ] Ein deutsches Testvideo (für Füllwörter wie „äh/ähm“) und eines mit Blick ins Script
 
-### Nächster Schritt: Meilenstein 3
-Blick-Erkennung (MediaPipe), Zoom-Wechsel bei Jump Cuts, Lautheit −14 LUFS + Kompression, Untertitel (SRT, eingebrannt),
-**Buzzword-Highlights und Text-Animationen auch im YouTube-Modus** (Carinas Wunsch vom 8.11.).
+### Offen / Ideen
+- Blick-Stellen mit Zoom „überdecken“ statt schneiden (aktuell nur Schneiden als Vorschlag)
+- Buzzword-Varianten (Durchstreichen, Wort-Slam, Karte) kommen mit der Vorlagen-Bibliothek (M6) auch für YouTube
+
+### Nächster Schritt: Meilenstein 4
+Export-Optionen (FCPXML/EDL für DaVinci), Kapitel, 3 Titel, Beschreibung, Tags (Ollama + claude.ai-Kopierweg),
+Thumbnail-Vorschläge (Augen offen, Blick in Kamera, Lächeln).
 
 ### Entscheidungen
 - 8.11.: **So wenig bezahlen wie möglich.** Keine kostenpflichtigen Dienste einbauen.

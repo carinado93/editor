@@ -12,6 +12,7 @@ const TYPE_LABEL: Record<CutType, string> = {
   doppelt: "Doppelt",
   fragment: "Abgebrochen",
   fuellwort: "Füllwort",
+  blick: "Blick weg",
   manuell: "Von dir gelöscht",
 };
 
@@ -48,6 +49,8 @@ export function ProjectView({ id }: { id: string }) {
   const [sel, setSel] = useState<[number, number] | null>(null);
   const [busy, setBusy] = useState(false);
   const [quality, setQuality] = useState("1080");
+  const [faceBox, setFaceBox] = useState<number[] | null>(null);
+  const [suggesting, setSuggesting] = useState(false);
   const video = useRef<HTMLVideoElement>(null);
   const textBox = useRef<HTMLDivElement>(null);
   const previewRef = useRef(preview);
@@ -66,7 +69,10 @@ export function ProjectView({ id }: { id: string }) {
         if (p.status === "fertig" && !haveTranscript) {
           haveTranscript = true;
           setTranscript(await api.transcript(id));
-          if (p.mode === "youtube") setCuts(await api.cuts(id));
+          if (p.mode === "youtube") {
+            setCuts(await api.cuts(id));
+            api.blick(id).then((b) => setFaceBox(b.face_box)).catch(() => {});
+          }
         }
         const rendering = p.render && (p.render.status === "warteschlange" || p.render.status === "arbeitet");
         if (p.status !== "fertig" && p.status !== "fehler") timer = setTimeout(load, 1500);
@@ -108,6 +114,35 @@ export function ProjectView({ id }: { id: string }) {
     });
     return m;
   }, [cuts]);
+
+  const buzzOf = useMemo(() => {
+    const m = new Map<number, { start: number; end: number }>();
+    cuts?.cutlist.buzzwords.forEach((b) => {
+      for (let k = b.start; k < b.end; k++) m.set(k, b);
+    });
+    return m;
+  }, [cuts]);
+
+  // Untertitel-Zeilen für die Vorschau (gleiche Regeln wie beim Rendern)
+  const subLines = useMemo(() => {
+    if (!flags || !words.length) return [] as { start: number; end: number; text: string }[];
+    const maxChars = project?.info && project.info.height > project.info.width ? 26 : 42;
+    const out: { start: number; end: number; text: string }[] = [];
+    let cur: FlatWord[] = [];
+    const push = () => {
+      if (cur.length) out.push({ start: cur[0].s, end: cur[cur.length - 1].e + 0.15, text: cur.map((w) => w.w).join(" ") });
+      cur = [];
+    };
+    for (const w of words) {
+      if (flags[w.i]) continue;
+      const text = [...cur, w].map((x) => x.w).join(" ");
+      if (cur.length && text.length > maxChars) push();
+      cur.push(w);
+      if (/[.!?…]$/.test(w.w) || (/[,;:]$/.test(w.w) && text.length > maxChars * 0.6)) push();
+    }
+    push();
+    return out;
+  }, [flags, words, project?.info]);
 
   const pauseAfter = useMemo(() => {
     const m = new Map<number, CutView["evaluation"]["pauses"][number]>();
@@ -357,7 +392,10 @@ export function ProjectView({ id }: { id: string }) {
       <div className={`review-grid ${portrait ? "portrait" : ""}`}>
         <div className="player card">
           {project.step !== "pruefen" && project.step !== "ton" && project.step !== "vorschau" && project.info ? (
-            <video ref={video} src={api.proxyUrl(id)} controls preload="auto" playsInline />
+            <div className="video-wrap">
+              <video ref={video} src={api.proxyUrl(id)} controls preload="auto" playsInline />
+              {cutMode && preview && cuts && <TextOverlay time={time} cuts={cuts} words={words} subLines={subLines} faceBox={faceBox} portrait={portrait} />}
+            </div>
           ) : (
             <div className="player-placeholder muted">Vorschau-Video wird erstellt …</div>
           )}
@@ -412,6 +450,50 @@ export function ProjectView({ id }: { id: string }) {
             <div className="render-box">
               <h3>Final rendern</h3>
               <p className="small muted">Erst wenn du hier klickst, entsteht das fertige Video. Dein Original bleibt unverändert.</p>
+              {cuts && (
+                <div className="render-options small">
+                  <label>
+                    <input type="checkbox" checked={cuts.cutlist.render_options.zoom} disabled={busy} onChange={(e) => run(() => api.renderOptions(id, { zoom: e.target.checked }))} />{" "}
+                    Zoom-Wechsel bei Schnitten (100/108/115 %)
+                  </label>
+                  <label>
+                    <input type="checkbox" checked={cuts.cutlist.render_options.loudness} disabled={busy} onChange={(e) => run(() => api.renderOptions(id, { loudness: e.target.checked }))} />{" "}
+                    Lautstärke angleichen (−14 LUFS für YouTube)
+                  </label>
+                  <label>
+                    <input type="checkbox" checked={cuts.cutlist.render_options.denoise} disabled={busy} onChange={(e) => run(() => api.renderOptions(id, { denoise: e.target.checked }))} />{" "}
+                    Rauschen mindern
+                  </label>
+                  <label>
+                    Untertitel{" "}
+                    <select value={cuts.cutlist.render_options.subtitles} disabled={busy} onChange={(e) => run(() => api.renderOptions(id, { subtitles: e.target.value as "aus" }))}>
+                      <option value="aus">keine</option>
+                      <option value="srt">nur als SRT-Datei</option>
+                      <option value="einbrennen">ins Video einbrennen (+ SRT)</option>
+                    </select>
+                  </label>
+                  {cuts.cutlist.render_options.subtitles === "einbrennen" && (
+                    <label>
+                      <input type="checkbox" checked={cuts.cutlist.render_options.karaoke} disabled={busy} onChange={(e) => run(() => api.renderOptions(id, { karaoke: e.target.checked }))} />{" "}
+                      Karaoke (gesprochenes Wort wird lila)
+                    </label>
+                  )}
+                  <div className="buzz-row">
+                    <span>★ Buzzwords: {cuts.cutlist.buzzwords.length}</span>
+                    <button
+                      className="link"
+                      disabled={suggesting || busy}
+                      onClick={async () => {
+                        setSuggesting(true);
+                        await run(() => api.suggestBuzz(id));
+                        setSuggesting(false);
+                      }}
+                    >
+                      {suggesting ? "lokale KI denkt nach …" : "vorschlagen lassen (Ollama)"}
+                    </button>
+                  </div>
+                </div>
+              )}
               <div className="render-row">
                 <select value={quality} onChange={(e) => setQuality(e.target.value)} disabled={!!rendering}>
                   {Object.entries(QUALITIES).map(([k, v]) => (
@@ -492,6 +574,16 @@ export function ProjectView({ id }: { id: string }) {
                     Löschen
                   </button>
                 )}
+                {!selHasCut && (
+                  <button
+                    className="btn ghost"
+                    disabled={busy}
+                    onClick={() => run(() => api.buzzword(id, sel[0], sel[1] + 1, !buzzOf.has(sel[0])))}
+                    title="Wird im Video als animierte Text-Einblendung gezeigt"
+                  >
+                    {buzzOf.has(sel[0]) ? "★ Buzzword entfernen" : "★ Als Buzzword"}
+                  </button>
+                )}
                 <button className="btn ghost" onClick={() => seek(words[sel[0]].s)}>
                   ▶ Anhören
                 </button>
@@ -523,6 +615,7 @@ export function ProjectView({ id }: { id: string }) {
                       f ? `cut cut-${f}` : "",
                       isSugg ? "suggestion" : "",
                       sel && w.i >= sel[0] && w.i <= sel[1] ? "selected" : "",
+                      buzzOf.has(w.i) && !f ? "buzz" : "",
                     ].join(" ");
                     const title = f
                       ? f === "manuell"
@@ -563,6 +656,49 @@ export function ProjectView({ id }: { id: string }) {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function TextOverlay({
+  time,
+  cuts,
+  words,
+  subLines,
+  faceBox,
+  portrait,
+}: {
+  time: number;
+  cuts: CutView;
+  words: FlatWord[];
+  subLines: { start: number; end: number; text: string }[];
+  faceBox: number[] | null;
+  portrait: boolean;
+}) {
+  const o = cuts.cutlist.render_options;
+  const sub = o.subtitles === "einbrennen" ? subLines.find((l) => time >= l.start && time <= l.end) : undefined;
+  const buzz = cuts.cutlist.buzzwords.find((b) => {
+    const s = words[b.start]?.s ?? 0;
+    const e = Math.max(s + 1.8, (words[b.end - 1]?.e ?? 0) + 0.8);
+    return time >= s && time <= e;
+  });
+  const fb = faceBox ?? [0.3, 0.1, 0.7, 0.5];
+  const buzzStyle: React.CSSProperties = portrait
+    ? { left: "50%", top: `${Math.min(62, Math.max((fb[3] + 0.04) * 100, 50))}%` }
+    : { left: (fb[0] + fb[2]) / 2 < 0.5 ? "76%" : "24%", top: "42%" };
+  const buzzText = buzz ? words.slice(buzz.start, buzz.end).map((w) => w.w.replace(/[.,!?;:…]+$/, "")).join(" ") : "";
+  return (
+    <div className="text-overlay" aria-hidden>
+      {buzz && (
+        <span key={buzz.start} className="ov-buzz" style={buzzStyle}>
+          {buzzText}
+        </span>
+      )}
+      {sub && (
+        <span className="ov-sub" style={{ top: portrait ? "70%" : "90%" }}>
+          {sub.text}
+        </span>
+      )}
     </div>
   );
 }

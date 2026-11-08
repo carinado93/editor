@@ -105,8 +105,86 @@ def build_audio(src: Path, info: dict, frames: list[tuple[int, int]], fps: Fract
     return out_path
 
 
+def output_size(info: dict, quality: str) -> tuple[int, int]:
+    w, h = info["width"], info["height"]
+    short = min(w, h)
+    target = {"1080": 1080, "2160": 2160}.get(quality)
+    if target and short > target:
+        f = target / short
+        w, h = w * f, h * f
+    return int(round(w / 2)) * 2, int(round(h / 2)) * 2
+
+
+def _filter_path(p: Path) -> str:
+    s = str(p).replace("\\", "/").replace(":", "\\:").replace("'", "\\'")
+    return f"'{s}'"
+
+
+ZOOM_LEVELS = [1.0, 1.08, 1.15]
+
+
+def _zoom_filters(frames: list[tuple[int, int]], fps: Fraction, out_w: int, out_h: int,
+                  centers: list[tuple[float, float] | None]) -> str:
+    """Abwechselnde Zoom-Stufen pro Abschnitt (100/108/115 %), Ausschnitt um das Gesicht."""
+    big_w, big_h = int(round(out_w * 1.15 / 2)) * 2, int(round(out_h * 1.15 / 2)) * 2
+    z_terms, x_terms, y_terms = [], [], []
+    pos = 0
+    for k, (a, b) in enumerate(frames):
+        n = b - a
+        z = ZOOM_LEVELS[k % len(ZOOM_LEVELS)]
+        cx, cy = centers[k] or (0.5, 0.45)
+        rng = f"between(in\\,{pos}\\,{pos + n - 1})"
+        if z != 1.0:
+            z_terms.append(f"{z - 1:.3f}*{rng}")
+            # Gesicht in die Bildmitte (waagrecht) und ins obere Drittel (senkrecht) rücken, ohne über den Rand zu gehen
+            x_terms.append(f"{rng}*max(0\\,min(iw-iw/zoom\\,{cx:.4f}*iw-iw/zoom/2))")
+            y_terms.append(f"{rng}*max(0\\,min(ih-ih/zoom\\,{cy:.4f}*ih-ih/zoom*0.42))")
+        pos += n
+    z_expr = "1+" + "+".join(z_terms) if z_terms else "1"
+    x_expr = "+".join(x_terms) if x_terms else "0"
+    y_expr = "+".join(y_terms) if y_terms else "0"
+    fps_str = f"{fps.numerator}/{fps.denominator}"
+    return (f"scale={big_w}:{big_h}:flags=lanczos,"
+            f"zoompan=z='{z_expr}':x='{x_expr}':y='{y_expr}':d=1:s={out_w}x{out_h}:fps={fps_str}")
+
+
+def process_audio(raw: Path, out: Path, loudness: bool, denoise: bool) -> Path:
+    """Ton veredeln: optional Rauschen mindern, sanft komprimieren, auf -14 LUFS (YouTube) bringen (2 Durchgänge)."""
+    if not loudness and not denoise:
+        return raw
+    chain = []
+    if denoise:
+        chain.append("afftdn=nr=10:nf=-45")
+    if loudness:
+        chain.append("acompressor=threshold=-20dB:ratio=2.5:attack=15:release=200:makeup=2")
+    pcm_in = ["-f", "s16le", "-ar", str(SR), "-ac", str(CH), "-i", str(raw)]
+    if loudness:
+        r = media.run([media.ffmpeg(), "-hide_banner", "-nostdin", *pcm_in, "-af",
+                       ",".join(chain + ["loudnorm=I=-14:TP=-1.5:LRA=11:print_format=json"]), "-f", "null", "-"])
+        m = re.search(r"\{[^{}]*\"input_i\"[^{}]*\}", r.stderr, re.S)
+        if m:
+            import json as _json
+            st = _json.loads(m.group(0))
+            chain.append(f"loudnorm=I=-14:TP=-1.5:LRA=11:measured_I={st['input_i']}:measured_TP={st['input_tp']}:"
+                         f"measured_LRA={st['input_lra']}:measured_thresh={st['input_thresh']}:"
+                         f"offset={st['target_offset']}:linear=true")
+        else:
+            chain.append("loudnorm=I=-14:TP=-1.5:LRA=11")
+        chain.append(f"aresample={SR}")
+    r = media.run([media.ffmpeg(), "-hide_banner", "-nostdin", "-y", *pcm_in, "-af", ",".join(chain),
+                   "-ar", str(SR), "-ac", str(CH), "-f", "s16le", str(out)])
+    if r.returncode != 0:
+        raise UserError("Der Ton konnte nicht bearbeitet werden: " + r.stderr[-300:])
+    return out
+
+
 def render(src: Path, info: dict, segments: list[list[float]], out: Path, work: Path, quality: str = "1080",
-           progress: Callable[[float, str], None] | None = None) -> dict:
+           progress: Callable[[float, str], None] | None = None, options: dict | None = None) -> dict:
+    """options: zoom, loudness, denoise (bool), subtitles ("aus"/"srt"/"einbrennen"), karaoke (bool),
+    words + flags (Transkript), buzzwords ([{start,end,text?}]), gaze (blick.json-Daten), fonts_dir."""
+    from . import gaze, subtitles
+
+    opts = {"zoom": True, "loudness": True, "denoise": False, "subtitles": "srt", "karaoke": False, **(options or {})}
     report = progress or (lambda f, m: None)
     if quality not in QUALITIES:
         raise UserError("Unbekannte Qualität.")
@@ -118,16 +196,50 @@ def render(src: Path, info: dict, segments: list[list[float]], out: Path, work: 
     frames = snap(segments, fps, info["duration"])
     n_frames = sum(b - a for a, b in frames)
     new_duration = float(n_frames / fps)
+    out_w, out_h = output_size(info, quality)
+    fps_str = f"{fps.numerator}/{fps.denominator}"
+    keep_t = [(float(Fraction(a) / fps), float(Fraction(b) / fps)) for a, b in frames]
+    tmap = subtitles.TimeMap(keep_t)
+    gaze_data = opts.get("gaze") or {}
 
     report(0.02, "Ton wird geschnitten …")
     audio = build_audio(src, info, frames, fps, work)
+    if opts["loudness"] or opts["denoise"]:
+        report(0.04, "Ton wird veredelt (Lautstärke −14 LUFS) …")
+        audio = process_audio(audio, work / "ton_fertig.pcm", opts["loudness"], opts["denoise"])
+
+    # Untertitel / Buzzwords
+    extra_files = []
+    words, flags = opts.get("words") or [], opts.get("flags") or []
+    groups = None
+    if words and opts["subtitles"] in ("srt", "einbrennen"):
+        kw = subtitles.kept_words(words, flags, tmap)
+        groups = subtitles.lines(kw, max_chars=26 if out_h > out_w else 42)
+        srt_path = out.with_suffix(".srt")
+        srt_path.write_text(subtitles.srt(groups), encoding="utf-8")
+        extra_files.append(srt_path.name)
+    buzz = subtitles.buzz_events(opts.get("buzzwords") or [], words, tmap) if words else []
+    burn_subs = opts["subtitles"] == "einbrennen" and groups
+    ass_filter = ""
+    if burn_subs or buzz:
+        ass_path = work / "texte.ass"
+        ass_path.write_text(subtitles.ass(out_w, out_h, groups if burn_subs else None, buzz,
+                                          gaze.face_box(gaze_data) if gaze_data else None, opts["karaoke"]),
+                            encoding="utf-8")
+        ass_filter = f",ass={_filter_path(ass_path)}"
+        if opts.get("fonts_dir"):
+            ass_filter += f":fontsdir={_filter_path(Path(opts['fonts_dir']))}"
 
     h = 0.5 / float(fps)
     terms = "+".join(f"between(t\\,{float(Fraction(a) / fps) - h:.6f}\\,{float(Fraction(b) / fps) - h:.6f})"
                      for a, b in frames)
-    fps_str = f"{fps.numerator}/{fps.denominator}"
+    if opts["zoom"] and len(frames) > 1:
+        centers = [gaze.face_center(gaze_data, a, b) if gaze_data else None for a, b in keep_t]
+        scale = _zoom_filters(frames, fps, out_w, out_h, centers)
+    else:
+        scale = f"scale={out_w}:{out_h}:flags=lanczos"
     graph = (f"[0:{info['video_index']}]fps={fps_str},select='{terms}',setpts=N/({fps_str})/TB,"
-             f"{_scale_filter(info, quality)},format=yuv420p[v]")
+             f"{scale},setsar=1,format=yuv420p{ass_filter}[v]")
     script = work / "filter.txt"
     script.write_text(graph, encoding="utf-8")
 
@@ -142,18 +254,20 @@ def render(src: Path, info: dict, segments: list[list[float]], out: Path, work: 
         el = time.time() - started
         rest = el / f * (1 - f) if f > 0.02 else None
         msg = f"Video wird berechnet ({f:.0%})" + (f", noch ca. {int(rest // 60)} Min {int(rest % 60)} s" if rest else "")
-        report(0.05 + 0.95 * f, msg)
+        report(0.06 + 0.94 * f, msg)
 
     media._run_with_progress(args, new_duration, on_video)
     tmp.replace(out)
-    for f in ("ton_schnitt.pcm",):
+    for f in ("ton_schnitt.pcm", "ton_fertig.pcm"):
         try:
             (work / f).unlink()
         except OSError:
             pass
     report(1.0, "Fertig gerendert")
     return {"file": out.name, "duration": round(new_duration, 2), "segments": len(frames),
-            "size": out.stat().st_size, "quality": quality}
+            "size": out.stat().st_size, "quality": quality, "extra": extra_files,
+            "options": {k: opts[k] for k in ("zoom", "loudness", "denoise", "subtitles", "karaoke")},
+            "buzzwords": len(buzz)}
 
 
 def safe_name(name: str) -> str:
