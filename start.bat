@@ -60,6 +60,10 @@ if errorlevel 1 (
 ) else (
   echo         Nvidia-Grafikkarte gefunden: sie wird fuer die Spracherkennung genutzt.
   uv sync --quiet --extra gpu
+  if errorlevel 1 (
+    echo         Grafikkarten-Bausteine gingen nicht. Die App startet trotzdem, mit dem Prozessor.
+    uv sync --quiet
+  )
 )
 if errorlevel 1 (
   echo.

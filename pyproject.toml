@@ -13,7 +13,8 @@ dependencies = [
 [project.optional-dependencies]
 # Nvidia-Grafikkarte: CUDA-Bibliotheken für die Spracherkennung
 gpu = [
-    "nvidia-cublas-cu12; sys_platform == 'win32' or sys_platform == 'linux'",
+    # 12.9.3 gibt es nicht für Windows, darum höchstens 12.9.2
+    "nvidia-cublas-cu12>=12.4,<12.9.3; sys_platform == 'win32' or sys_platform == 'linux'",
     "nvidia-cudnn-cu12>=9,<10; sys_platform == 'win32' or sys_platform == 'linux'",
 ]
 
@@ -22,6 +23,11 @@ dev = ["pytest>=8", "httpx>=0.27"]
 
 [tool.uv]
 package = false
+# Die App läuft auf Windows (Carinas PC). uv soll nur Versionen wählen, die es dort auch gibt.
+required-environments = [
+    "sys_platform == 'win32' and platform_machine == 'AMD64'",
+    "sys_platform == 'linux' and platform_machine == 'x86_64'",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["backend/tests"]
