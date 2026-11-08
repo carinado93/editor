@@ -158,6 +158,8 @@ Carina möchte möglichst keine weiteren Apps/Dienste bezahlen. Darum hat die Ap
 | 2. Lokale KI (Ollama, offene Modelle wie Qwen/Gemma) | 0 € | spürbar schwächer, v. a. bei deutschen Hooks; braucht guten PC (16 GB RAM+) | läuft komplett auf deinem PC, automatisch |
 | 3. Claude API | ca. 3–8 $/Monat | beste, vollautomatisch | nur falls dir das Kopieren irgendwann zu umständlich wird |
 
+Update: **Ollama ist bei Carina schon installiert.** Darum: Ollama für einfache Texte automatisch, claude.ai-Kopierweg für Hooks/Skripte, wo Qualität zählt.
+
 Hinweis: Ein claude.ai-Abo kann technisch nicht direkt von einer eigenen App benutzt werden, deshalb der Kopier-Weg.
 
 Auch sonst gilt: **kein Abo nötig** für ffmpeg, Whisper, MediaPipe, Remotion (für dich gratis), Schriften. CapCut Pro brauchst du für diese Abläufe nicht mehr; die Cover macht die App selbst (Canva bleibt optional).
