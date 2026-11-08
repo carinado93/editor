@@ -29,3 +29,14 @@ def test_ass_contains_styles_and_buzzword():
     assert "Style: Buzz,Cormorant Garamond Bold" in a
     assert "Burnout" in a and "\\fscx40" in a
     assert "Dialogue: 0,0:00:00.00" in a
+
+
+def test_rule_based_buzzwords_are_unique_and_spread():
+    from editor_app import buzz
+    words, t = [], 0.0
+    for w in ("Stress is normal. Burnout is not. Stress again and again. Your nervous system needs rest. " * 4).split():
+        words.append({"w": w, "s": t, "e": t + 0.3})
+        t += 0.6
+    found = buzz.suggest(words, [None] * len(words))
+    toks = [words[b["start"]]["w"].strip(".").lower() for b in found]
+    assert len(toks) == len(set(toks)) >= 2

@@ -224,3 +224,34 @@ def suggest_buzzwords(pid: str) -> dict:
     def fn(c):
         c["buzzwords"] = sorted(found, key=lambda b: b["start"])
     return _change(pid, fn)
+
+
+def auto_buzzwords(pid: str) -> None:
+    """Einmal pro Projekt automatisch Buzzwords setzen: lokale KI (Ollama), sonst eingebaute Regeln."""
+    from . import buzz
+    from .errors import UserError as _UE
+
+    cl = load(pid)
+    if cl.get("buzz_auto"):
+        return
+    if cl.get("buzzwords"):  # schon von Hand gesetzt: nichts überschreiben
+        with _lock:
+            c = load(pid)
+            c["buzz_auto"] = "manuell"
+            _save(pid, c)
+        return
+    source = "ollama"
+    try:
+        suggest_buzzwords(pid)
+    except _UE:
+        source = "regeln"
+        t = _transcript(pid)
+        found = buzz.suggest(cuts.flat_words(t), cuts.evaluate(t, load(pid))["flags"])
+        with _lock:
+            c = load(pid)
+            c["buzzwords"] = found
+            _save(pid, c)
+    with _lock:
+        c = load(pid)
+        c["buzz_auto"] = source
+        _save(pid, c)

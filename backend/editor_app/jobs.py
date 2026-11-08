@@ -159,6 +159,8 @@ def _process(pid: str) -> None:
         cutstore.create(pid, result)  # Schnittvorschläge gleich mit berechnen
         projects.update(pid, status="arbeitet", step="blick", progress=0.97, message="Blick-Erkennung …")
         _gaze(pid)
+        projects.update(pid, message="Buzzwords werden ausgesucht …", progress=0.99)
+        _buzz(pid)
     projects.update(pid, status="fertig", step="", progress=1.0, message="Fertig",
                     transcript={"language": result["language"], "model": result["model"],
                                 "device": result["device"], "words": words})
@@ -181,6 +183,13 @@ def _gaze(pid: str) -> None:
         traceback.print_exc()
 
 
+def _buzz(pid: str) -> None:
+    try:
+        cutstore.auto_buzzwords(pid)
+    except Exception:  # noqa: BLE001 – Zusatzfunktion, darf nichts stoppen
+        traceback.print_exc()
+
+
 def _worker() -> None:
     while True:
         pid, kind, opts = _queue.get()
@@ -189,6 +198,9 @@ def _worker() -> None:
                 _render(pid, opts["quality"])
             elif kind == "blick":
                 _gaze(pid)
+                _buzz(pid)
+            elif kind == "buzz":
+                _buzz(pid)
             else:
                 _process(pid)
         except Exception as exc:  # noqa: BLE001 – alles abfangen und verständlich anzeigen
@@ -217,6 +229,8 @@ def start() -> None:
             enqueue(p["id"])
         elif p["status"] == "fertig" and p["mode"] == "youtube" and not projects.path(p["id"], "blick.json").exists():
             _queue.put((p["id"], "blick", {}))  # ältere Projekte bekommen die Blick-Erkennung nachträglich
+        elif p["status"] == "fertig" and p["mode"] == "youtube":
+            _queue.put((p["id"], "buzz", {}))  # einmalig automatische Buzzwords (macht nichts, wenn schon erledigt)
         elif (p.get("render") or {}).get("status") in ("warteschlange", "arbeitet"):
             projects.update(p["id"], render={**p["render"], "status": "fehler",
                                              "error": "Das Rendern wurde unterbrochen (App beendet). Bitte nochmal starten."})

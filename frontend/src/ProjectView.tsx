@@ -479,7 +479,10 @@ export function ProjectView({ id }: { id: string }) {
                     </label>
                   )}
                   <div className="buzz-row">
-                    <span>★ Buzzwords: {cuts.cutlist.buzzwords.length}</span>
+                    <span>
+                      ★ Buzzwords: {cuts.cutlist.buzzwords.length}
+                      {cuts.cutlist.buzzwords.length === 0 && <span className="muted"> (Wort im Transkript anklicken → „★ Als Buzzword“)</span>}
+                    </span>
                     <button
                       className="link"
                       disabled={suggesting || busy}

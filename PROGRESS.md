@@ -62,6 +62,10 @@
 - [ ] OK für Meilenstein 4
 - [ ] Ein deutsches Testvideo (für Füllwörter wie „äh/ähm“) und eines mit Blick ins Script
 
+- [x] 8.11.: Carina sah keine Buzzwords (sie mussten von Hand gesetzt werden). Jetzt automatisch: nach dem Transkript
+  bzw. beim App-Start für bestehende Projekte einmalig Ollama-Vorschlag, sonst eingebaute Regeln (`buzz.py`:
+  Themenwörter, Zahlen, starke Wörter, ca. alle 15 s, keine Wiederholung). Von Hand gesetzte werden nie überschrieben.
+
 ### Offen / Ideen
 - Blick-Stellen mit Zoom „überdecken“ statt schneiden (aktuell nur Schneiden als Vorschlag)
 - Buzzword-Varianten (Durchstreichen, Wort-Slam, Karte) kommen mit der Vorlagen-Bibliothek (M6) auch für YouTube
