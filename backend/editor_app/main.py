@@ -11,7 +11,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import config, jobs, media, projects, transcribe
+from . import config, cuts, cutstore, jobs, media, projects, render, transcribe
 from .errors import UserError, explain
 
 
@@ -145,6 +145,107 @@ def get_thumb(pid: str):
     if not f.exists():
         raise HTTPException(404)
     return FileResponse(f, media_type="image/jpeg")
+
+
+# ---------- Schnitte (YouTube-Modus) ----------
+
+class ToggleBody(BaseModel):
+    id: str
+    active: bool
+
+
+class WordsBody(BaseModel):
+    indices: list[int]
+    cut: bool
+
+
+class PauseBody(BaseModel):
+    after: int
+    keep: bool
+
+
+class SettingsBody(BaseModel):
+    tempo: str | None = None
+    max_gap: float | None = None
+    signal_words: list[str] | None = None
+    fillers: dict[str, bool] | None = None
+
+
+class RenderBody(BaseModel):
+    quality: str = "1080"
+
+
+@app.get("/api/schnitt-optionen")
+def cut_options():
+    return {"tempo": {k: {"max": v[0], "ziel": v[1]} for k, v in cuts.TEMPO.items()},
+            "reasons": cuts.REASON_TEXT, "qualities": render.QUALITIES}
+
+
+@app.get("/api/projects/{pid}/cuts")
+def get_cuts(pid: str):
+    return cutstore.view(pid)
+
+
+@app.post("/api/projects/{pid}/cuts/toggle")
+def toggle_cut(pid: str, body: ToggleBody):
+    return cutstore.toggle_detection(pid, body.id, body.active)
+
+
+@app.post("/api/projects/{pid}/cuts/words")
+def cut_words(pid: str, body: WordsBody):
+    return cutstore.set_words(pid, body.indices, body.cut)
+
+
+@app.post("/api/projects/{pid}/cuts/pause")
+def cut_pause(pid: str, body: PauseBody):
+    return cutstore.set_pause(pid, body.after, body.keep)
+
+
+@app.put("/api/projects/{pid}/cuts/settings")
+def cut_settings(pid: str, body: SettingsBody):
+    return cutstore.update_settings(pid, {k: v for k, v in body.model_dump().items() if v is not None})
+
+
+@app.post("/api/projects/{pid}/cuts/reset")
+def cut_reset(pid: str):
+    return cutstore.reset(pid)
+
+
+@app.post("/api/projects/{pid}/cuts/undo")
+def cut_undo(pid: str):
+    return cutstore.undo(pid)
+
+
+@app.post("/api/projects/{pid}/render")
+def start_render(pid: str, body: RenderBody):
+    jobs.enqueue_render(pid, body.quality)
+    return projects.load(pid)
+
+
+@app.get("/api/projects/{pid}/export/{name}")
+def get_export(pid: str, name: str):
+    f = projects.path(pid, "export") / name
+    if "/" in name or "\\" in name or not f.is_file():
+        raise HTTPException(404, "Datei nicht gefunden.")
+    return FileResponse(f, filename=name)
+
+
+@app.post("/api/projects/{pid}/open-folder")
+def open_folder(pid: str):
+    """Öffnet den Export-Ordner im Windows-Explorer."""
+    import os
+    import subprocess
+    import sys
+
+    folder = projects.path(pid, "export")
+    folder.mkdir(parents=True, exist_ok=True)
+    if sys.platform == "win32":
+        os.startfile(folder)  # type: ignore[attr-defined]
+    elif sys.platform == "darwin":
+        subprocess.Popen(["open", str(folder)])
+    else:
+        raise UserError(f"Der Ordner liegt hier: {folder}")
+    return {"ok": True}
 
 
 # ---------- Oberfläche ----------

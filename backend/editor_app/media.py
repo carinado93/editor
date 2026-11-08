@@ -78,6 +78,7 @@ def probe(path: Path) -> dict:
         "width": width,
         "height": height,
         "fps": round(fps, 3),
+        "fps_rational": video.get("avg_frame_rate") or video.get("r_frame_rate"),
         "video_codec": video.get("codec_name"),
         "video_index": int(video["index"]),
         "has_audio": audio is not None,

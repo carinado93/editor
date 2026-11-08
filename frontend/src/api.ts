@@ -28,6 +28,41 @@ export interface Project {
   info: VideoInfo | null;
   settings: { model: string; language: string };
   transcript: { language: string; model: string; device: string; words: number } | null;
+  render?: { status: "warteschlange" | "arbeitet" | "fertig" | "fehler"; progress: number; message: string; error: string | null; quality: string; file?: string };
+  exports?: { file: string; duration: number; segments: number; size: number; quality: string; created: number }[];
+}
+
+export type CutType = "retake" | "signal" | "doppelt" | "fragment" | "fuellwort" | "manuell";
+
+export interface Detection {
+  id: string;
+  type: Exclude<CutType, "manuell">;
+  start: number;
+  end: number;
+  sure: boolean;
+  reason: string;
+  active: boolean;
+}
+
+export interface CutSettings {
+  tempo: "locker" | "normal" | "straff";
+  max_gap: number;
+  signal_words: string[];
+  fillers: Record<string, boolean>;
+}
+
+export interface Pause {
+  after: number;
+  start: number;
+  end: number;
+  length: number;
+  kept: boolean;
+}
+
+export interface CutView {
+  cutlist: { settings: CutSettings; detections: Detection[]; manual: { cut: number[]; keep: number[] }; pause_keep: number[] };
+  evaluation: { flags: (CutType | null)[]; keep: [number, number][]; pauses: Pause[]; new_duration: number; old_duration: number };
+  can_undo: boolean;
 }
 
 export interface Word {
@@ -100,6 +135,17 @@ export const api = {
   uploadDone: (id: string) => call<Project>(`/api/projects/${id}/upload/done`, { method: "POST" }),
   retry: (id: string) => call<Project>(`/api/projects/${id}/retry`, { method: "POST" }),
   remove: (id: string) => call<{ ok: boolean }>(`/api/projects/${id}`, { method: "DELETE" }),
+  cuts: (id: string) => call<CutView>(`/api/projects/${id}/cuts`),
+  toggleCut: (id: string, det: string, active: boolean) => call<CutView>(`/api/projects/${id}/cuts/toggle`, json({ id: det, active })),
+  cutWords: (id: string, indices: number[], cut: boolean) => call<CutView>(`/api/projects/${id}/cuts/words`, json({ indices, cut })),
+  setPause: (id: string, after: number, keep: boolean) => call<CutView>(`/api/projects/${id}/cuts/pause`, json({ after, keep })),
+  cutSettings: (id: string, settings: Partial<CutSettings>) =>
+    call<CutView>(`/api/projects/${id}/cuts/settings`, { ...json(settings), method: "PUT" }),
+  resetCuts: (id: string) => call<CutView>(`/api/projects/${id}/cuts/reset`, { method: "POST" }),
+  undo: (id: string) => call<CutView>(`/api/projects/${id}/cuts/undo`, { method: "POST" }),
+  render: (id: string, quality: string) => call<Project>(`/api/projects/${id}/render`, json({ quality })),
+  openFolder: (id: string) => call<{ ok: boolean }>(`/api/projects/${id}/open-folder`, { method: "POST" }),
+  exportUrl: (id: string, file: string) => `/api/projects/${id}/export/${encodeURIComponent(file)}`,
   proxyUrl: (id: string) => `/api/projects/${id}/vorschau.mp4`,
   thumbUrl: (id: string) => `/api/projects/${id}/bild.jpg`,
 };

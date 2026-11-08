@@ -2,7 +2,7 @@
 
 ## Stand: 8. November 2026
 
-**Phase:** Meilenstein 1 fertig, wartet auf Carinas Test auf dem eigenen PC und ihr OK für Meilenstein 2.
+**Phase:** Meilenstein 2 fertig (Rohschnitt). Wartet auf Carinas Test und ihr OK für Meilenstein 3.
 
 ### Erledigt
 - [x] Recherche → `RESEARCH.md`
@@ -22,14 +22,31 @@
   - Test mit Carinas Video (DJI, 2:44, 1512×2688, HEVC 60 fps, 1,1 GB): Upload → fertig in ca. 3 Min auf einem
     4-Kern-Prozessor ohne Grafikkarte. Transkript Englisch, 294 Wörter, alle Retakes sind im Text erhalten.
 
-### Wartet auf Carina
-- [ ] `start.bat` auf dem eigenen PC ausprobieren und sagen, ob oben rechts „Spracherkennung: Grafikkarte“ steht
-- [ ] OK für Meilenstein 2
-- [ ] Später: ein deutsches Testvideo (für Füllwörter wie „äh/ähm“) und eines mit langen Pausen/Blick ins Script
+- [x] **Meilenstein 2** (YouTube-Rohschnitt)
+  - `cuts.py`: Retakes (Neuanfang mit denselben Wörtern, letzte Version bleibt, mehrere Anläufe → nur der letzte),
+    Signalwörter (nur wenn allein gesprochen), doppelte/abgebrochene Wörter, Füllwörter (Schalter pro Wort),
+    Pausen kürzen (locker 0,75→0,5 s / normal 0,45→0,3 s / straff 0,3→0,18 s)
+  - Carinas Regeln (8.11.): max. **5 s Sprechen** zwischen erstem Versuch und Neuanfang (Denkpausen zählen nicht),
+    wiederholte ganze Sätze werden immer geschnitten (sie wiederholt Sätze nie absichtlich).
+    Zwei gleiche Wörter zählen nur am Satz-/Teilsatzanfang (sonst Fehltreffer wie „in the … in the“).
+  - `cutstore.py`: schnitte.json pro Projekt, nicht-destruktiv, Rückgängig (50 Schritte), Einstellungen neu berechnen
+    behält manuelle Änderungen
+  - Review-UI: farbig durchgestrichen nach Grund, Vorschläge gestrichelt, Pausen-Kästchen, Auswahl + Löschen/Zurücknehmen,
+    Entf / Strg+Z / Leertaste, Tempo-Knöpfe, Vorschau überspringt Schnitte live, Zeitleiste
+  - `render.py`: Schnittkanten auf ganze Bilder gerundet (Bild/Ton bleiben synchron), Ton per numpy mit 10-ms-Blenden
+    (keine Knackser), Video per ffmpeg `select`, H.264 CRF 18 (NVENC cq 19), AAC 192k, 1080p/4K/Original
+  - Test mit Carinas Video: 2:44 → 1:09, alle Retakes raus, Bild und Ton exakt gleich lang (69,903 s),
+    keine Knackser an 17 Schnittkanten, erneute Transkription des Ergebnisses: kein angeschnittenes Wort
+  - 17 automatische Tests
 
-### Nächster Schritt: Meilenstein 2 (YouTube-Rohschnitt)
-Pausen, Füllwörter, Wortwiederholungen, „again/nochmal“-Retakes, durchgestrichene Wörter in der Review-Ansicht,
-Vorschau spielt die Schnitte live, „Final rendern“.
+### Wartet auf Carina
+- [ ] `start.bat` auf dem eigenen PC ausprobieren (erster Versuch scheiterte an cuBLAS ohne Windows-Version → behoben)
+  und sagen, ob oben rechts „Spracherkennung: Grafikkarte“ steht
+- [ ] Schnitte an einem eigenen Video prüfen, OK für Meilenstein 3
+- [ ] Ein deutsches Testvideo (für Füllwörter wie „äh/ähm“) und eines mit Blick ins Script
+
+### Nächster Schritt: Meilenstein 3
+Blick-Erkennung (MediaPipe), Zoom-Wechsel bei Jump Cuts, Lautheit −14 LUFS + Kompression, Untertitel (SRT, eingebrannt).
 
 ### Entscheidungen
 - 8.11.: **So wenig bezahlen wie möglich.** Keine kostenpflichtigen Dienste einbauen.

@@ -270,8 +270,13 @@ def timeline(words: list[dict], flags: list[str | None], duration: float, tempo:
             pauses.append({"after": a, "start": round(wa["e"], 3), "end": round(wb["s"], 3),
                            "length": round(gap, 2), "kept": False})
         half = min(target / 2, max(gap, 0) / 2)
-        segs.append([cur_start, wa["e"] + half])
-        cur_start = wb["s"] - half
+        after, before = half, half
+        if removed_between:
+            # Die Luft darf nicht in ein geschnittenes Nachbarwort hineinreichen (sonst bleibt "I m…" hörbar)
+            after = min(half, max(0.02, words[a + 1]["s"] - wa["e"] - 0.02))
+            before = min(half, max(0.02, wb["s"] - words[b - 1]["e"] - 0.02))
+        segs.append([cur_start, wa["e"] + after])
+        cur_start = wb["s"] - before
     # Pausen, die behalten werden sollen, trotzdem anzeigen
     for a in sorted(pause_keep):
         if a in kept and a + 1 < len(words) and flags[a + 1] is None:

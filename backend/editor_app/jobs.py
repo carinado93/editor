@@ -6,10 +6,12 @@ import queue
 import threading
 import traceback
 
-from . import media, projects, transcribe
-from .errors import explain
+import time
 
-_queue: "queue.Queue[str]" = queue.Queue()
+from . import cutstore, media, projects, render, transcribe
+from .errors import UserError, explain
+
+_queue: "queue.Queue[tuple[str, str, dict]]" = queue.Queue()
 _started = False
 
 # Anteil der Schritte am Gesamtfortschritt
@@ -23,7 +25,44 @@ STEPS = [
 
 def enqueue(pid: str) -> None:
     projects.update(pid, status="warteschlange", message="Wartet auf Verarbeitung …", error=None)
-    _queue.put(pid)
+    _queue.put((pid, "vorbereiten", {}))
+
+
+def enqueue_render(pid: str, quality: str) -> None:
+    p = projects.load(pid)
+    if p["status"] != "fertig":
+        raise UserError("Das Video wird noch vorbereitet. Bitte warte, bis es fertig ist.")
+    if (p.get("render") or {}).get("status") in ("warteschlange", "arbeitet"):
+        raise UserError("Das Video wird schon gerendert.")
+    if quality not in render.QUALITIES:
+        raise UserError("Unbekannte Qualität.")
+    projects.update(pid, render={"status": "warteschlange", "progress": 0.0, "message": "Wartet …",
+                                 "error": None, "quality": quality})
+    _queue.put((pid, "rendern", {"quality": quality}))
+
+
+def _render(pid: str, quality: str) -> None:
+    p = projects.load(pid)
+
+    def rep(f: float, msg: str):
+        projects.update(pid, render={**(projects.load(pid).get("render") or {}), "status": "arbeitet",
+                                     "progress": round(f, 4), "message": msg})
+
+    rep(0.0, "Rendern startet …")
+    v = cutstore.view(pid)
+    segments = v["evaluation"]["keep"]
+    name = render.safe_name(p["name"])
+    out = projects.path(pid, "export") / f"{name}_schnitt_{time.strftime('%Y%m%d-%H%M%S')}.mp4"
+    result = render.render(projects.path(pid, p["original_file"]), p["info"], segments, out,
+                           projects.path(pid, "cache"), quality, rep)
+    # Schnittliste zum fertigen Video dazulegen (zum Nachvollziehen)
+    (out.with_suffix(".schnitte.json")).write_text(
+        json.dumps({"keep": segments, "settings": v["cutlist"]["settings"]}, ensure_ascii=False, indent=1),
+        encoding="utf-8")
+    exports = (projects.load(pid).get("exports") or []) + [{**result, "created": time.time()}]
+    projects.update(pid, exports=exports,
+                    render={"status": "fertig", "progress": 1.0, "message": "Fertig", "error": None,
+                            "quality": quality, "file": result["file"]})
 
 
 def _process(pid: str) -> None:
@@ -105,6 +144,8 @@ def _process(pid: str) -> None:
         raise proxy_error[0]
     projects.path(pid, "transkript.json").write_text(json.dumps(result, ensure_ascii=False), encoding="utf-8")
     words = sum(len(s["words"]) for s in result["segments"])
+    if p["mode"] == "youtube":
+        cutstore.create(pid, result)  # Schnittvorschläge gleich mit berechnen
     projects.update(pid, status="fertig", step="", progress=1.0, message="Fertig",
                     transcript={"language": result["language"], "model": result["model"],
                                 "device": result["device"], "words": words})
@@ -112,13 +153,20 @@ def _process(pid: str) -> None:
 
 def _worker() -> None:
     while True:
-        pid = _queue.get()
+        pid, kind, opts = _queue.get()
         try:
-            _process(pid)
+            if kind == "rendern":
+                _render(pid, opts["quality"])
+            else:
+                _process(pid)
         except Exception as exc:  # noqa: BLE001 – alles abfangen und verständlich anzeigen
             traceback.print_exc()
             try:
-                projects.update(pid, status="fehler", error=explain(exc), message="Fehler")
+                if kind == "rendern":
+                    r = projects.load(pid).get("render") or {}
+                    projects.update(pid, render={**r, "status": "fehler", "error": explain(exc), "message": "Fehler"})
+                else:
+                    projects.update(pid, status="fehler", error=explain(exc), message="Fehler")
             except Exception:
                 pass
         finally:
@@ -135,3 +183,6 @@ def start() -> None:
     for p in reversed(projects.list_all()):
         if p["status"] in ("warteschlange", "arbeitet"):
             enqueue(p["id"])
+        elif (p.get("render") or {}).get("status") in ("warteschlange", "arbeitet"):
+            projects.update(p["id"], render={**p["render"], "status": "fehler",
+                                             "error": "Das Rendern wurde unterbrochen (App beendet). Bitte nochmal starten."})

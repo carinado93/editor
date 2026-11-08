@@ -94,3 +94,15 @@ def test_manual_keep_and_cut():
     cl["manual"] = {"keep": [0, 1, 2, 3, 4], "cut": [10]}
     flags = cuts.evaluate(t, cl)["flags"]
     assert flags[:5] == [None] * 5 and flags[10] == "manuell"
+
+
+def test_padding_never_reaches_into_a_cut_word():
+    t = make("and I made this notebook uh, and the thing is I made this notebook for you.", gaps={7: 3.0})
+    s = cuts.default_settings("en")
+    ev = cuts.evaluate(t, cuts.build(t, s))
+    words = cuts.flat_words(t)
+    for k, f in enumerate(ev["flags"]):
+        if f:  # geschnittenes Wort: darf in keinem behaltenen Bereich liegen
+            mid = (words[k]["s"] + words[k]["e"]) / 2
+            assert not any(a <= words[k]["s"] + 0.01 and words[k]["s"] + 0.01 <= b for a, b in ev["keep"]), words[k]
+            assert not any(a <= mid <= b for a, b in ev["keep"])
