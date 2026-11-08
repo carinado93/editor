@@ -23,7 +23,9 @@ export function ReelPackage({
   duration: number;
 }) {
   const [overlays, setOverlays] = useState<Overlay[]>(cuts.cutlist.overlays ?? []);
-  const [prompt, setPrompt] = useState("");
+  const [idea, setIdea] = useState("");
+  const [lang, setLang] = useState("en");
+  const [silent, setSilent] = useState(false);
   const [texts, setTexts] = useState<ReelTexts | null>(null);
   const [full, setFull] = useState("");
   const [paste, setPaste] = useState("");
@@ -37,9 +39,11 @@ export function ReelPackage({
     api
       .reelTexts(id)
       .then((r) => {
-        setPrompt(r.prompt);
         setTexts(r.texts);
         setFull(r.full_caption);
+        setSilent(r.silent);
+        setLang(r.language === "de" ? "de" : "en");
+        setIdea(r.idea ?? "");
       })
       .catch((e) => setErr(e.message));
   }, [id]);
@@ -120,12 +124,33 @@ export function ReelPackage({
         </div>
 
         <div className="card">
-          <h3>Caption, 5 Hashtags, Cover-Text, Shorts-Titel</h3>
+          <h3>Deine Idee & Texte</h3>
+          {silent && <div className="banner small">In diesem Clip sprichst du nicht. Schreib kurz deine Idee, daraus entstehen die Texte im Video, Caption, Hashtags und Cover.</div>}
+          <label className="small idea-box">
+            Idee / Anweisung {silent ? "" : "(optional – sonst nimmt die App, was du im Video sagst)"}
+            <textarea
+              rows={3}
+              value={idea}
+              onChange={(e) => setIdea(e.target.value)}
+              placeholder="z. B. Sonntags-Scaries: polarisierender Hook, 3 kurze Aussagen, am Ende mein Notizbuch erwähnen"
+            />
+          </label>
+          <label className="small">
+            Sprache{" "}
+            <select value={lang} onChange={(e) => setLang(e.target.value)}>
+              <option value="en">Englisch (@carina.dorca)</option>
+              <option value="de">Deutsch (@carinadorca.coach)</option>
+            </select>
+          </label>
           <div className="row-buttons">
-            <button className="btn" disabled={!!busy} onClick={() => act("ollama", async () => applyTexts(await api.reelTextsOllama(id)))}>
+            <button className="btn" disabled={!!busy || (silent && !idea.trim())} onClick={() => act("ollama", async () => applyTexts(await api.reelTextsOllama(id, idea, lang)))}>
               {busy === "ollama" ? "Lokale KI schreibt … (1–2 Min)" : "Mit lokaler KI erstellen (Ollama)"}
             </button>
-            <button className="btn ghost" disabled={!!busy} onClick={() => { copy(prompt, setMsg); setShowPaste(true); }}>
+            <button
+              className="btn ghost"
+              disabled={!!busy || (silent && !idea.trim())}
+              onClick={() => act("prompt", async () => { const r = await api.reelPrompt(id, idea, lang); copy(r.prompt, setMsg); setShowPaste(true); })}
+            >
               Auftrag für claude.ai kopieren
             </button>
           </div>
@@ -136,11 +161,28 @@ export function ReelPackage({
               </p>
               <textarea rows={5} value={paste} onChange={(e) => setPaste(e.target.value)} placeholder='{"caption": … }' />
               <button className="btn" disabled={!paste.trim() || !!busy} onClick={() => act("import", async () => {
-                applyTexts(await api.importReelTexts(id, paste));
+                applyTexts(await api.importReelTexts(id, paste, idea, lang));
                 setPaste("");
                 setShowPaste(false);
               })}>
                 Antwort übernehmen
+              </button>
+            </div>
+          )}
+          {!!texts?.scenes?.length && (
+            <div className="scenes">
+              <h4>Vorgeschlagene Texte fürs Video</h4>
+              <ol className="small">
+                {texts.scenes.map((sc, i) => (
+                  <li key={i}>{sc}</li>
+                ))}
+              </ol>
+              <button className="btn" disabled={!!busy} onClick={() => act("scenes", async () => {
+                const r = await api.applyScenes(id);
+                onCuts(r);
+                setMsg(r.warnings?.length ? r.warnings.join(" ") : "Texte ins Video übernommen ✓ – links kannst du sie noch ändern.");
+              })}>
+                Passt – ins Video übernehmen
               </button>
             </div>
           )}

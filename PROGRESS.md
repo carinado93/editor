@@ -122,6 +122,11 @@
     Größe war 30,8 MB → Berechnung korrigiert (normale Reels ≤ 90 s liegen weit darunter).
   - 37 automatische Tests
 
+- [x] 8.11.: **Reels ohne Sprechen mit eigener Idee/Prompt**: Feld „Deine Idee“ im Reel-Paket (+ Sprache EN/DE).
+  Daraus: Szenen-Texte (max. Cliplänge/4,4 s, höchstens 6), Caption, 5 Hashtags, Cover-Text, Shorts-Titel
+  (Ollama oder claude.ai). Szenen kommen erst nach „Passt – ins Video übernehmen“ ins Video (Freigabe).
+  Clips ohne Tonspur: kein Transkript, Render ohne Ton. Auch bei Clips mit Sprechen kann eine Idee mitgegeben werden.
+
 ### Nächster Schritt
 M6 Vorlagen-Bibliothek + B2 (Reel aus Idee), M6b Karussell-Generator, M7 Politur. Carina wählt die Reihenfolge.
 

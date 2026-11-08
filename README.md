@@ -75,6 +75,10 @@ Im Transkript ist alles **durchgestrichen**, was geschnitten wird. Die Farbe zei
   dem Gesicht, mindestens 4,4 s sichtbar. Weitere Texte mit „+ Text bei …“. Buzzwords wie bei YouTube.
 - **Reel-Paket:** Caption in deiner Stimme, **genau 5 Hashtags**, Cover-Text, YouTube-Shorts-Titel
   (Ollama oder claude.ai), dazu das **Reel-Cover** im Farbwechsel lila → hell → oliv.
+- **Reel ohne Sprechen** (Musik, Natur, stumme Clips, auch ganz ohne Tonspur): Schreib im Reel-Paket deine **Idee**
+  (z. B. „Sonntags-Scaries, polarisierender Hook, am Ende mein Notizbuch“). Die App schlägt Texte fürs Video,
+  Caption, 5 Hashtags und Cover-Text vor. Erst wenn du **„Passt – ins Video übernehmen“** klickst, kommen die Texte
+  ins Video (gleichmäßig verteilt, jeder mind. 4,4 s).
 - **Reel rendern:** fertiges MP4 unter 30 MB.
 - Hashtags: Die App nimmt deine Sammlung und **lernt neue passende Hashtags selbst dazu**.
 

@@ -49,6 +49,71 @@ Antworte NUR mit JSON in genau diesem Format:
 """
 
 
+SCENE_SCHEMA = """{
+  "scenes": ["Text Szene 1 (Hook)", "Text Szene 2", "…"],
+  "caption": "Caption (mehrere kurze Absätze, mit Zeilenumbrüchen \\n)",
+  "hashtags": ["#a", "#b", "#c", "#d", "#e"],
+  "cover_text": "Cover-Text, 2–4 kurze Zeilen",
+  "shorts_title": "YouTube-Shorts-Titel"
+}"""
+
+READ_SECONDS = 4.4  # so lange muss eine Aussage stehen (Carinas Erfahrung)
+
+
+def build_idea_prompt(idea: str, language: str, duration: float, transcript_text: str = "") -> str:
+    """Für Reels, in denen Carina nicht (oder nur wenig) spricht: aus ihrer Idee Szenen-Texte + Caption machen."""
+    lang = "Deutsch" if language == "de" else "Englisch"
+    account = "@carinadorca.coach" if language == "de" else "@carina.dorca"
+    bank = ", ".join(meta.hashtag_bank(language)[:30])
+    max_scenes = max(1, int(duration // READ_SECONDS)) if duration else 6
+    n = max(1, min(max_scenes, 6))
+    return f"""Du schreibst für Carina Dorca (Instagram {account}, YouTube Shorts), Stress- und Burnout-Prävention.
+Sie hat einen Clip von {duration:.0f} Sekunden gefilmt{', in dem sie nicht spricht' if not transcript_text else ''}.
+Ihre Idee / Anweisung für das Reel:
+>>> {idea.strip()} <<<
+{f'Was im Clip gesagt wird: {transcript_text}' if transcript_text else ''}
+
+{meta.GUARDRAILS}
+
+Schreibe auf {lang}:
+1. Texte, die nacheinander im Video eingeblendet werden: höchstens {n} Szenen (jede steht ca. {READ_SECONDS} s).
+   Szene 1 = polarisierender, konkreter Hook (kein "in case no one told you"). Kurze Sätze (max. 12 Wörter),
+   die letzte Szene sagt klar, was Carina anbietet oder was die Zuschauerin tun soll.
+   Ein Schlüsselwort pro Szene in *Sternchen* (wird lila-kursiv).
+2. Caption in Carinas Stimme: erste Zeile Hook + 🤍, 2–3 sehr kurze Absätze, eine kleine Aufgabe für diese Woche,
+   "📌 Save this for …", "💌 Share it with someone who …", "Follow {account} for more about anxiety, stress & burnout
+   prevention", letzte Zeile "Educational and my own experience, not a diagnosis or therapy." (auf Deutsch sinngemäß).
+   KEINE Hashtags in der Caption.
+3. GENAU 5 Hashtags, bevorzugt aus: {bank}
+4. Cover-Text (2–4 kurze Zeilen) und YouTube-Shorts-Titel (max. 70 Zeichen).
+
+Antworte NUR mit JSON in genau diesem Format:
+{SCENE_SCHEMA}
+"""
+
+
+def distribute_scenes(scenes: list[str], duration: float) -> tuple[list[dict], list[str]]:
+    """Szenen gleichmäßig über den Clip verteilen; jede mindestens 4,4 s, wenn es die Länge erlaubt."""
+    warnings = []
+    scenes = [str(x).strip() for x in scenes if str(x).strip()]
+    if not scenes or duration <= 0:
+        return [], warnings
+    slot = duration / len(scenes)
+    if slot < READ_SECONDS:
+        keep = max(1, int(duration // READ_SECONDS))
+        warnings.append(f"Der Clip ist zu kurz für {len(scenes)} Texte à {READ_SECONDS:.1f} s – "
+                        f"es werden nur die ersten {keep} gezeigt.".replace(".", ",", 1))
+        scenes = scenes[:keep]
+        slot = duration / len(scenes)
+    out = []
+    for i, text in enumerate(scenes):
+        start = round(i * slot + (0.2 if i == 0 else 0.1), 2)
+        end = round(min(duration, (i + 1) * slot - 0.1), 2)
+        out.append({"id": f"szene-{i + 1}", "kind": "hook" if i == 0 else "szene", "start": start, "end": end,
+                    "text": text, "on": True})
+    return out, warnings
+
+
 def parse(text_or_obj, language: str) -> dict:
     if isinstance(text_or_obj, str):
         m = re.search(r"\{.*\}", text_or_obj, re.S)
@@ -79,7 +144,14 @@ def parse(text_or_obj, language: str) -> dict:
             warnings.append(f"Achtung, möglicherweise Heilversprechen/heikle Aussage: „{m.group(0)}“ – bitte umformulieren.")
     if "diagnos" not in low and "therap" not in low:
         warnings.append("Hinweis „keine Diagnose oder Therapie“ fehlt in der Caption.")
-    return {"caption": caption, "hashtags": hashtags, "cover_text": cover, "shorts_title": title, "warnings": warnings}
+    scenes = [str(x).strip() for x in data.get("scenes", []) if str(x).strip()]
+    for sc in scenes:
+        for pat in meta.FORBIDDEN:
+            m = re.search(pat, sc.lower())
+            if m:
+                warnings.append(f"Achtung im Szenen-Text: „{m.group(0)}“ – bitte umformulieren.")
+    return {"caption": caption, "hashtags": hashtags, "cover_text": cover, "shorts_title": title, "scenes": scenes,
+            "warnings": warnings}
 
 
 def full_caption(d: dict) -> str:

@@ -105,7 +105,11 @@ def _process(pid: str) -> None:
 
     wav = projects.path(pid, "ton.wav")
     rep = stage("ton")
-    if not wav.exists():
+    silent = not info["has_audio"]
+    if silent and p["mode"] == "youtube":
+        raise UserError("Das Video hat keine Tonspur. Für den YouTube-Rohschnitt braucht die App deine Stimme. "
+                        "Für stumme Clips bitte den Modus „Reel veredeln“ wählen.")
+    if not silent and not wav.exists():
         media.extract_audio(src, wav, info, lambda f: rep(f))
 
     # Vorschau-Video und Transkript laufen gleichzeitig (Video-Chip und Spracherkennung stören sich kaum).
@@ -148,8 +152,14 @@ def _process(pid: str) -> None:
     t = threading.Thread(target=proxy_job, daemon=True, name="vorschau")
     t.start()
     settings = p.get("settings", {})
-    result = transcribe.transcribe(wav, projects.path(pid, "cache"), settings.get("model", "auto"),
-                                   settings.get("language", "auto"), on_trans)
+    if silent:  # stummer Clip (Reel): kein Transkript, Texte kommen aus Carinas Idee/Prompt
+        lang = settings.get("language", "auto")
+        result = {"language": lang if lang in ("de", "en") else "en", "model": "-", "device": "-",
+                  "duration": info["duration"], "segments": [], "silent": True}
+        on_trans(1.0, "Kein Ton – Texte kommen aus deiner Idee")
+    else:
+        result = transcribe.transcribe(wav, projects.path(pid, "cache"), settings.get("model", "auto"),
+                                       settings.get("language", "auto"), on_trans)
     if t.is_alive():
         on_trans(1.0, "Transkript fertig, Vorschau-Video wird noch erstellt")
     t.join()

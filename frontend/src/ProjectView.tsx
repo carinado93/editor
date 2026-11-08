@@ -620,6 +620,9 @@ export function ProjectView({ id }: { id: string }) {
 
           <div className={`transcript ${cutMode ? "editing" : ""}`} ref={textBox}>
             {!transcript && <p className="muted">Das Transkript erscheint hier, sobald es fertig ist.</p>}
+            {transcript && !transcript.segments.length && (
+              <p className="muted">In diesem Clip wird nicht gesprochen. Schreib unten im Reel-Paket deine Idee – daraus entstehen die Texte.</p>
+            )}
             {transcript?.segments.map((s, si) => (
               <p key={si} className="segment">
                 <button className="time" onClick={() => seek(s.s)} title="Hierher springen">

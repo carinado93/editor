@@ -139,3 +139,39 @@ def test_filter_script_option_matches_ffmpeg_version(monkeypatch, tmp_path):
         monkeypatch.setattr(media, "run", lambda args, v=version: type("R", (), {"stdout": v, "stderr": ""})())
         assert media.filter_script_args(script)[0] == expected, version
     media.ffmpeg_major.cache_clear()
+
+
+def test_silent_reel_with_idea(client, tmp_path):
+    video = tmp_path / "stumm.mp4"
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc=s=360x640:d=12:r=30",
+                    "-c:v", "libx264", "-pix_fmt", "yuv420p", str(video)], check=True)
+    data = video.read_bytes()
+    pid = client.post("/api/projects", json={"mode": "reel", "filename": "stumm.mp4", "size": len(data)}).json()["id"]
+    client.put(f"/api/projects/{pid}/upload?offset=0", content=data)
+    client.post(f"/api/projects/{pid}/upload/done")
+    for _ in range(150):
+        p = client.get(f"/api/projects/{pid}").json()
+        if p["status"] in ("fertig", "fehler"):
+            break
+        time.sleep(0.2)
+    assert p["status"] == "fertig", p["error"]
+    r = client.get(f"/api/projects/{pid}/reel-texte").json()
+    assert r["silent"] is True
+    # ohne Idee: verständliche Meldung
+    assert client.post(f"/api/projects/{pid}/reel-texte/auftrag", json={"idea": ""}).status_code == 400
+    prompt = client.post(f"/api/projects/{pid}/reel-texte/auftrag", json={"idea": "Sunday scaries", "language": "en"}).json()["prompt"]
+    assert "Sunday scaries" in prompt and "höchstens 2 Szenen" in prompt
+    answer = '{"scenes": ["Sunday *scaries*?", "Plan one calm thing."], "caption": "Hi 🤍 not a diagnosis or therapy", "hashtags": ["#burnout"], "cover_text": "Sunday scaries", "shorts_title": "Sunday scaries"}'
+    t = client.post(f"/api/projects/{pid}/reel-texte/import", json={"text": answer, "language": "en"}).json()["texts"]
+    assert t["scenes"] and len(t["hashtags"]) == 5
+    v = client.post(f"/api/projects/{pid}/reel-texte/szenen-uebernehmen").json()
+    ov = v["cutlist"]["overlays"]
+    assert [o["text"] for o in ov] == ["Sunday *scaries*?", "Plan one calm thing."] and ov[1]["end"] <= 12
+    client.post(f"/api/projects/{pid}/render", json={"quality": "1080"})
+    for _ in range(300):
+        p = client.get(f"/api/projects/{pid}").json()
+        if p["render"]["status"] in ("fertig", "fehler"):
+            break
+        time.sleep(0.2)
+    assert p["render"]["status"] == "fertig", p["render"]["error"]
+    assert abs(p["exports"][0]["duration"] - 12) < 0.1

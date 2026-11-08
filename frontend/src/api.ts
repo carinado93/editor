@@ -76,6 +76,7 @@ export interface ReelTexts {
   hashtags: string[];
   cover_text: string;
   shorts_title: string;
+  scenes?: string[];
   warnings?: string[];
 }
 
@@ -214,9 +215,14 @@ export const api = {
   coverColorUsed: (used: string) => call<{ next: string }>(`/api/cover-farbe/verwendet`, json({ used })),
   setOverlays: (id: string, overlays: Overlay[]) =>
     call<CutView>(`/api/projects/${id}/cuts/overlays`, { ...json({ overlays }), method: "PUT" }),
-  reelTexts: (id: string) => call<{ prompt: string; texts: ReelTexts | null; full_caption: string }>(`/api/projects/${id}/reel-texte`),
-  reelTextsOllama: (id: string) => call<{ texts: ReelTexts; full_caption: string }>(`/api/projects/${id}/reel-texte/ollama`, { method: "POST" }),
-  importReelTexts: (id: string, text: string) => call<{ texts: ReelTexts; full_caption: string }>(`/api/projects/${id}/reel-texte/import`, json({ text })),
+  reelTexts: (id: string) =>
+    call<{ texts: ReelTexts | null; full_caption: string; silent: boolean; language: string; idea: string }>(`/api/projects/${id}/reel-texte`),
+  reelPrompt: (id: string, idea: string, language: string) => call<{ prompt: string }>(`/api/projects/${id}/reel-texte/auftrag`, json({ idea, language })),
+  reelTextsOllama: (id: string, idea: string, language: string) =>
+    call<{ texts: ReelTexts; full_caption: string }>(`/api/projects/${id}/reel-texte/ollama`, json({ idea, language })),
+  importReelTexts: (id: string, text: string, idea: string, language: string) =>
+    call<{ texts: ReelTexts; full_caption: string }>(`/api/projects/${id}/reel-texte/import`, json({ text, idea, language })),
+  applyScenes: (id: string) => call<CutView & { warnings: string[] }>(`/api/projects/${id}/reel-texte/szenen-uebernehmen`, { method: "POST" }),
   saveReelTexts: (id: string, t: ReelTexts) =>
     call<{ texts: ReelTexts; full_caption: string }>(`/api/projects/${id}/reel-texte`, {
       ...json({ caption: t.caption, hashtags: t.hashtags, cover_text: t.cover_text, shorts_title: t.shorts_title }),

@@ -49,3 +49,17 @@ def test_caption_parse_exactly_five_hashtags_and_checks():
 def test_caption_prompt_has_guardrails_and_account():
     p = captions.build_prompt("Hallo", "de", "Hook")
     assert "@carinadorca.coach" in p and "GENAU 5 Hashtags" in p and "keine Heilversprechen" in p
+
+
+def test_idea_prompt_and_scene_distribution():
+    p = captions.build_idea_prompt("Sunday scaries, polarizing hook", "en", 15)
+    assert "Sunday scaries" in p and "höchstens 3 Szenen" in p and '"scenes"' in p
+    ov, warn = captions.distribute_scenes(["Hook *one*", "Two", "Three", "Four"], 15)
+    assert len(ov) == 3 and warn  # 15 s reichen nur für 3 Texte à 4,4 s
+    assert ov[0]["start"] == 0.2 and ov[-1]["end"] <= 15
+    assert all(o["end"] - o["start"] >= 4.4 for o in ov)
+
+
+def test_parse_keeps_scenes():
+    d = captions.parse('{"scenes": ["A *b*", "C"], "caption": "x not a diagnosis", "hashtags": [], "cover_text": "c", "shorts_title": "t"}', "en")
+    assert d["scenes"] == ["A *b*", "C"] and len(d["hashtags"]) == 5

@@ -418,13 +418,30 @@ def _reel_file(pid: str):
     return projects.path(pid, "reel_texte.json")
 
 
-def _reel_prompt(pid: str) -> tuple[str, str]:
+def _reel_prompt(pid: str, idea: str = "", language: str = "") -> tuple[str, str]:
     from . import captions
 
     t, v, sentences = _cut_context(pid)
     hook = next((o["text"].replace("*", "") for o in v["cutlist"].get("overlays", []) if o.get("on", True)), "")
-    lang = t.get("language", "en")
-    return captions.build_prompt(" ".join(s for _, s in sentences), lang, hook), lang
+    lang = language if language in ("de", "en") else t.get("language", "en")
+    spoken = " ".join(s for _, s in sentences)
+    if idea.strip():
+        return captions.build_idea_prompt(idea, lang, v["evaluation"]["new_duration"], spoken), lang
+    if not spoken:
+        raise UserError("In diesem Clip wird nicht gesprochen. Bitte schreib oben kurz deine Idee "
+                        "(z. B. „Sonntags-Scaries, polarisierender Hook“).")
+    return captions.build_prompt(spoken, lang, hook), lang
+
+
+class ReelIdeaBody(BaseModel):
+    idea: str = ""
+    language: str = ""
+
+
+class ReelImportBody(BaseModel):
+    text: str
+    idea: str = ""
+    language: str = ""
 
 
 @app.put("/api/projects/{pid}/cuts/overlays")
@@ -436,42 +453,70 @@ def put_overlays(pid: str, body: OverlaysBody):
 def get_reel_texts(pid: str):
     from . import captions
 
-    prompt, _ = _reel_prompt(pid)
     f = _reel_file(pid)
     data = json.loads(f.read_text(encoding="utf-8")) if f.exists() else None
-    return {"prompt": prompt, "texts": data, "full_caption": captions.full_caption(data) if data else ""}
+    t = cutstore._transcript(pid)
+    return {"texts": data, "full_caption": captions.full_caption(data) if data else "",
+            "silent": not any(s["words"] for s in t.get("segments", [])), "language": t.get("language", "en"),
+            "idea": (data or {}).get("idea", "")}
 
 
-def _save_reel(pid: str, data: dict, source: str) -> dict:
+@app.post("/api/projects/{pid}/reel-texte/auftrag")
+def reel_prompt(pid: str, body: ReelIdeaBody):
+    prompt, _ = _reel_prompt(pid, body.idea, body.language)
+    return {"prompt": prompt}
+
+
+def _save_reel(pid: str, data: dict, source: str, idea: str = "") -> dict:
     from . import captions
 
     data["source"] = source
+    data["idea"] = idea
     _reel_file(pid).write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
     return {"texts": data, "full_caption": captions.full_caption(data)}
 
 
 @app.post("/api/projects/{pid}/reel-texte/ollama")
-def reel_texts_ollama(pid: str):
+def reel_texts_ollama(pid: str, body: ReelIdeaBody):
     from . import captions
 
-    prompt, lang = _reel_prompt(pid)
-    return _save_reel(pid, captions.from_ollama(prompt, lang), "ollama")
+    prompt, lang = _reel_prompt(pid, body.idea, body.language)
+    return _save_reel(pid, captions.from_ollama(prompt, lang), "ollama", body.idea)
 
 
 @app.post("/api/projects/{pid}/reel-texte/import")
-def reel_texts_import(pid: str, body: MetaImportBody):
+def reel_texts_import(pid: str, body: ReelImportBody):
     from . import captions
 
-    _, lang = _reel_prompt(pid)
-    return _save_reel(pid, captions.parse(body.text, lang), "claude.ai")
+    lang = body.language if body.language in ("de", "en") else cutstore._transcript(pid).get("language", "en")
+    return _save_reel(pid, captions.parse(body.text, lang), "claude.ai", body.idea)
 
 
 @app.put("/api/projects/{pid}/reel-texte")
 def reel_texts_save(pid: str, body: ReelTextsBody):
     from . import captions
 
-    _, lang = _reel_prompt(pid)
-    return _save_reel(pid, captions.parse(body.model_dump(), lang), "bearbeitet")
+    f = _reel_file(pid)
+    old = json.loads(f.read_text(encoding="utf-8")) if f.exists() else {}
+    lang = cutstore._transcript(pid).get("language", "en")
+    data = captions.parse({**body.model_dump(), "scenes": old.get("scenes", [])}, lang)
+    return _save_reel(pid, data, "bearbeitet", old.get("idea", ""))
+
+
+@app.post("/api/projects/{pid}/reel-texte/szenen-uebernehmen")
+def reel_scenes_apply(pid: str):
+    """Freigegebene Szenen-Texte als Einblendungen ins Video legen (gleichmäßig, je ≥ 4,4 s)."""
+    from . import captions
+
+    f = _reel_file(pid)
+    data = json.loads(f.read_text(encoding="utf-8")) if f.exists() else {}
+    if not data.get("scenes"):
+        raise UserError("Es gibt noch keine Szenen-Texte. Bitte erst Texte aus deiner Idee erstellen lassen.")
+    _, v, _ = _cut_context(pid)
+    overlays, warnings = captions.distribute_scenes(data["scenes"], v["evaluation"]["new_duration"])
+    result = cutstore.set_overlays(pid, overlays)
+    result["warnings"] = warnings
+    return result
 
 
 # ---------- Thumbnails & Cover (M4b) ----------

@@ -204,7 +204,9 @@ def render(src: Path, info: dict, segments: list[list[float]], out: Path, work: 
     gaze_data = opts.get("gaze") or {}
 
     audio = None
-    if opts["audio_copy"] and len(frames) == 1 and frames[0][0] == 0:
+    if not info.get("has_audio"):
+        opts["audio_copy"] = False  # stummer Clip: Video ohne Ton
+    elif opts["audio_copy"] and len(frames) == 1 and frames[0][0] == 0:
         pass  # Reel: Ton bleibt exakt wie im Original (wird nur übernommen)
     else:
         opts["audio_copy"] = False
@@ -263,7 +265,9 @@ def render(src: Path, info: dict, segments: list[list[float]], out: Path, work: 
             encoder = ["-c:v", "h264_nvenc", "-preset", "p5", "-rc", "vbr", "-cq", "20", *rate, "-profile:v", "high"]
         else:
             encoder = ["-c:v", "libx264", "-preset", "fast", "-crf", "20", *rate, "-profile:v", "high"]
-    if opts["audio_copy"]:
+    if not info.get("has_audio"):
+        audio_in, audio_map, audio_codec = [], [], ["-an"]
+    elif opts["audio_copy"]:
         audio_in, audio_map, audio_codec = [], ["-map", f"0:{info['audio_index']}"], ["-c:a", "copy"]
         if info.get("audio_codec") not in ("aac", "mp3"):
             audio_codec = ["-c:a", "aac", "-b:a", "192k"]
