@@ -155,3 +155,30 @@ def test_word_tail_is_not_a_noise(tmp_path):
         w.writeframes((audio * 32767).astype(np.int16).tobytes())
     words = [{"w": "someone.", "s": 0.5, "e": 1.0, "p": 0.9}, {"w": "Then", "s": 2.2, "e": 2.5, "p": 0.9}]
     assert noises.find(wav, words) == []
+
+
+def test_sound_right_after_word_with_dip_is_found(tmp_path):
+    """Wie bei 2:14: "someone" – kurze Senke (keine Stille) – "meah"."""
+    import wave
+    import numpy as np
+    from editor_app import noises
+
+    sr = 16000
+    rng = np.random.default_rng(1)
+    audio = rng.normal(0, 0.003, sr * 4).astype(np.float32)  # Raumrauschen, nie ganz still
+
+    def tone(a, b, amp):
+        n = int((b - a) * sr)
+        audio[int(a * sr):int(a * sr) + n] += amp * np.sin(np.arange(n) * 2 * np.pi * 180 / sr)
+
+    tone(0.5, 1.15, 0.3)   # "someone" (Spracherkennung sagt: endet bei 1,0)
+    tone(1.15, 1.3, 0.02)  # Senke
+    tone(1.3, 1.45, 0.2)   # "meah"
+    tone(3.0, 3.4, 0.3)    # "Then"
+    wav = tmp_path / "ton.wav"
+    with wave.open(str(wav), "wb") as w:
+        w.setnchannels(1), w.setsampwidth(2), w.setframerate(sr)
+        w.writeframes((np.clip(audio, -1, 1) * 32767).astype(np.int16).tobytes())
+    words = [{"w": "someone.", "s": 0.5, "e": 1.0, "p": 0.9}, {"w": "Then", "s": 3.0, "e": 3.4, "p": 0.9}]
+    found = noises.find(wav, words)
+    assert len(found) == 1 and 1.25 <= found[0]["start"] <= 1.35, found

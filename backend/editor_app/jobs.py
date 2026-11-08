@@ -170,7 +170,11 @@ def _gaze(pid: str) -> None:
     """Blick-Erkennung auf dem Vorschau-Video. Fehler hier stoppen nichts (ist nur ein Zusatz)."""
     out = projects.path(pid, "blick.json")
     if out.exists():
-        return
+        try:
+            if json.loads(out.read_text(encoding="utf-8")).get("version") == gaze.VERSION:
+                return
+        except ValueError:
+            pass
     try:
         def rep(f: float):
             p = projects.load(pid)
@@ -181,6 +185,14 @@ def _gaze(pid: str) -> None:
         cutstore.refresh(pid)
     except Exception:  # noqa: BLE001
         traceback.print_exc()
+
+
+def _gaze_current(pid: str) -> bool:
+    f = projects.path(pid, "blick.json")
+    try:
+        return f.exists() and json.loads(f.read_text(encoding="utf-8")).get("version") == gaze.VERSION
+    except ValueError:
+        return False
 
 
 def _buzz(pid: str) -> None:
@@ -227,7 +239,7 @@ def start() -> None:
     for p in reversed(projects.list_all()):
         if p["status"] in ("warteschlange", "arbeitet"):
             enqueue(p["id"])
-        elif p["status"] == "fertig" and p["mode"] == "youtube" and not projects.path(p["id"], "blick.json").exists():
+        elif p["status"] == "fertig" and p["mode"] == "youtube" and not _gaze_current(p["id"]):
             _queue.put((p["id"], "blick", {}))  # ältere Projekte bekommen die Blick-Erkennung nachträglich
         elif p["status"] == "fertig" and p["mode"] == "youtube":
             _queue.put((p["id"], "buzz", {}))  # einmalig automatische Buzzwords (macht nichts, wenn schon erledigt)

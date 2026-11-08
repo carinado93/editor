@@ -72,6 +72,9 @@
 - [x] 8.11.: Laute ohne Wort („meah“, „mh“, Schmatzer): `noises.py` findet sie am Ton (fast so laut wie Sprache,
   mit Stille davor und danach, damit Wortenden nie abgeschnitten werden) und schneidet sie heraus. Anzeige „🔊 Laut“,
   per Klick behaltbar. Neue Füllwörter: meh, mäh, mh, mmh, ehm, äm, uhm (eh/ah standardmäßig aus).
+- [x] 8.11.: „meah“ bei 2:14 kam direkt nach „someone.“ ohne Stille → Regel jetzt: Lautstärke sinkt nach dem Wort
+  ≥ 10 dB ab und steigt wieder an = eigener Laut (ein Wortende klingt nur aus). MediaPipe-`tongueOut` ist immer 0
+  und Mund-Werte schlagen auch beim Sprechen an → für Grimassen unbrauchbar (Zunge wird nur genutzt, falls je > 0).
 
 ### Offen / Ideen
 - Blick-Stellen mit Zoom „überdecken“ statt schneiden (aktuell nur Schneiden als Vorschlag)

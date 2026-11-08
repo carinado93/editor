@@ -34,7 +34,9 @@ def _gaze_events(pid: str, settings: dict | None = None) -> list[dict]:
 
 def _noises(pid: str, t: dict) -> list[dict]:
     try:
-        return noises.find(projects.path(pid, "ton.wav"), cuts.flat_words(t))
+        gf = projects.path(pid, "blick.json")
+        face = json.loads(gf.read_text(encoding="utf-8")).get("samples") if gf.exists() else None
+        return noises.find(projects.path(pid, "ton.wav"), cuts.flat_words(t), face_samples=face)
     except Exception:  # noqa: BLE001 – Zusatz, darf nie stören
         return []
 
@@ -63,6 +65,7 @@ def create(pid: str, transcript: dict | None = None) -> dict:
     cl["overrides"] = {}
     cl["history"] = []
     cl["noises"] = _noises(pid, t)
+    cl["noises_v"] = noises.VERSION
     _save(pid, cl)
     return cl
 
@@ -72,8 +75,9 @@ def load(pid: str) -> dict:
     if not f.exists():
         return create(pid)
     cl = json.loads(f.read_text(encoding="utf-8"))
-    if "noises" not in cl:  # ältere Projekte: Laute einmalig nachträglich suchen
+    if cl.get("noises_v") != noises.VERSION:  # ältere Projekte: Laute (neu) suchen
         cl["noises"] = _noises(pid, _transcript(pid))
+        cl["noises_v"] = noises.VERSION
         _save(pid, cl)
     return cl
 
@@ -188,8 +192,8 @@ def refresh(pid: str) -> None:
         cl = load(pid)
         rebuilt = cuts.build(t, cl["settings"], cl["manual"], cl.get("pause_keep"), _gaze_events(pid, cl["settings"]))
         cl["detections"] = rebuilt["detections"]
-        if "noises" not in cl:
-            cl["noises"] = _noises(pid, t)
+        cl["noises"] = _noises(pid, t)  # nach neuer Blick-Analyse: Grimassen mit einbeziehen
+        cl["noises_v"] = noises.VERSION
         _apply_overrides(cl)
         _save(pid, cl)
 

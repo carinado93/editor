@@ -23,6 +23,7 @@ from .errors import UserError
 MODEL_URL = ("https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/"
              "face_landmarker.task")
 SAMPLE_FPS = 5.0
+VERSION = 2  # erhöhen, wenn neue Werte gespeichert werden (ältere Analysen werden dann neu gemacht)
 
 DEFAULTS = {
     "min_seconds": 1.5,   # so lange muss der Blick weg sein
@@ -104,6 +105,10 @@ def analyze(video: Path, progress: Callable[[float], None] | None = None) -> dic
                                           bs.get("eyeLookInLeft", 0) + bs.get("eyeLookOutRight", 0)) / 2, 3),
                         "blink": round((bs.get("eyeBlinkLeft", 0) + bs.get("eyeBlinkRight", 0)) / 2, 3),
                         "smile": round((bs.get("mouthSmileLeft", 0) + bs.get("mouthSmileRight", 0)) / 2, 3),
+                        "tongue": round(bs.get("tongueOut", 0), 3),
+                        "jaw": round(bs.get("jawOpen", 0), 3),
+                        "grimace": round(max(bs.get("mouthFunnel", 0), bs.get("mouthPucker", 0),
+                                             (bs.get("noseSneerLeft", 0) + bs.get("noseSneerRight", 0)) / 2), 3),
                     })
                 samples.append(s)
                 if progress and total:
@@ -112,7 +117,7 @@ def analyze(video: Path, progress: Callable[[float], None] | None = None) -> dic
     cap.release()
     if progress:
         progress(1.0)
-    return {"sample_fps": SAMPLE_FPS, "samples": samples}
+    return {"version": VERSION, "sample_fps": SAMPLE_FPS, "samples": samples}
 
 
 def baseline(samples: list[dict]) -> dict:
