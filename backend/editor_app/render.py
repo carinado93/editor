@@ -245,7 +245,7 @@ def render(src: Path, info: dict, segments: list[list[float]], out: Path, work: 
 
     tmp = out.with_suffix(".tmp.mp4")
     args = ["-i", str(src), "-f", "s16le", "-ar", str(SR), "-ac", str(CH), "-i", str(audio),
-            "-filter_complex_script", str(script), "-map", "[v]", "-map", "1:a",
+            *media.filter_script_args(script), "-map", "[v]", "-map", "1:a",
             *_encoder(), "-r", fps_str, "-c:a", "aac", "-b:a", "192k",
             "-movflags", "+faststart", "-map_metadata", "-1", "-shortest", str(tmp)]
     started = time.time()

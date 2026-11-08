@@ -125,3 +125,17 @@ def test_upload_in_chunks_and_process(client, tmp_path):
     assert (tmp_path / pid / "original.mp4").read_bytes() == data
     assert client.delete(f"/api/projects/{pid}").json()["ok"]
     assert client.get("/api/projects").json() == []
+
+
+def test_filter_script_option_matches_ffmpeg_version(monkeypatch, tmp_path):
+    from editor_app import media
+
+    script = tmp_path / "f.txt"
+    for version, expected in [("ffmpeg version 8.0-essentials_build-www.gyan.dev", "-/filter_complex"),
+                              ("ffmpeg version 7.1.1 Copyright", "-/filter_complex"),
+                              ("ffmpeg version n7.0", "-/filter_complex"),
+                              ("ffmpeg version 6.1.1-3ubuntu5 Copyright", "-filter_complex_script")]:
+        media.ffmpeg_major.cache_clear()
+        monkeypatch.setattr(media, "run", lambda args, v=version: type("R", (), {"stdout": v, "stderr": ""})())
+        assert media.filter_script_args(script)[0] == expected, version
+    media.ffmpeg_major.cache_clear()

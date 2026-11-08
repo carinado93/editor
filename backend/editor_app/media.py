@@ -109,6 +109,22 @@ def _run_with_progress(args: list[str], duration: float, progress: Progress | No
 
 
 @functools.cache
+def ffmpeg_major() -> int:
+    r = run([ffmpeg(), "-hide_banner", "-version"])
+    m = re.search(r"ffmpeg version n?(\d+)", r.stdout)
+    return int(m.group(1)) if m else 0
+
+
+def filter_script_args(script: Path) -> list[str]:
+    """Filter aus Datei lesen. ffmpeg 7+: "-/filter_complex datei", ältere Versionen: "-filter_complex_script"."""
+    major = ffmpeg_major()
+    if major == 0:  # unbekannte Version (z. B. Entwicklerversion "N-12345"): neue Schreibweise testen
+        test = run([ffmpeg(), "-hide_banner", "-h", "full"])
+        major = 6 if "filter_complex_script" in test.stdout else 7
+    return ["-/filter_complex", str(script)] if major >= 7 else ["-filter_complex_script", str(script)]
+
+
+@functools.cache
 def h264_encoder() -> list[str]:
     """Nimmt den Video-Chip der Nvidia-Grafikkarte (viel schneller), wenn er da ist, sonst den Prozessor."""
     test = run([ffmpeg(), "-hide_banner", "-f", "lavfi", "-i", "color=black:s=256x256:d=0.1",
