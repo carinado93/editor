@@ -34,11 +34,15 @@ rem ---- 2. ffmpeg (schneiden und umwandeln) ----
 if not exist "tools\ffmpeg\bin\ffmpeg.exe" (
   where ffmpeg >nul 2>nul
   if errorlevel 1 (
-    echo   [2/4] Einmalig: ffmpeg wird geladen (ca. 100 MB^) ...
+    echo   [2/4] Einmalig: ffmpeg wird geladen (ca. 100 MB, kann ein paar Minuten dauern^) ...
     if not exist tools mkdir tools
+    curl.exe -L -# -o "tools\ffmpeg.zip" "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
+    if errorlevel 1 (
+      powershell -NoProfile -ExecutionPolicy Bypass -Command "Invoke-WebRequest 'https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip' -OutFile 'tools\ffmpeg.zip'"
+    )
+    echo         Wird entpackt ...
     powershell -NoProfile -ExecutionPolicy Bypass -Command ^
       "$ProgressPreference='SilentlyContinue';" ^
-      "Invoke-WebRequest 'https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip' -OutFile 'tools\ffmpeg.zip';" ^
       "Expand-Archive 'tools\ffmpeg.zip' -DestinationPath 'tools\ffmpeg_tmp' -Force;" ^
       "$inner = Get-ChildItem 'tools\ffmpeg_tmp' -Directory | Select-Object -First 1;" ^
       "Move-Item $inner.FullName 'tools\ffmpeg';" ^
