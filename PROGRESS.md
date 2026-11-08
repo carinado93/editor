@@ -81,6 +81,9 @@
 - Buzzword-Varianten (Durchstreichen, Wort-Slam, Karte) kommen mit der Vorlagen-Bibliothek (M6) auch für YouTube
 
 ### Neu geplant
+- **M6c Inspiration → eigene Version** (vorgemerkt für nächste Woche): Screenshots/Bildschirmaufnahme eines fremden
+  Reels hochladen → App erkennt Aufbau, Takt, Text-Stil → baut daraus eine Vorlage mit Carinas eigenen Clips und
+  Worten (nie 1:1). Bilderkennung über Gemma 3 (Ollama) oder claude.ai.
 - **Captions & Hashtags für YouTube, Reels und Karussells** (Wunsch 8.11.): gemeinsamer Baustein, Hashtag-Sammlung
   aus ihren Beispielen in `vorlagen/hashtags.json`. Offen: Anzahl Hashtags (Vorgabe „genau 5“ vs. ~20 im
   Karussell-Beispiel als erster Kommentar).

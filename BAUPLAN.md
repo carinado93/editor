@@ -98,6 +98,16 @@ Ein gemeinsamer Text-Baustein für **YouTube, Reels und Karussells** (EN für @c
 - Inspirations-Reel → eigene Version in deinen Worten (nie 1:1)
 - **Demo:** pro Vorlage ein Beispiel-GIF, ein komplettes Reel EN+DE
 
+### M6c – Inspiration → eigene Version (für nächste Woche vorgemerkt, Wunsch 8.11.)
+- Carina gibt ein Beispiel: **Screenshots**, eine **Bildschirmaufnahme** des Reels oder den heruntergeladenen Clip
+  (falls sie ihn hat) – Screensharing live ist nicht nötig.
+- Die App zerlegt das Beispiel: Szenen und Schnitt-Takt (Szenenerkennung), Text-Positionen und -Längen, Art der
+  Animation, Farben, Aufbau (Hook → Aussagen → Abschluss). Bilder liest **Gemma 3 über Ollama** (kann Bilder,
+  kostenlos) oder Claude über den claude.ai-Weg.
+- Daraus wird eine **Vorlage** (Szenen-JSON) aus der Vorlagen-Bibliothek, die mit **Carinas eigenen Videos,
+  Worten und Farben** gefüllt wird – nie 1:1 kopiert (Texte, Musik und Bilder anderer bleiben außen vor).
+- Vorschau-Standbilder, Freigabe, dann Render – wie bei B2.
+
 ### M6b – Karussell-Generator (neu, Wunsch 8.11.)
 - Aus einem Prompt (z. B. „Karussell über Coping-Tools vs. Ursachen, EN“) → Folientexte + Caption + 5 Hashtags
   (Vorschlag per Ollama oder claude.ai-Kopierweg, **erst nach Carinas Freigabe** wird gestaltet)
