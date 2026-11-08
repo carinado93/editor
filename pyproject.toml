@@ -1,0 +1,28 @@
+[project]
+name = "carina-editor"
+version = "0.1.0"
+description = "Automatischer Video-Editor für Carina Dorca (lokal im Browser)"
+requires-python = ">=3.11,<3.14"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "faster-whisper>=1.1",
+    "numpy>=1.26",
+]
+
+[project.optional-dependencies]
+# Nvidia-Grafikkarte: CUDA-Bibliotheken für die Spracherkennung
+gpu = [
+    "nvidia-cublas-cu12; sys_platform == 'win32' or sys_platform == 'linux'",
+    "nvidia-cudnn-cu12>=9,<10; sys_platform == 'win32' or sys_platform == 'linux'",
+]
+
+[dependency-groups]
+dev = ["pytest>=8", "httpx>=0.27"]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["backend/tests"]
+pythonpath = ["backend"]
