@@ -74,6 +74,16 @@ Nach jedem Meilenstein bekommst du: **Screenshots der App + Vorschau-Bilder/Vide
   Reel-Cover mit Farbschleier lila/hell/oliv)
 - **Demo:** 3 Thumbnail- und 3 Cover-Varianten aus ihrem Testvideo
 
+### Querschnitt: Captions & Hashtags für alle Formate (Wunsch 8.11.)
+Ein gemeinsamer Text-Baustein für **YouTube, Reels und Karussells** (EN für @carina.dorca, DE für @carinadorca.coach):
+- **YouTube** (fertig in M4): Beschreibung + Kapitel + Tags + 3 Hashtags; dazu Shorts-Titel
+- **Reel/Short**: Caption in Carinas Stimme (Hook-Zeile, kurze Absätze, Mini-Aufgabe, 📌 Save / 💌 Share,
+  „Follow me for …“, Hinweis „not a diagnosis or therapy“), Hashtags, Cover-Text, YouTube-Shorts-Titel
+- **Karussell**: gleiche Caption-Struktur wie ihre Beispiele, Hashtags
+- Hashtags kommen aus ihrer eigenen Sammlung `vorlagen/hashtags.json` (editierbar) + passend zum Thema
+- Leitplanken-Prüfung (keine Heilversprechen) und Zählen der Hashtags automatisch
+- Wege: Ollama (automatisch) oder claude.ai-Kopierweg, alles editierbar, Kopier-Knöpfe
+
 ### M5 – Reel-Modus B1 "Veredeln" (ca. 2 Sitzungen)
 - `style.json` mit deinen Farben, Schriften, Safe Zone, Lesezeit (4,4 s), Cover-Rotation (nächstes: **hell**)
 - Video bleibt exakt wie es ist (Länge, Tempo, Format, kein Filter, Ton unangetastet)

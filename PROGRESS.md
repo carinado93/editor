@@ -81,6 +81,9 @@
 - Buzzword-Varianten (Durchstreichen, Wort-Slam, Karte) kommen mit der Vorlagen-Bibliothek (M6) auch für YouTube
 
 ### Neu geplant
+- **Captions & Hashtags für YouTube, Reels und Karussells** (Wunsch 8.11.): gemeinsamer Baustein, Hashtag-Sammlung
+  aus ihren Beispielen in `vorlagen/hashtags.json`. Offen: Anzahl Hashtags (Vorgabe „genau 5“ vs. ~20 im
+  Karussell-Beispiel als erster Kommentar).
 - **M6b Karussell-Generator** (Wunsch 8.11.): Prompt → Folien im bisherigen Stil + Caption. Erste Beispiele erhalten,
   Stil in `docs/KARUSSELL_STIL.md`. Carina schickt weitere Beispiele.
 - **M4b Thumbnail- & Cover-Generator** (Wunsch 8.11.): Standbild aus dem Video → Thumbnail/Reel-Cover im Stil ihrer
