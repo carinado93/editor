@@ -98,8 +98,19 @@
   - UI „YouTube-Paket“ unter der Schnittansicht; 29 automatische Tests
   - Ollama-Weg hier nicht testbar (läuft nur auf Carinas PC); claude.ai-Weg mit einer Test-Antwort geprüft
 
+- [x] 8.11.: **Immer genau 5 Hashtags** (auch YouTube). App lernt neue Hashtags selbst (daten/hashtags_gelernt.json,
+  nicht im Git), Grundsammlung `vorlagen/hashtags.json`.
+- [x] 8.11.: DaVinci-Export entfernt (keine Programme, die Carina nicht hat).
+- [x] **M4b Thumbnail- & Cover-Generator** (`covers.py`, Pillow):
+  - YouTube „Aussage“ 1280×720: Creme-Rosa links, fette Versalien (Poppins ExtraBold als Ersatz, bis Carina ihre
+    Canva-Schrift nennt), *Schlüsselwort* rosa und größer, weinrote Pille, Carina rechts mit weicher Blende, Aquarell
+  - YouTube „Meditation“: Foto mit Creme-Blende links, Serif-Titel, kursiver Untertitel, Pille + Label, Name-Fuß
+  - Reel-Cover 1080×1920: Farbschleier lila/hell/oliv, Cormorant zentriert über/unter dem Gesicht, Rotation wird
+    gemerkt (daten/einstellungen.json, Start: hell)
+  - 3 Varianten aus den 3 besten Standbildern, JPEG < 2 MB; UI „Thumbnail gestalten“ im YouTube-Paket
+
 ### Nächster Schritt
-M4b Thumbnail-/Cover-Generator (Beispiele da) oder M5 Reel-Modus – Carina entscheidet die Reihenfolge.
+M5 Reel-Modus (läuft).
 
 ### Entscheidungen
 - 8.11.: **Keine Programme, die Carina nicht schon hat** (kein DaVinci). DaVinci-Export (FCPXML/EDL) wieder entfernt.

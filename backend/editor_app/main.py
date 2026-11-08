@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import re
 import shutil
+import time
 import webbrowser
 from contextlib import asynccontextmanager
 
@@ -398,6 +399,107 @@ def get_thumbnail(pid: str, name: str):
     if "/" in name or "\\" in name or not f.is_file():
         raise HTTPException(404)
     return FileResponse(f, media_type="image/jpeg")
+
+
+# ---------- Thumbnails & Cover (M4b) ----------
+
+class CoverBody(BaseModel):
+    kind: str  # youtube | meditation | reel
+    text: str = ""
+    pill: str = ""
+    subtitle: str = ""
+    top_pill: str = ""
+    top_label: str = ""
+    color: str = "auto"
+
+
+def _ensure_thumbs(pid: str) -> list[dict]:
+    from . import thumbs
+
+    p = projects.load(pid)
+    if p.get("thumbnails"):
+        d = projects.path(pid, "export") / "thumbnails"
+        if all((d / t["file"]).exists() for t in p["thumbnails"]):
+            return p["thumbnails"]
+    _, v, _ = _cut_context(pid)
+    gf = projects.path(pid, "blick.json")
+    data = json.loads(gf.read_text(encoding="utf-8")) if gf.exists() else {}
+    shots = thumbs.make(projects.path(pid, p["original_file"]), data, v["evaluation"]["keep"],
+                        projects.path(pid, "export") / "thumbnails")
+    projects.update(pid, thumbnails=shots)
+    return shots
+
+
+@app.get("/api/projects/{pid}/cover-vorschlag")
+def cover_defaults(pid: str):
+    from . import buzz, covers
+
+    _, _, sentences = _cut_context(pid)
+    f = _meta_file(pid)
+    meta_data = json.loads(f.read_text(encoding="utf-8")) if f.exists() else None
+    title = (meta_data or {}).get("titles", [""])[0] if meta_data and meta_data.get("titles") else ""
+    hook = sentences[0][1] if sentences else ""
+    short_hook = " ".join(re.sub(r"[.!?…]+$", "", hook).split()[:7])
+    return {
+        "youtube": {"text": covers.default_thumb_text(title or short_hook, buzz.THEMEN), "pill": ""},
+        "meditation": {"text": title or short_hook, "subtitle": "", "top_pill": "", "top_label": ""},
+        "reel": {"text": short_hook, "color": covers.next_cover_color()},
+        "next_color": covers.next_cover_color(),
+    }
+
+
+@app.post("/api/projects/{pid}/covers")
+def make_covers(pid: str, body: CoverBody):
+    from PIL import Image
+
+    from . import covers
+
+    if body.kind not in ("youtube", "meditation", "reel"):
+        raise UserError("Unbekannte Art.")
+    if not body.text.strip():
+        raise UserError("Bitte einen Text eingeben.")
+    shots = _ensure_thumbs(pid)[:3]
+    gf = projects.path(pid, "blick.json")
+    samples = json.loads(gf.read_text(encoding="utf-8")).get("samples", []) if gf.exists() else []
+    color = covers.next_cover_color() if body.color == "auto" else body.color
+    out_dir = projects.path(pid, "export") / "cover"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    for old in out_dir.glob(f"{body.kind}_*"):
+        old.unlink()
+    files = []
+    for n, shot in enumerate(shots, 1):
+        img = Image.open(projects.path(pid, "export") / "thumbnails" / shot["file"]).convert("RGB")
+        faces = [s for s in samples if s.get("face")]
+        face = min(faces, key=lambda s: abs(s["t"] - shot["t"]))["box"] if faces else None
+        if body.kind == "youtube":
+            im = covers.youtube_talking(img, face, body.text, body.pill)
+        elif body.kind == "meditation":
+            im = covers.youtube_meditation(img, face, body.text, body.subtitle, body.top_pill, body.top_label)
+        else:
+            im = covers.reel_cover(img, face, body.text, color)
+        name = f"{body.kind}_{n}_{int(time.time())}.jpg"
+        im.save(out_dir / name, "JPEG", quality=92)  # YouTube erlaubt max. 2 MB
+        files.append(name)
+    return {"files": files, "color": color if body.kind == "reel" else None}
+
+
+@app.get("/api/projects/{pid}/cover/{name}")
+def get_cover(pid: str, name: str):
+    f = projects.path(pid, "export") / "cover" / name
+    if "/" in name or "\\" in name or not f.is_file():
+        raise HTTPException(404)
+    return FileResponse(f, media_type="image/jpeg", filename=name)
+
+
+class ColorBody(BaseModel):
+    used: str
+
+
+@app.post("/api/cover-farbe/verwendet")
+def cover_color_used(body: ColorBody):
+    from . import covers
+
+    return {"next": covers.advance_cover_color(body.used)}
 
 
 # ---------- Oberfläche ----------

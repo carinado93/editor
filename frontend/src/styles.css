@@ -1036,3 +1036,52 @@ kbd {
   object-fit: cover;
   background: var(--creme-2);
 }
+
+/* ---------- M4b: Cover-Studio ---------- */
+.cover-studio {
+  display: grid;
+  gap: 10px;
+}
+
+.cover-form {
+  display: grid;
+  gap: 8px;
+}
+
+.cover-form label {
+  display: grid;
+  gap: 4px;
+}
+
+.cover-form input,
+.cover-form select {
+  font: inherit;
+  border: 1px solid var(--creme-2);
+  border-radius: 8px;
+  padding: 7px 10px;
+  background: var(--weiss);
+  color: var(--braun);
+}
+
+.cover-form .two {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.cover-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+
+.cover-grid.tall {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.cover-grid img {
+  width: 100%;
+  display: block;
+  border-radius: 8px;
+  box-shadow: var(--schatten);
+}

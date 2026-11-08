@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, type YoutubeMeta } from "./api";
+import { CoverStudio } from "./CoverStudio";
 
 function copy(text: string, done: (msg: string) => void) {
   navigator.clipboard.writeText(text).then(
@@ -113,7 +114,9 @@ export function YoutubePackage({ id }: { id: string }) {
               </a>
             ))}
           </div>
-          <p className="small muted">Fertige Thumbnails mit Text in deinem Stil kommen im nächsten Meilenstein.</p>
+          <h3 style={{ marginTop: 24 }}>Thumbnail gestalten</h3>
+          <p className="small muted">Im Stil deiner bisherigen Thumbnails, aus den besten Standbildern oben.</p>
+          <CoverStudio id={id} kinds={["youtube", "meditation", "reel"]} />
 
           <p className="small muted" style={{ marginTop: 16 }}>
             Für CapCut: das gerenderte MP4 und die Untertitel-Datei (.srt) aus dem Export-Ordner nehmen.

@@ -187,6 +187,13 @@ export const api = {
     }),
   thumbnails: (id: string) => call<{ thumbnails: { file: string; t: number }[] }>(`/api/projects/${id}/thumbnails`, { method: "POST" }),
   thumbnailUrl: (id: string, file: string) => `/api/projects/${id}/thumbnails/${encodeURIComponent(file)}`,
+  coverDefaults: (id: string) =>
+    call<{ youtube: { text: string; pill: string }; meditation: Record<string, string>; reel: { text: string; color: string }; next_color: string }>(
+      `/api/projects/${id}/cover-vorschlag`,
+    ),
+  covers: (id: string, body: Record<string, string>) => call<{ files: string[]; color: string | null }>(`/api/projects/${id}/covers`, json(body)),
+  coverUrl: (id: string, file: string) => `/api/projects/${id}/cover/${encodeURIComponent(file)}`,
+  coverColorUsed: (used: string) => call<{ next: string }>(`/api/cover-farbe/verwendet`, json({ used })),
   render: (id: string, quality: string) => call<Project>(`/api/projects/${id}/render`, json({ quality })),
   openFolder: (id: string) => call<{ ok: boolean }>(`/api/projects/${id}/open-folder`, { method: "POST" }),
   exportUrl: (id: string, file: string) => `/api/projects/${id}/export/${encodeURIComponent(file)}`,
