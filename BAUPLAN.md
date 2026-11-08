@@ -53,6 +53,10 @@ Nach jedem Meilenstein bekommst du: **Screenshots der App + Vorschau-Bilder/Vide
 - Zoom-Stufen 100/108/115 % abwechselnd bei Jump Cuts (Gesicht bleibt mittig)
 - Ton: −14 LUFS (loudnorm, 2 Durchgänge), sanfte Kompression, optional Rauschentfernung
 - Untertitel wortgenau, SRT, optional eingebrannt im Reel-Stil, Karaoke-Highlight optional
+- **Neu (Wunsch 8.11.): Buzzwords und Animationen auch für YouTube.** Schlüsselwörter/Kernsätze aus dem Transkript
+  (Vorschlag per Ollama, von dir bestätigt) werden als animierte Text-Einblendungen in deinem Stil gezeigt
+  (Flieder-Highlight, Wort-Pop, Kernsatz-Karte), nie über dem Gesicht. Im Transkript markierst du Wörter als
+  „Buzzword“, die Vorschau zeigt sie, gerendert wird erst nach deinem Klick.
 - **Demo:** Blick-Markierungen im Transkript, Frames mit Zoom und Untertiteln
 
 ### M4 – Exporte & YouTube-Extras (ca. 1 Sitzung)

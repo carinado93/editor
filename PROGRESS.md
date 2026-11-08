@@ -46,7 +46,8 @@
 - [ ] Ein deutsches Testvideo (für Füllwörter wie „äh/ähm“) und eines mit Blick ins Script
 
 ### Nächster Schritt: Meilenstein 3
-Blick-Erkennung (MediaPipe), Zoom-Wechsel bei Jump Cuts, Lautheit −14 LUFS + Kompression, Untertitel (SRT, eingebrannt).
+Blick-Erkennung (MediaPipe), Zoom-Wechsel bei Jump Cuts, Lautheit −14 LUFS + Kompression, Untertitel (SRT, eingebrannt),
+**Buzzword-Highlights und Text-Animationen auch im YouTube-Modus** (Carinas Wunsch vom 8.11.).
 
 ### Entscheidungen
 - 8.11.: **So wenig bezahlen wie möglich.** Keine kostenpflichtigen Dienste einbauen.
