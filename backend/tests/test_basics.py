@@ -175,3 +175,8 @@ def test_silent_reel_with_idea(client, tmp_path):
         time.sleep(0.2)
     assert p["render"]["status"] == "fertig", p["render"]["error"]
     assert abs(p["exports"][0]["duration"] - 12) < 0.1
+
+
+def test_unknown_api_says_restart(client):
+    r = client.post("/api/projects/xyz/gibt-es-nicht", json={})
+    assert r.status_code == 404 and "neu starten" in r.json()["fehler"]

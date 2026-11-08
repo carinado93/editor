@@ -628,6 +628,14 @@ def cover_color_used(body: ColorBody):
     return {"next": covers.advance_cover_color(body.used)}
 
 
+# Unbekannte Adresse unter /api: meist läuft noch ein alter Motor mit neuer Oberfläche (nach "Git: Pull")
+@app.api_route("/api/{rest:path}", methods=["GET", "POST", "PUT", "DELETE"])
+def unknown_api(rest: str):
+    return JSONResponse({"fehler": "Diese Funktion kennt der laufende Motor noch nicht. Bitte die App neu starten: "
+                                   "schwarzes Fenster bzw. Terminal schließen und start.bat erneut starten, "
+                                   "dann im Browser Strg+F5."}, status_code=404)
+
+
 # ---------- Oberfläche ----------
 
 if config.FRONTEND_DIST.exists():
