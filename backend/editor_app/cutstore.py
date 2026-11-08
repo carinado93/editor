@@ -8,7 +8,7 @@ import copy
 import json
 import threading
 
-from . import cuts, gaze, projects
+from . import cuts, gaze, noises, projects
 from .errors import UserError
 
 _lock = threading.RLock()
@@ -29,6 +29,13 @@ def _gaze_events(pid: str, settings: dict | None = None) -> list[dict]:
     try:
         return gaze.away_events(json.loads(f.read_text(encoding="utf-8")), (settings or {}).get("gaze"))
     except (OSError, ValueError):
+        return []
+
+
+def _noises(pid: str, t: dict) -> list[dict]:
+    try:
+        return noises.find(projects.path(pid, "ton.wav"), cuts.flat_words(t))
+    except Exception:  # noqa: BLE001 – Zusatz, darf nie stören
         return []
 
 
@@ -55,6 +62,7 @@ def create(pid: str, transcript: dict | None = None) -> dict:
     cl = cuts.build(t, cuts.default_settings(t.get("language", "de")), gaze_events=_gaze_events(pid))
     cl["overrides"] = {}
     cl["history"] = []
+    cl["noises"] = _noises(pid, t)
     _save(pid, cl)
     return cl
 
@@ -63,7 +71,11 @@ def load(pid: str) -> dict:
     f = _file(pid)
     if not f.exists():
         return create(pid)
-    return json.loads(f.read_text(encoding="utf-8"))
+    cl = json.loads(f.read_text(encoding="utf-8"))
+    if "noises" not in cl:  # ältere Projekte: Laute einmalig nachträglich suchen
+        cl["noises"] = _noises(pid, _transcript(pid))
+        _save(pid, cl)
+    return cl
 
 
 def view(pid: str, cutlist: dict | None = None) -> dict:
@@ -176,6 +188,8 @@ def refresh(pid: str) -> None:
         cl = load(pid)
         rebuilt = cuts.build(t, cl["settings"], cl["manual"], cl.get("pause_keep"), _gaze_events(pid, cl["settings"]))
         cl["detections"] = rebuilt["detections"]
+        if "noises" not in cl:
+            cl["noises"] = _noises(pid, t)
         _apply_overrides(cl)
         _save(pid, cl)
 

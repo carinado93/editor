@@ -295,7 +295,8 @@ export function ProjectView({ id }: { id: string }) {
   cuts?.cutlist.detections.forEach((d) => d.active && (counts[d.type] = (counts[d.type] ?? 0) + 1));
   if (cuts?.cutlist.manual.cut.length) counts.manuell = cuts.cutlist.manual.cut.length;
   const suggestions = cuts?.cutlist.detections.filter((d) => !d.active).length ?? 0;
-  const pausesCut = cuts?.evaluation.pauses.filter((p) => !p.kept).length ?? 0;
+  const pausesCut = cuts?.evaluation.pauses.filter((p) => !p.kept && !p.noise).length ?? 0;
+  const noisesCut = cuts?.evaluation.pauses.filter((p) => !p.kept && p.noise).length ?? 0;
   const oldDur = cuts?.evaluation.old_duration ?? project.info?.duration ?? 0;
   const newDur = cuts?.evaluation.new_duration ?? 0;
   const duration = project.info?.duration ?? 0;
@@ -364,6 +365,7 @@ export function ProjectView({ id }: { id: string }) {
               ) : null,
             )}
             {pausesCut > 0 && <span className="chip cut-pause">Pausen gekürzt: {pausesCut}</span>}
+            {noisesCut > 0 && <span className="chip cut-fuellwort">Laute ohne Wort: {noisesCut}</span>}
             {suggestions > 0 && <span className="chip suggestion">Vorschläge: {suggestions}</span>}
           </div>
           <div className="tempo" role="radiogroup" aria-label="Tempo">
@@ -636,10 +638,18 @@ export function ProjectView({ id }: { id: string }) {
                           <button
                             className={`pause ${pause.kept ? "kept" : ""}`}
                             disabled={busy}
-                            title={pause.kept ? "Pause bleibt. Klick: kürzen" : "Pause wird gekürzt. Klick: behalten"}
+                            title={
+                              pause.noise
+                                ? pause.kept
+                                  ? "Laut (z. B. „mh“) bleibt. Klick: herausschneiden"
+                                  : "Laut ohne Wort (z. B. „mh“, „meah“) wird herausgeschnitten. Klick: behalten"
+                                : pause.kept
+                                  ? "Pause bleibt. Klick: kürzen"
+                                  : "Pause wird gekürzt. Klick: behalten"
+                            }
                             onClick={() => run(() => api.setPause(id, pause.after, !pause.kept))}
                           >
-                            ⏸ {pause.length.toFixed(1).replace(".", ",")} s
+                            {pause.noise ? "🔊 Laut" : "⏸"} {pause.length.toFixed(1).replace(".", ",")} s
                           </button>
                         )}
                       </Fragment>

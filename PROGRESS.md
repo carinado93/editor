@@ -66,6 +66,13 @@
   bzw. beim App-Start für bestehende Projekte einmalig Ollama-Vorschlag, sonst eingebaute Regeln (`buzz.py`:
   Themenwörter, Zahlen, starke Wörter, ca. alle 15 s, keine Wiederholung). Von Hand gesetzte werden nie überschrieben.
 
+- [x] 8.11.: Render-Fehler bei Carina „Unrecognized option 'filter_complex_script'“: ihr ffmpeg (Gyan, 7/8) kennt die
+  alte Option nicht mehr → App erkennt die Version und nutzt `-/filter_complex datei`. (Konnte ffmpeg 8 hier nicht
+  selbst ausführen, Test mit nachgestellten Versionsangaben.)
+- [x] 8.11.: Laute ohne Wort („meah“, „mh“, Schmatzer): `noises.py` findet sie am Ton (fast so laut wie Sprache,
+  mit Stille davor und danach, damit Wortenden nie abgeschnitten werden) und schneidet sie heraus. Anzeige „🔊 Laut“,
+  per Klick behaltbar. Neue Füllwörter: meh, mäh, mh, mmh, ehm, äm, uhm (eh/ah standardmäßig aus).
+
 ### Offen / Ideen
 - Blick-Stellen mit Zoom „überdecken“ statt schneiden (aktuell nur Schneiden als Vorschlag)
 - Buzzword-Varianten (Durchstreichen, Wort-Slam, Karte) kommen mit der Vorlagen-Bibliothek (M6) auch für YouTube

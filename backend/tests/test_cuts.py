@@ -106,3 +106,52 @@ def test_padding_never_reaches_into_a_cut_word():
             mid = (words[k]["s"] + words[k]["e"]) / 2
             assert not any(a <= words[k]["s"] + 0.01 and words[k]["s"] + 0.01 <= b for a, b in ev["keep"]), words[k]
             assert not any(a <= mid <= b for a, b in ev["keep"])
+
+
+def test_noise_between_words_is_found_and_cut(tmp_path):
+    import wave
+    import numpy as np
+    from editor_app import noises
+
+    sr = 16000
+    audio = np.zeros(sr * 4, dtype=np.float32)
+    rng = np.random.default_rng(0)
+
+    def tone(a, b, amp):
+        n = int((b - a) * sr)
+        audio[int(a * sr):int(a * sr) + n] = amp * np.sin(np.arange(n) * 2 * np.pi * 200 / sr) + rng.normal(0, 0.001, n)
+
+    tone(0.5, 1.0, 0.3)   # Wort 1
+    tone(1.6, 1.85, 0.25)  # "meah" (kein Wort erkannt)
+    tone(2.5, 3.0, 0.3)   # Wort 2
+    wav = tmp_path / "ton.wav"
+    with wave.open(str(wav), "wb") as w:
+        w.setnchannels(1), w.setsampwidth(2), w.setframerate(sr)
+        w.writeframes((audio * 32767).astype(np.int16).tobytes())
+    words = [{"w": "Hallo", "s": 0.5, "e": 1.0, "p": 0.9}, {"w": "Welt", "s": 2.5, "e": 3.0, "p": 0.9}]
+    found = noises.find(wav, words)
+    assert len(found) == 1 and 1.5 <= found[0]["start"] <= 1.7 and 1.8 <= found[0]["end"] <= 1.95
+    t = {"language": "de", "duration": 4.0, "segments": [{"s": 0, "e": 3, "text": "", "words": words}]}
+    cl = cuts.build(t, cuts.default_settings("de"))
+    cl["noises"] = found
+    keep = cuts.evaluate(t, cl)["keep"]
+    assert not any(a <= 1.7 <= b for a, b in keep)  # Laut liegt in keinem behaltenen Bereich
+    cl["pause_keep"] = [0]  # "behalten" geklickt
+    assert len(cuts.evaluate(t, cl)["keep"]) == 1
+
+
+def test_word_tail_is_not_a_noise(tmp_path):
+    import wave
+    import numpy as np
+    from editor_app import noises
+
+    sr = 16000
+    audio = np.zeros(sr * 3, dtype=np.float32)
+    n = int(0.9 * sr)  # Wort klingt länger als die Spracherkennung meint (bis 1,4 s statt 1,0 s)
+    audio[int(0.5 * sr):int(0.5 * sr) + n] = 0.3 * np.sin(np.arange(n) * 2 * np.pi * 200 / sr)
+    wav = tmp_path / "ton.wav"
+    with wave.open(str(wav), "wb") as w:
+        w.setnchannels(1), w.setsampwidth(2), w.setframerate(sr)
+        w.writeframes((audio * 32767).astype(np.int16).tobytes())
+    words = [{"w": "someone.", "s": 0.5, "e": 1.0, "p": 0.9}, {"w": "Then", "s": 2.2, "e": 2.5, "p": 0.9}]
+    assert noises.find(wav, words) == []

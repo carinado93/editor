@@ -20,9 +20,11 @@ DEFAULT_SIGNAL_WORDS = ["again", "nochmal", "noch mal", "noch einmal", "von vorn
 
 # Füllwörter: (Wort, standardmäßig an?)
 DEFAULT_FILLERS = {
-    "de": {"äh": True, "ähm": True, "öh": True, "öhm": True, "hm": True, "hmm": True, "mhm": True,
+    "de": {"äh": True, "ähm": True, "öh": True, "öhm": True, "hm": True, "hmm": True, "mhm": True, "mh": True,
+           "mäh": True, "meh": True, "ehm": True, "äm": True, "mmh": True, "eh": False, "ah": False,
            "also": False, "quasi": False, "halt": False, "sozusagen": False, "irgendwie": False},
-    "en": {"uh": True, "um": True, "erm": True, "er": True, "hm": True, "hmm": True, "mhm": True,
+    "en": {"uh": True, "um": True, "erm": True, "er": True, "hm": True, "hmm": True, "mhm": True, "mh": True,
+           "meh": True, "ehm": True, "mmh": True, "uhm": True, "eh": False, "ah": False,
            "like": False, "you know": False, "i mean": False, "basically": False, "actually": False},
 }
 
@@ -253,7 +255,7 @@ def word_cut_flags(n: int, detections: list[dict], manual: dict) -> list[str | N
 
 
 def timeline(words: list[dict], flags: list[str | None], duration: float, tempo: str = "normal",
-             pause_keep: list[int] | None = None) -> dict:
+             pause_keep: list[int] | None = None, noises: list[dict] | None = None) -> dict:
     """Berechnet, welche Zeitbereiche des Videos bleiben. Gibt {keep:[[s,e],…], pauses:[…], new_duration} zurück.
 
     Zwischen zwei behaltenen Wörtern bleibt höchstens die Pause des gewählten Tempos.
@@ -267,30 +269,38 @@ def timeline(words: list[dict], flags: list[str | None], duration: float, tempo:
     segs: list[list[float]] = []
     pauses = []
     cur_start = max(0.0, words[kept[0]]["s"] - lead)
+    noise_list = sorted(noises or [], key=lambda n: n["start"])
     for a, b in zip(kept, kept[1:]):
         wa, wb = words[a], words[b]
         gap = wb["s"] - wa["e"]
         removed_between = b != a + 1
-        if not removed_between and (gap <= max_pause or a in pause_keep):
+        loud = [n for n in noise_list if wa["e"] <= n["start"] and n["end"] <= wb["s"]]
+        has_noise = bool(loud) and a not in pause_keep
+        if not removed_between and not has_noise and (gap <= max_pause or a in pause_keep):
             continue
         if not removed_between:
             pauses.append({"after": a, "start": round(wa["e"], 3), "end": round(wb["s"], 3),
-                           "length": round(gap, 2), "kept": False})
+                           "length": round(gap, 2), "kept": False, "noise": bool(loud)})
         half = min(target / 2, max(gap, 0) / 2)
         after, before = half, half
         if removed_between:
             # Die Luft darf nicht in ein geschnittenes Nachbarwort hineinreichen (sonst bleibt "I m…" hörbar)
             after = min(half, max(0.02, words[a + 1]["s"] - wa["e"] - 0.02))
             before = min(half, max(0.02, wb["s"] - words[b - 1]["e"] - 0.02))
+        if has_noise:
+            # Laute wie "meah" ganz herausschneiden
+            after = min(after, max(0.02, loud[0]["start"] - wa["e"] - 0.03))
+            before = min(before, max(0.02, wb["s"] - loud[-1]["end"] - 0.03))
         segs.append([cur_start, wa["e"] + after])
         cur_start = wb["s"] - before
     # Pausen, die behalten werden sollen, trotzdem anzeigen
     for a in sorted(pause_keep):
         if a in kept and a + 1 < len(words) and flags[a + 1] is None:
             gap = words[a + 1]["s"] - words[a]["e"]
-            if gap > max_pause:
+            loud = any(n["after"] == a for n in noise_list)
+            if gap > max_pause or loud:
                 pauses.append({"after": a, "start": round(words[a]["e"], 3), "end": round(words[a + 1]["s"], 3),
-                               "length": round(gap, 2), "kept": True})
+                               "length": round(gap, 2), "kept": True, "noise": loud})
     segs.append([cur_start, min(duration, words[kept[-1]]["e"] + lead)])
     segs = [[round(s, 3), round(e, 3)] for s, e in segs if e - s > 0.02]
     pauses.sort(key=lambda p: p["after"])
@@ -301,6 +311,7 @@ def default_settings(language: str) -> dict:
     return {
         "tempo": "normal",
         "max_gap": 5.0,
+        "noises": True,
         "signal_words": list(DEFAULT_SIGNAL_WORDS),
         "fillers": dict(DEFAULT_FILLERS.get(language, DEFAULT_FILLERS["en"])),
     }
@@ -318,5 +329,6 @@ def evaluate(transcript: dict, cutlist: dict) -> dict:
     words = flat_words(transcript)
     flags = word_cut_flags(len(words), cutlist["detections"], cutlist["manual"])
     tl = timeline(words, flags, transcript.get("duration", words[-1]["e"] if words else 0),
-                  cutlist["settings"].get("tempo", "normal"), cutlist.get("pause_keep"))
+                  cutlist["settings"].get("tempo", "normal"), cutlist.get("pause_keep"),
+                  cutlist.get("noises") if cutlist["settings"].get("noises", True) else None)
     return {"flags": flags, **tl, "old_duration": round(transcript.get("duration", 0), 2)}

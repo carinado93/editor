@@ -65,6 +65,7 @@ export interface Pause {
   end: number;
   length: number;
   kept: boolean;
+  noise?: boolean;
 }
 
 export interface CutView {
