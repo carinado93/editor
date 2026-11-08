@@ -30,6 +30,7 @@ export function ReelPackage({
   const [full, setFull] = useState("");
   const [paste, setPaste] = useState("");
   const [showPaste, setShowPaste] = useState(false);
+  const [promptText, setPromptText] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -77,8 +78,7 @@ export function ReelPackage({
   return (
     <section className="package">
       <h2>Reel-Paket</h2>
-      {err && <div className="banner error">{err}</div>}
-      {msg && <div className="banner">{msg}</div>}
+
       <div className="package-grid">
         <div className="card">
           <h3>Texte im Video</h3>
@@ -121,6 +121,7 @@ export function ReelPackage({
               Texte speichern
             </button>
           </div>
+          {busy === "overlays" || (msg ?? "").startsWith("Texte") ? <Status busy={busy} err={err} msg={msg} /> : null}
         </div>
 
         <div className="card">
@@ -143,19 +144,38 @@ export function ReelPackage({
             </select>
           </label>
           <div className="row-buttons">
-            <button className="btn" disabled={!!busy || (silent && !idea.trim())} onClick={() => act("ollama", async () => applyTexts(await api.reelTextsOllama(id, idea, lang)))}>
+            <button className="btn" disabled={!!busy} onClick={() => {
+              if (silent && !idea.trim()) { setErr("Bitte zuerst oben deine Idee eintragen (in diesem Clip wird nicht gesprochen)."); return; }
+              act("ollama", async () => { applyTexts(await api.reelTextsOllama(id, idea, lang)); setMsg("Fertig ✓ – Vorschläge stehen unten."); });
+            }}>
               {busy === "ollama" ? "Lokale KI schreibt … (1–2 Min)" : "Mit lokaler KI erstellen (Ollama)"}
             </button>
-            <button
-              className="btn ghost"
-              disabled={!!busy || (silent && !idea.trim())}
-              onClick={() => act("prompt", async () => { const r = await api.reelPrompt(id, idea, lang); copy(r.prompt, setMsg); setShowPaste(true); })}
-            >
+            <button className="btn ghost" disabled={!!busy} onClick={() => {
+              if (silent && !idea.trim()) { setErr("Bitte zuerst oben deine Idee eintragen (in diesem Clip wird nicht gesprochen)."); return; }
+              const tab = window.open("https://claude.ai/new", "_blank");
+              act("prompt", async () => {
+                const r = await api.reelPrompt(id, idea, lang);
+                setPromptText(r.prompt);
+                setShowPaste(true);
+                try {
+                  await navigator.clipboard.writeText(r.prompt);
+                  setMsg("Auftrag kopiert ✓ – in claude.ai (neuer Tab) mit Strg+V einfügen und abschicken, dann die Antwort unten einfügen.");
+                } catch {
+                  setMsg("Bitte den Auftrag unten markieren (Strg+A) und kopieren (Strg+C).");
+                }
+                if (!tab) setMsg((m) => (m ?? "") + " (claude.ai bitte selbst öffnen: claude.ai/new)");
+              });
+            }}>
               Auftrag für claude.ai kopieren
             </button>
           </div>
+          <Status busy={busy} err={err} msg={msg} />
           {showPaste && (
             <div className="paste-box">
+              <details className="small">
+                <summary>Auftrag anzeigen (falls Kopieren nicht ging)</summary>
+                <textarea rows={6} readOnly value={promptText} onFocus={(e) => e.currentTarget.select()} />
+              </details>
               <p className="small">
                 1. In <a href="https://claude.ai/new" target="_blank" rel="noreferrer">claude.ai</a> einfügen und abschicken. 2. Die komplette Antwort hier einfügen:
               </p>
@@ -227,6 +247,15 @@ function ReelTextEditor({ texts, full, busy, onSave, onCopy }: {
         <button className="btn" disabled={busy} onClick={() => onSave(t)}>Änderungen speichern</button>
         <button className="btn ghost" onClick={() => onCopy(full)}>Caption + Hashtags kopieren</button>
       </div>
+    </div>
+  );
+}
+
+export function Status({ busy, err, msg }: { busy: string | null; err: string | null; msg: string | null }) {
+  if (!busy && !err && !msg) return null;
+  return (
+    <div className={`banner small ${err ? "error" : ""}`} role="status">
+      {busy ? "⏳ Läuft … bitte warten." : err ? `⚠ ${err}` : msg}
     </div>
   );
 }

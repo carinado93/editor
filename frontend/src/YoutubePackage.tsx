@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, type YoutubeMeta } from "./api";
 import { CoverStudio } from "./CoverStudio";
+import { Status } from "./ReelPackage";
 
 function copy(text: string, done: (msg: string) => void) {
   navigator.clipboard.writeText(text).then(
@@ -56,8 +57,7 @@ export function YoutubePackage({ id }: { id: string }) {
   return (
     <section className="package">
       <h2>YouTube-Paket</h2>
-      {err && <div className="banner error">{err}</div>}
-      {msg && <div className="banner">{msg}</div>}
+
 
       <div className="package-grid">
         <div className="card">
@@ -73,12 +73,21 @@ export function YoutubePackage({ id }: { id: string }) {
             })}>
               {busy === "ollama" ? "Lokale KI schreibt … (1–3 Min)" : "Mit lokaler KI erstellen (Ollama)"}
             </button>
-            <button className="btn ghost" disabled={!!busy} onClick={() => { copy(prompt, setMsg); setShowPaste(true); }}>
+            <button className="btn ghost" disabled={!!busy} onClick={() => {
+              const tab = window.open("https://claude.ai/new", "_blank");
+              copy(prompt, (m) => setMsg(m.startsWith("Kopiert") ? "Auftrag kopiert ✓ – in claude.ai (neuer Tab) mit Strg+V einfügen, dann die Antwort unten einfügen." + (tab ? "" : " (claude.ai bitte selbst öffnen)") : m));
+              setShowPaste(true);
+            }}>
               Auftrag für claude.ai kopieren
             </button>
           </div>
+          <Status busy={busy} err={err} msg={msg} />
           {showPaste && (
             <div className="paste-box">
+              <details className="small">
+                <summary>Auftrag anzeigen (falls Kopieren nicht ging)</summary>
+                <textarea rows={6} readOnly value={prompt} onFocus={(e) => e.currentTarget.select()} />
+              </details>
               <p className="small">
                 1. In <a href="https://claude.ai/new" target="_blank" rel="noreferrer">claude.ai</a> einfügen (Strg+V) und abschicken.
                 2. Die komplette Antwort kopieren und hier einfügen:

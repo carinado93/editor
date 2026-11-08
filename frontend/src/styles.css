@@ -1175,3 +1175,8 @@ kbd {
 .scenes h4 {
   margin: 4px 0;
 }
+
+.paste-box details textarea {
+  margin-top: 6px;
+  font-size: 12px;
+}
