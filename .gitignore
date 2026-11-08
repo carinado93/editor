@@ -12,3 +12,4 @@ modelle/
 tools/ffmpeg/
 .env
 *.log
+*.tsbuildinfo
