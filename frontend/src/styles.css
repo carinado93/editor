@@ -1085,3 +1085,66 @@ kbd {
   border-radius: 8px;
   box-shadow: var(--schatten);
 }
+
+/* ---------- M5: Reel-Modus ---------- */
+.ov-hook {
+  position: absolute;
+  left: 45.8%;
+  transform: translateX(-50%);
+  width: 75%;
+  text-align: center;
+  background: rgba(244, 238, 228, 0.93);
+  color: var(--braun);
+  font-family: "Cormorant Garamond", serif;
+  font-weight: 600;
+  font-size: 7cqw;
+  line-height: 1.15;
+  padding: 0.35em 0.5em;
+  animation: hook-in 0.25s ease-out;
+}
+
+.ov-hook em {
+  color: var(--lila);
+  font-style: italic;
+}
+
+@keyframes hook-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.overlay-row {
+  display: grid;
+  gap: 6px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--creme-2);
+}
+
+.overlay-row textarea {
+  font: inherit;
+  width: 100%;
+  border: 1px solid var(--creme-2);
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: var(--weiss);
+  color: var(--braun);
+}
+
+.overlay-times {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.overlay-times input {
+  width: 70px;
+  font: inherit;
+  border: 1px solid var(--creme-2);
+  border-radius: 6px;
+  padding: 3px 6px;
+}

@@ -401,6 +401,79 @@ def get_thumbnail(pid: str, name: str):
     return FileResponse(f, media_type="image/jpeg")
 
 
+# ---------- Reel-Modus (M5) ----------
+
+class OverlaysBody(BaseModel):
+    overlays: list[dict]
+
+
+class ReelTextsBody(BaseModel):
+    caption: str
+    hashtags: list[str]
+    cover_text: str
+    shorts_title: str
+
+
+def _reel_file(pid: str):
+    return projects.path(pid, "reel_texte.json")
+
+
+def _reel_prompt(pid: str) -> tuple[str, str]:
+    from . import captions
+
+    t, v, sentences = _cut_context(pid)
+    hook = next((o["text"].replace("*", "") for o in v["cutlist"].get("overlays", []) if o.get("on", True)), "")
+    lang = t.get("language", "en")
+    return captions.build_prompt(" ".join(s for _, s in sentences), lang, hook), lang
+
+
+@app.put("/api/projects/{pid}/cuts/overlays")
+def put_overlays(pid: str, body: OverlaysBody):
+    return cutstore.set_overlays(pid, body.overlays)
+
+
+@app.get("/api/projects/{pid}/reel-texte")
+def get_reel_texts(pid: str):
+    from . import captions
+
+    prompt, _ = _reel_prompt(pid)
+    f = _reel_file(pid)
+    data = json.loads(f.read_text(encoding="utf-8")) if f.exists() else None
+    return {"prompt": prompt, "texts": data, "full_caption": captions.full_caption(data) if data else ""}
+
+
+def _save_reel(pid: str, data: dict, source: str) -> dict:
+    from . import captions
+
+    data["source"] = source
+    _reel_file(pid).write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
+    return {"texts": data, "full_caption": captions.full_caption(data)}
+
+
+@app.post("/api/projects/{pid}/reel-texte/ollama")
+def reel_texts_ollama(pid: str):
+    from . import captions
+
+    prompt, lang = _reel_prompt(pid)
+    return _save_reel(pid, captions.from_ollama(prompt, lang), "ollama")
+
+
+@app.post("/api/projects/{pid}/reel-texte/import")
+def reel_texts_import(pid: str, body: MetaImportBody):
+    from . import captions
+
+    _, lang = _reel_prompt(pid)
+    return _save_reel(pid, captions.parse(body.text, lang), "claude.ai")
+
+
+@app.put("/api/projects/{pid}/reel-texte")
+def reel_texts_save(pid: str, body: ReelTextsBody):
+    from . import captions
+
+    _, lang = _reel_prompt(pid)
+    return _save_reel(pid, captions.parse(body.model_dump(), lang), "bearbeitet")
+
+
 # ---------- Thumbnails & Cover (M4b) ----------
 
 class CoverBody(BaseModel):
@@ -440,10 +513,18 @@ def cover_defaults(pid: str):
     title = (meta_data or {}).get("titles", [""])[0] if meta_data and meta_data.get("titles") else ""
     hook = sentences[0][1] if sentences else ""
     short_hook = " ".join(re.sub(r"[.!?…]+$", "", hook).split()[:7])
+    reel_text = short_hook
+    hook = next((o["text"].replace("*", "") for o in cutstore.view(pid)["cutlist"].get("overlays", [])
+                 if o.get("on", True)), "")
+    if hook:
+        reel_text = hook
+    rf = _reel_file(pid)
+    if rf.exists():
+        reel_text = json.loads(rf.read_text(encoding="utf-8")).get("cover_text") or reel_text
     return {
         "youtube": {"text": covers.default_thumb_text(title or short_hook, buzz.THEMEN), "pill": ""},
         "meditation": {"text": title or short_hook, "subtitle": "", "top_pill": "", "top_label": ""},
-        "reel": {"text": short_hook, "color": covers.next_cover_color()},
+        "reel": {"text": reel_text, "color": covers.next_cover_color()},
         "next_color": covers.next_cover_color(),
     }
 

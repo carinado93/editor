@@ -109,8 +109,21 @@
     gemerkt (daten/einstellungen.json, Start: hell)
   - 3 Varianten aus den 3 besten Standbildern, JPEG < 2 MB; UI „Thumbnail gestalten“ im YouTube-Paket
 
+- [x] **M5 Reel-Modus B1 „Veredeln“**
+  - Keine Schnitte (`no_cuts`), Ton wird 1:1 übernommen (`-c:a copy`), kein Zoom, keine Lautstärke-Änderung,
+    Format bleibt (nur auf 1080 Breite verkleinert); Bitrate automatisch so, dass die Datei < 30 MB bleibt
+  - Hook-Karte (ASS: Creme-Box, Cormorant SemiBold 92 px, *Akzent* lila-kursiv), Safe Zone y 280–1250 / x 90–900,
+    über dem Gesicht wenn Platz, sonst darunter; Versprecher im Hook werden automatisch entfernt; ≥ 4,4 s
+  - Buzzwords nie gleichzeitig mit der Hook-Karte; Blick-Analyse + automatische Buzzwords auch im Reel-Modus
+  - `captions.py`: Caption nach Carinas Aufbau, genau 5 Hashtags (lernt neue dazu), Cover-Text, Shorts-Titel,
+    Prüfung (Heilversprechen, „keine Diagnose/Therapie“), Ollama oder claude.ai-Kopierweg
+  - UI: Reel-Paket (Texte im Video, Caption-Editor, Reel-Cover mit Rotation), Vorschau zeigt Hook-Karte live
+  - Test mit dem 2:44-Video als Reel: Länge gleich, Ton unverändert (AAC 317 kbit/s übernommen), Hook + Buzzwords ok.
+    Größe war 30,8 MB → Berechnung korrigiert (normale Reels ≤ 90 s liegen weit darunter).
+  - 37 automatische Tests
+
 ### Nächster Schritt
-M5 Reel-Modus (läuft).
+M6 Vorlagen-Bibliothek + B2 (Reel aus Idee), M6b Karussell-Generator, M7 Politur. Carina wählt die Reihenfolge.
 
 ### Entscheidungen
 - 8.11.: **Keine Programme, die Carina nicht schon hat** (kein DaVinci). DaVinci-Export (FCPXML/EDL) wieder entfernt.

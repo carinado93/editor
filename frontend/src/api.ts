@@ -62,6 +62,23 @@ export interface YoutubeMeta {
   source?: string;
 }
 
+export interface Overlay {
+  id: string;
+  kind: string;
+  start: number;
+  end: number;
+  text: string;
+  on: boolean;
+}
+
+export interface ReelTexts {
+  caption: string;
+  hashtags: string[];
+  cover_text: string;
+  shorts_title: string;
+  warnings?: string[];
+}
+
 export interface RenderOptions {
   zoom: boolean;
   loudness: boolean;
@@ -86,6 +103,7 @@ export interface CutView {
     manual: { cut: number[]; keep: number[] };
     pause_keep: number[];
     buzzwords: { start: number; end: number }[];
+    overlays?: Overlay[];
     render_options: RenderOptions;
   };
   evaluation: { flags: (CutType | null)[]; keep: [number, number][]; pauses: Pause[]; new_duration: number; old_duration: number };
@@ -194,6 +212,16 @@ export const api = {
   covers: (id: string, body: Record<string, string>) => call<{ files: string[]; color: string | null }>(`/api/projects/${id}/covers`, json(body)),
   coverUrl: (id: string, file: string) => `/api/projects/${id}/cover/${encodeURIComponent(file)}`,
   coverColorUsed: (used: string) => call<{ next: string }>(`/api/cover-farbe/verwendet`, json({ used })),
+  setOverlays: (id: string, overlays: Overlay[]) =>
+    call<CutView>(`/api/projects/${id}/cuts/overlays`, { ...json({ overlays }), method: "PUT" }),
+  reelTexts: (id: string) => call<{ prompt: string; texts: ReelTexts | null; full_caption: string }>(`/api/projects/${id}/reel-texte`),
+  reelTextsOllama: (id: string) => call<{ texts: ReelTexts; full_caption: string }>(`/api/projects/${id}/reel-texte/ollama`, { method: "POST" }),
+  importReelTexts: (id: string, text: string) => call<{ texts: ReelTexts; full_caption: string }>(`/api/projects/${id}/reel-texte/import`, json({ text })),
+  saveReelTexts: (id: string, t: ReelTexts) =>
+    call<{ texts: ReelTexts; full_caption: string }>(`/api/projects/${id}/reel-texte`, {
+      ...json({ caption: t.caption, hashtags: t.hashtags, cover_text: t.cover_text, shorts_title: t.shorts_title }),
+      method: "PUT",
+    }),
   render: (id: string, quality: string) => call<Project>(`/api/projects/${id}/render`, json({ quality })),
   openFolder: (id: string) => call<{ ok: boolean }>(`/api/projects/${id}/open-folder`, { method: "POST" }),
   exportUrl: (id: string, file: string) => `/api/projects/${id}/export/${encodeURIComponent(file)}`,

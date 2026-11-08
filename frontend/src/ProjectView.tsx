@@ -1,5 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { YoutubePackage } from "./YoutubePackage";
+import { ReelPackage } from "./ReelPackage";
 import { api, formatSize, formatTime, type CutType, type CutView, type Detection, type Project, type Transcript, type Word } from "./api";
 
 interface FlatWord extends Word {
@@ -70,7 +71,7 @@ export function ProjectView({ id }: { id: string }) {
         if (p.status === "fertig" && !haveTranscript) {
           haveTranscript = true;
           setTranscript(await api.transcript(id));
-          if (p.mode === "youtube") {
+          if (p.mode === "youtube" || p.mode === "reel") {
             setCuts(await api.cuts(id));
             api.blick(id).then((b) => setFaceBox(b.face_box)).catch(() => {});
           }
@@ -106,6 +107,8 @@ export function ProjectView({ id }: { id: string }) {
   const flags = cuts?.evaluation.flags;
   const keep = cuts?.evaluation.keep;
   const cutMode = project?.mode === "youtube" && !!cuts;
+  const reelMode = project?.mode === "reel" && !!cuts;
+  const editMode = cutMode || reelMode;
 
   // Wort → Erkennung (für Tooltip und "Schnitt zurücknehmen")
   const detOf = useMemo(() => {
@@ -397,7 +400,7 @@ export function ProjectView({ id }: { id: string }) {
           {project.step !== "pruefen" && project.step !== "ton" && project.step !== "vorschau" && project.info ? (
             <div className="video-wrap">
               <video ref={video} src={api.proxyUrl(id)} controls preload="auto" playsInline />
-              {cutMode && preview && cuts && <TextOverlay time={time} cuts={cuts} words={words} subLines={subLines} faceBox={faceBox} portrait={portrait} />}
+              {editMode && (preview || reelMode) && cuts && <TextOverlay time={time} cuts={cuts} words={words} subLines={subLines} faceBox={faceBox} portrait={portrait} />}
             </div>
           ) : (
             <div className="player-placeholder muted">Vorschau-Video wird erstellt …</div>
@@ -449,12 +452,18 @@ export function ProjectView({ id }: { id: string }) {
             </dl>
           )}
 
-          {cutMode && (
+          {editMode && (
             <div className="render-box">
-              <h3>Final rendern</h3>
-              <p className="small muted">Erst wenn du hier klickst, entsteht das fertige Video. Dein Original bleibt unverändert.</p>
+              <h3>{reelMode ? "Reel rendern" : "Final rendern"}</h3>
+              <p className="small muted">
+                {reelMode
+                  ? "Länge, Tempo, Format und Ton bleiben genau wie im Original. Es kommen nur deine Texte dazu. Unter 30 MB."
+                  : "Erst wenn du hier klickst, entsteht das fertige Video. Dein Original bleibt unverändert."}
+              </p>
               {cuts && (
                 <div className="render-options small">
+                  {!reelMode && (
+                  <>
                   <label>
                     <input type="checkbox" checked={cuts.cutlist.render_options.zoom} disabled={busy} onChange={(e) => run(() => api.renderOptions(id, { zoom: e.target.checked }))} />{" "}
                     Zoom-Wechsel bei Schnitten (100/108/115 %)
@@ -467,6 +476,8 @@ export function ProjectView({ id }: { id: string }) {
                     <input type="checkbox" checked={cuts.cutlist.render_options.denoise} disabled={busy} onChange={(e) => run(() => api.renderOptions(id, { denoise: e.target.checked }))} />{" "}
                     Rauschen mindern
                   </label>
+                  </>
+                  )}
                   <label>
                     Untertitel{" "}
                     <select value={cuts.cutlist.render_options.subtitles} disabled={busy} onChange={(e) => run(() => api.renderOptions(id, { subtitles: e.target.value as "aus" }))}>
@@ -501,6 +512,7 @@ export function ProjectView({ id }: { id: string }) {
                 </div>
               )}
               <div className="render-row">
+                {!reelMode && (
                 <select value={quality} onChange={(e) => setQuality(e.target.value)} disabled={!!rendering}>
                   {Object.entries(QUALITIES).map(([k, v]) => (
                     <option key={k} value={k}>
@@ -508,8 +520,9 @@ export function ProjectView({ id }: { id: string }) {
                     </option>
                   ))}
                 </select>
+                )}
                 <button className="btn" onClick={startRender} disabled={!!rendering || busy || !newDur}>
-                  Final rendern
+                  {reelMode ? "Reel rendern" : "Final rendern"}
                 </button>
               </div>
               {rendering && r && (
@@ -554,20 +567,25 @@ export function ProjectView({ id }: { id: string }) {
               <span className="demo cut-retake">Durchgestrichen</span> = wird geschnitten, <span className="demo suggestion">gestrichelt</span> = Vorschlag.
               Klick auf ein Wort wählt es aus (Umschalt+Klick für mehrere). <kbd>Entf</kbd> löscht, <kbd>Strg+Z</kbd> macht rückgängig.
             </p>
+          ) : reelMode ? (
+            <p className="muted small hint">
+              Hier wird nichts geschnitten. Klick auf ein Wort → <strong>„★ Als Buzzword“</strong>: Es poppt im Reel auf.
+              Die Hook-Karte stellst du unten im „Reel-Paket“ ein.
+            </p>
           ) : (
             <p className="muted small hint">
               Klick auf ein Wort springt im Video dorthin. <span className="unsure">Gepunktet</span> = Spracherkennung war unsicher.
             </p>
           )}
 
-          {cutMode && sel && (
+          {editMode && sel && (
             <div className="action-bar">
               <div className="small">
                 <strong>„{selWords.slice(0, 12).map((k) => words[k]?.w).join(" ")}{selWords.length > 12 ? " …" : ""}“</strong>
                 {selDetExact && <div className="muted">{selDetExact.active ? selDetExact.reason : `Vorschlag: ${selDetExact.reason}`}</div>}
               </div>
               <div className="action-buttons">
-                {selDetExact && !selDetExact.active ? (
+                {!cutMode ? null : selDetExact && !selDetExact.active ? (
                   <button className="btn" disabled={busy} onClick={() => run(() => api.toggleCut(id, selDetExact.id, true))}>
                     Vorschlag übernehmen (schneiden)
                   </button>
@@ -671,6 +689,7 @@ export function ProjectView({ id }: { id: string }) {
         </div>
       </div>
       {cutMode && <YoutubePackage id={id} />}
+      {reelMode && cuts && <ReelPackage id={id} cuts={cuts} onCuts={setCuts} time={time} duration={duration} />}
     </div>
   );
 }
@@ -698,13 +717,22 @@ function TextOverlay({
     return time >= s && time <= e;
   });
   const fb = faceBox ?? [0.3, 0.1, 0.7, 0.5];
+  const hook = (cuts.cutlist.overlays ?? []).find((h) => h.on && time >= h.start && time <= h.end);
+  const hookTop = !faceBox || fb[1] * 1920 > 280 + 300 ? 300 / 19.2 : Math.min(1250 - 300, fb[3] * 1920 + 40) / 19.2;
   const buzzStyle: React.CSSProperties = portrait
     ? { left: "50%", top: `${Math.min(62, Math.max((fb[3] + 0.04) * 100, 50))}%` }
     : { left: (fb[0] + fb[2]) / 2 < 0.5 ? "76%" : "24%", top: "42%" };
   const buzzText = buzz ? words.slice(buzz.start, buzz.end).map((w) => w.w.replace(/[.,!?;:…]+$/, "")).join(" ") : "";
   return (
     <div className="text-overlay" aria-hidden>
-      {buzz && (
+      {hook && (
+        <span key={hook.id} className="ov-hook" style={{ top: `${hookTop}%` }}>
+          {hook.text.split(/(\*[^*]+\*)/).map((part, k) =>
+            part.startsWith("*") && part.endsWith("*") ? <em key={k}>{part.slice(1, -1)}</em> : <span key={k}>{part}</span>,
+          )}
+        </span>
+      )}
+      {buzz && !hook && (
         <span key={buzz.start} className="ov-buzz" style={buzzStyle}>
           {buzzText}
         </span>

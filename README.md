@@ -61,6 +61,23 @@ Im Transkript ist alles **durchgestrichen**, was geschnitten wird. Die Farbe zei
   Lautstärke angleichen (−14 LUFS, Standard bei YouTube), Rauschen mindern, Untertitel
   (keine / nur SRT-Datei / ins Video einbrennen, optional Karaoke).
 
+### YouTube-Paket (unter der Schnittansicht)
+
+- **Titel, Beschreibung, Kapitel, Tags, 5 Hashtags:** mit der lokalen KI (Ollama) oder über „Auftrag für claude.ai
+  kopieren“ → in claude.ai einfügen → Antwort zurück einfügen. Die App prüft auf Heilversprechen und YouTube-Regeln.
+- **Thumbnail-Vorschläge** (beste Standbilder) und **Thumbnail gestalten** im Stil deiner bisherigen
+  (Aussage mit *Schlüsselwort* in Rosa, oder Meditation), 3 Varianten zum Herunterladen.
+
+### Reel veredeln (Modus „Reel veredeln“)
+
+- **Nichts wird gekürzt**: Länge, Tempo, Format und Ton bleiben genau wie im Original, kein Filter.
+- **Texte im Video:** Hook-Karte (Creme, Cormorant, *Wort in Sternchen* lila-kursiv) in der Safe Zone, nie über
+  dem Gesicht, mindestens 4,4 s sichtbar. Weitere Texte mit „+ Text bei …“. Buzzwords wie bei YouTube.
+- **Reel-Paket:** Caption in deiner Stimme, **genau 5 Hashtags**, Cover-Text, YouTube-Shorts-Titel
+  (Ollama oder claude.ai), dazu das **Reel-Cover** im Farbwechsel lila → hell → oliv.
+- **Reel rendern:** fertiges MP4 unter 30 MB.
+- Hashtags: Die App nimmt deine Sammlung und **lernt neue passende Hashtags selbst dazu**.
+
 ### Final rendern
 
 Erst wenn du links auf **„Final rendern“** klickst, entsteht das fertige Video (MP4, H.264, sehr gute Qualität).

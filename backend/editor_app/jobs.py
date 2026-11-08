@@ -52,7 +52,8 @@ def _render(pid: str, quality: str) -> None:
     v = cutstore.view(pid)
     segments = v["evaluation"]["keep"]
     name = render.safe_name(p["name"])
-    out = projects.path(pid, "export") / f"{name}_schnitt_{time.strftime('%Y%m%d-%H%M%S')}.mp4"
+    suffix = "reel" if p["mode"] == "reel" else "schnitt"
+    out = projects.path(pid, "export") / f"{name}_{suffix}_{time.strftime('%Y%m%d-%H%M%S')}.mp4"
     tf = projects.path(pid, "transkript.json")
     gf = projects.path(pid, "blick.json")
     from . import config, cuts
@@ -61,6 +62,7 @@ def _render(pid: str, quality: str) -> None:
         "words": cuts.flat_words(json.loads(tf.read_text(encoding="utf-8"))),
         "flags": v["evaluation"]["flags"],
         "buzzwords": v["cutlist"].get("buzzwords", []),
+        "overlays": [o for o in v["cutlist"].get("overlays", []) if o.get("on", True)],
         "gaze": json.loads(gf.read_text(encoding="utf-8")) if gf.exists() else None,
         "fonts_dir": str(config.ROOT / "assets" / "fonts"),
     }
@@ -155,8 +157,8 @@ def _process(pid: str) -> None:
         raise proxy_error[0]
     projects.path(pid, "transkript.json").write_text(json.dumps(result, ensure_ascii=False), encoding="utf-8")
     words = sum(len(s["words"]) for s in result["segments"])
-    if p["mode"] == "youtube":
-        cutstore.create(pid, result)  # Schnittvorschläge gleich mit berechnen
+    if p["mode"] in ("youtube", "reel"):
+        cutstore.create(pid, result)  # Schnittvorschläge (Reel: Texte, ohne Schnitte) gleich mit berechnen
         projects.update(pid, status="arbeitet", step="blick", progress=0.97, message="Blick-Erkennung …")
         _gaze(pid)
         projects.update(pid, message="Buzzwords werden ausgesucht …", progress=0.99)
@@ -239,9 +241,9 @@ def start() -> None:
     for p in reversed(projects.list_all()):
         if p["status"] in ("warteschlange", "arbeitet"):
             enqueue(p["id"])
-        elif p["status"] == "fertig" and p["mode"] == "youtube" and not _gaze_current(p["id"]):
+        elif p["status"] == "fertig" and p["mode"] in ("youtube", "reel") and not _gaze_current(p["id"]):
             _queue.put((p["id"], "blick", {}))  # ältere Projekte bekommen die Blick-Erkennung nachträglich
-        elif p["status"] == "fertig" and p["mode"] == "youtube":
+        elif p["status"] == "fertig" and p["mode"] in ("youtube", "reel"):
             _queue.put((p["id"], "buzz", {}))  # einmalig automatische Buzzwords (macht nichts, wenn schon erledigt)
         elif (p.get("render") or {}).get("status") in ("warteschlange", "arbeitet"):
             projects.update(p["id"], render={**p["render"], "status": "fehler",

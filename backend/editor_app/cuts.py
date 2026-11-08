@@ -175,6 +175,8 @@ def _signal_positions(words: list[dict], tokens: list[str], signal_words: list[s
 
 
 def detect(transcript: dict, settings: dict, gaze_events: list[dict] | None = None) -> list[Detection]:
+    if settings.get("no_cuts"):
+        return []
     words = flat_words(transcript)
     tokens = [norm(w["w"]) for w in words]
     lang = transcript.get("language", "de")
@@ -327,6 +329,10 @@ def build(transcript: dict, settings: dict, manual: dict | None = None, pause_ke
 
 def evaluate(transcript: dict, cutlist: dict) -> dict:
     words = flat_words(transcript)
+    if cutlist["settings"].get("no_cuts"):  # Reel veredeln: Länge, Tempo und Ablauf bleiben exakt
+        dur = round(transcript.get("duration", words[-1]["e"] if words else 0), 3)
+        return {"flags": [None] * len(words), "keep": [[0.0, dur]], "pauses": [], "new_duration": dur,
+                "old_duration": dur}
     flags = word_cut_flags(len(words), cutlist["detections"], cutlist["manual"])
     tl = timeline(words, flags, transcript.get("duration", words[-1]["e"] if words else 0),
                   cutlist["settings"].get("tempo", "normal"), cutlist.get("pause_keep"),

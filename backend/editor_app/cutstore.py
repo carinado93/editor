@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import copy
 import json
+import re
 import threading
 
 from . import cuts, gaze, noises, projects
@@ -59,9 +60,55 @@ def _apply_overrides(cutlist: dict) -> None:
             d["active"] = ov[d["id"]]
 
 
+def _mode(pid: str) -> str:
+    try:
+        return projects.load(pid).get("mode", "youtube")
+    except Exception:  # noqa: BLE001
+        return "youtube"
+
+
+def dur_total(t: dict) -> float:
+    words = cuts.flat_words(t)
+    return t.get("duration", words[-1]["e"] if words else 0.0)
+
+
+def default_hook(t: dict) -> list[dict]:
+    """Hook-Karte am Anfang: erster Satz, mindestens 4,4 s sichtbar (Lesbarkeit), ein Wort als Akzent markiert."""
+    from . import buzz
+
+    words = cuts.flat_words(t)
+    if not words:
+        return []
+    sent = []
+    for w in words:
+        sent.append(w)
+        if re.search(r"[.!?…]$", w["w"]) or len(sent) >= 14:
+            break
+    # Versprecher/Neuanfänge im Hook weglassen ("I decided to make a, I decided to make a giveaway")
+    mini = {"language": t.get("language", "en"), "duration": dur_total(t),
+            "segments": [{"s": 0, "e": 0, "text": "", "words": sent}]}
+    flags = cuts.evaluate(mini, cuts.build(mini, cuts.default_settings(mini["language"])))["flags"]
+    sent = [w for w, f in zip(sent, flags) if not f] or sent
+    text_words = [re.sub(r"[.,;:]+$", "", w["w"]) if k == len(sent) - 1 else w["w"] for k, w in enumerate(sent)]
+    if text_words:
+        text_words[0] = text_words[0][:1].upper() + text_words[0][1:]
+    key = next((k for k, w in enumerate(text_words) if cuts.norm(w) in buzz.THEMEN), len(text_words) - 1)
+    text_words[key] = f"*{text_words[key]}*"
+    dur = t.get("duration", words[-1]["e"])
+    return [{"id": "hook", "kind": "hook", "start": 0.2, "end": round(min(dur, max(0.2 + 4.6, sent[-1]["e"] + 0.4)), 2),
+             "text": " ".join(text_words), "on": True}]
+
+
 def create(pid: str, transcript: dict | None = None) -> dict:
     t = transcript or _transcript(pid)
-    cl = cuts.build(t, cuts.default_settings(t.get("language", "de")), gaze_events=_gaze_events(pid))
+    settings = cuts.default_settings(t.get("language", "de"))
+    reel = _mode(pid) == "reel"
+    if reel:
+        settings["no_cuts"] = True
+    cl = cuts.build(t, settings, gaze_events=_gaze_events(pid))
+    if reel:
+        cl["render_options"] = dict(REEL_RENDER_DEFAULTS)
+        cl["overlays"] = default_hook(t)
     cl["overrides"] = {}
     cl["history"] = []
     cl["noises"] = _noises(pid, t)
@@ -89,7 +136,9 @@ def view(pid: str, cutlist: dict | None = None) -> dict:
     ev = cuts.evaluate(t, cl)
     public = {k: v for k, v in cl.items() if k != "history"}
     public.setdefault("buzzwords", [])
-    public["render_options"] = {**RENDER_DEFAULTS, **cl.get("render_options", {})}
+    public.setdefault("overlays", [])
+    defaults = REEL_RENDER_DEFAULTS if cl["settings"].get("no_cuts") else RENDER_DEFAULTS
+    public["render_options"] = {**defaults, **cl.get("render_options", {})}
     return {"cutlist": public, "evaluation": ev, "can_undo": bool(cl.get("history"))}
 
 
@@ -199,11 +248,15 @@ def refresh(pid: str) -> None:
 
 
 RENDER_DEFAULTS = {"zoom": True, "loudness": True, "denoise": False, "subtitles": "srt", "karaoke": False}
+# Reel veredeln: Format, Länge, Tempo, Ton bleiben exakt – kein Zoom, keine Lautstärke-Änderung
+REEL_RENDER_DEFAULTS = {"zoom": False, "loudness": False, "denoise": False, "subtitles": "aus", "karaoke": False,
+                        "audio_copy": True, "reel": True}
 
 
 def set_render_options(pid: str, options: dict) -> dict:
     def fn(cl):
-        cur = {**RENDER_DEFAULTS, **cl.get("render_options", {})}
+        base = REEL_RENDER_DEFAULTS if cl["settings"].get("no_cuts") else RENDER_DEFAULTS
+        cur = {**base, **cl.get("render_options", {})}
         for k, v in options.items():
             if k in ("zoom", "loudness", "denoise", "karaoke"):
                 cur[k] = bool(v)
@@ -273,3 +326,21 @@ def auto_buzzwords(pid: str) -> None:
         c = load(pid)
         c["buzz_auto"] = source
         _save(pid, c)
+
+
+def set_overlays(pid: str, overlays: list[dict]) -> dict:
+    t = _transcript(pid)
+    dur = t.get("duration", 0)
+
+    def fn(cl):
+        clean = []
+        for o in overlays:
+            text = str(o.get("text", "")).strip()
+            if not text:
+                continue
+            s_, e_ = max(0.0, float(o.get("start", 0))), float(o.get("end", 0))
+            e_ = min(dur, max(s_ + 1.0, e_)) if dur else max(s_ + 1.0, e_)
+            clean.append({"id": str(o.get("id") or f"text-{len(clean)}"), "kind": o.get("kind", "hook"),
+                          "start": round(s_, 2), "end": round(e_, 2), "text": text, "on": bool(o.get("on", True))})
+        cl["overlays"] = clean
+    return _change(pid, fn)

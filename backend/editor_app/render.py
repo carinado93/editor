@@ -184,7 +184,8 @@ def render(src: Path, info: dict, segments: list[list[float]], out: Path, work: 
     words + flags (Transkript), buzzwords ([{start,end,text?}]), gaze (blick.json-Daten), fonts_dir."""
     from . import gaze, subtitles
 
-    opts = {"zoom": True, "loudness": True, "denoise": False, "subtitles": "srt", "karaoke": False, **(options or {})}
+    opts = {"zoom": True, "loudness": True, "denoise": False, "subtitles": "srt", "karaoke": False,
+            "audio_copy": False, "reel": False, **(options or {})}
     report = progress or (lambda f, m: None)
     if quality not in QUALITIES:
         raise UserError("Unbekannte Qualität.")
@@ -202,9 +203,14 @@ def render(src: Path, info: dict, segments: list[list[float]], out: Path, work: 
     tmap = subtitles.TimeMap(keep_t)
     gaze_data = opts.get("gaze") or {}
 
-    report(0.02, "Ton wird geschnitten …")
-    audio = build_audio(src, info, frames, fps, work)
-    if opts["loudness"] or opts["denoise"]:
+    audio = None
+    if opts["audio_copy"] and len(frames) == 1 and frames[0][0] == 0:
+        pass  # Reel: Ton bleibt exakt wie im Original (wird nur übernommen)
+    else:
+        opts["audio_copy"] = False
+        report(0.02, "Ton wird geschnitten …")
+        audio = build_audio(src, info, frames, fps, work)
+    if audio is not None and (opts["loudness"] or opts["denoise"]):
         report(0.04, "Ton wird veredelt (Lautstärke −14 LUFS) …")
         audio = process_audio(audio, work / "ton_fertig.pcm", opts["loudness"], opts["denoise"])
 
@@ -220,11 +226,13 @@ def render(src: Path, info: dict, segments: list[list[float]], out: Path, work: 
         extra_files.append(srt_path.name)
     buzz = subtitles.buzz_events(opts.get("buzzwords") or [], words, tmap) if words else []
     burn_subs = opts["subtitles"] == "einbrennen" and groups
+    hooks = [{"s": tmap.clamp(o["start"]), "e": tmap.clamp(o["end"]), "text": o["text"]}
+             for o in opts.get("overlays") or []]
     ass_filter = ""
-    if burn_subs or buzz:
+    if burn_subs or buzz or hooks:
         ass_path = work / "texte.ass"
         ass_path.write_text(subtitles.ass(out_w, out_h, groups if burn_subs else None, buzz,
-                                          gaze.face_box(gaze_data) if gaze_data else None, opts["karaoke"]),
+                                          gaze.face_box(gaze_data) if gaze_data else None, opts["karaoke"], hooks),
                             encoding="utf-8")
         ass_filter = f",ass={_filter_path(ass_path)}"
         if opts.get("fonts_dir"):
@@ -244,9 +252,26 @@ def render(src: Path, info: dict, segments: list[list[float]], out: Path, work: 
     script.write_text(graph, encoding="utf-8")
 
     tmp = out.with_suffix(".tmp.mp4")
-    args = ["-i", str(src), "-f", "s16le", "-ar", str(SR), "-ac", str(CH), "-i", str(audio),
-            *media.filter_script_args(script), "-map", "[v]", "-map", "1:a",
-            *_encoder(), "-r", fps_str, "-c:a", "aac", "-b:a", "192k",
+    encoder = _encoder()
+    if opts["reel"]:
+        # Reels: unter 30 MB bleiben (Instagram/Metricool). Bitrate passend zur Länge, höchstens 5 Mbit/s.
+        # Übernommener Original-Ton kann größer sein (z. B. 320 kbit/s bei DJI) → großzügig einrechnen
+        audio_kbps = 330 if opts["audio_copy"] else 192
+        max_kbps = max(800, min(5000, int(30 * 8 * 1000 * 0.88 / max(1.0, new_duration)) - audio_kbps))
+        rate = ["-maxrate", f"{max_kbps}k", "-bufsize", f"{max_kbps * 2}k"]
+        if encoder[1] == "h264_nvenc":
+            encoder = ["-c:v", "h264_nvenc", "-preset", "p5", "-rc", "vbr", "-cq", "20", *rate, "-profile:v", "high"]
+        else:
+            encoder = ["-c:v", "libx264", "-preset", "fast", "-crf", "20", *rate, "-profile:v", "high"]
+    if opts["audio_copy"]:
+        audio_in, audio_map, audio_codec = [], ["-map", f"0:{info['audio_index']}"], ["-c:a", "copy"]
+        if info.get("audio_codec") not in ("aac", "mp3"):
+            audio_codec = ["-c:a", "aac", "-b:a", "192k"]
+    else:
+        audio_in = ["-f", "s16le", "-ar", str(SR), "-ac", str(CH), "-i", str(audio)]
+        audio_map, audio_codec = ["-map", "1:a"], ["-c:a", "aac", "-b:a", "192k"]
+    args = ["-i", str(src), *audio_in, *media.filter_script_args(script), "-map", "[v]", *audio_map,
+            *encoder, "-r", fps_str, *audio_codec,
             "-movflags", "+faststart", "-map_metadata", "-1", "-shortest", str(tmp)]
     started = time.time()
 
@@ -266,7 +291,7 @@ def render(src: Path, info: dict, segments: list[list[float]], out: Path, work: 
     report(1.0, "Fertig gerendert")
     return {"file": out.name, "duration": round(new_duration, 2), "segments": len(frames),
             "size": out.stat().st_size, "quality": quality, "extra": extra_files,
-            "options": {k: opts[k] for k in ("zoom", "loudness", "denoise", "subtitles", "karaoke")},
+            "options": {k: opts[k] for k in ("zoom", "loudness", "denoise", "subtitles", "karaoke", "audio_copy", "reel")},
             "buzzwords": len(buzz)}
 
 

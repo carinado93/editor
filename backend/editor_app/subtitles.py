@@ -114,8 +114,33 @@ def _esc(text: str) -> str:
     return text.replace("\\", "").replace("{", "(").replace("}", ")")
 
 
+def _accent(text: str) -> str:
+    """*Wort* → Lila-Kursiv (Kernphrase), Rest normal."""
+    out = []
+    for part in re.split(r"(\*[^*]+\*)", _esc_keep_stars(text)):
+        if part.startswith("*") and part.endswith("*") and len(part) > 2:
+            out.append(f"{{\\i1\\c{ass_color(LILA)}}}{part[1:-1]}{{\\i0\\c{ass_color(BRAUN)}}}")
+        elif part:
+            out.append(part)
+    return "".join(out)
+
+
+def _esc_keep_stars(text: str) -> str:
+    return text.replace("\\", "").replace("{", "(").replace("}", ")")
+
+
+def hook_y(height: int, face_box: list[float] | None, n_lines: int, size: int) -> int:
+    """Hook-Karte in der Safe Zone (y 280–1250 bei 1920 Höhe), über dem Gesicht wenn Platz, sonst darunter."""
+    f = height / 1920
+    top, bottom = round(280 * f), round(1250 * f)
+    block = round(n_lines * size * 1.3 + 60 * f)
+    if not face_box or face_box[1] * height > top + block + 20:
+        return top + round(20 * f)
+    return max(top, min(bottom - block, round(face_box[3] * height + 40 * f)))
+
+
 def ass(width: int, height: int, groups: list[list[dict]] | None, buzz: list[dict], face_box: list[float] | None,
-        karaoke: bool = False) -> str:
+        karaoke: bool = False, hooks: list[dict] | None = None) -> str:
     """ASS-Datei mit Untertiteln und Buzzword-Pops.
 
     Platzierung: Hochformat → Untertitel bei ~70 % Höhe (Instagram/Shorts-Safe-Zone endet bei ~1250/1920),
@@ -147,6 +172,7 @@ ScaledBorderAndShadow: yes
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 Style: Untertitel,Poppins SemiBold,{sub_size},{ass_color(LILA if karaoke else BRAUN)},{ass_color(BRAUN)},{ass_color(CREME, 0x18)},{ass_color("#000000", 0xB0)},0,0,0,0,100,100,0,0,3,{round(14 * unit)},0,5,40,40,0,1
+Style: Hook,Cormorant Garamond SemiBold,{round(92 * unit)},{ass_color(BRAUN)},{ass_color(BRAUN)},{ass_color(CREME, 0x14)},{ass_color("#000000", 0xC0)},0,0,0,0,100,100,0,0,3,{round(26 * unit)},0,8,{round(width * 90 / 1080)},{round(width * 180 / 1080)},0,1
 Style: Buzz,Cormorant Garamond Bold,{buzz_size},{ass_color(LILA_TIEF)},{ass_color(LILA_TIEF)},{ass_color(FLIEDER, 0x10)},{ass_color("#000000", 0xA0)},-1,0,0,0,100,100,1,0,3,{round(20 * unit)},0,5,40,40,0,1
 
 [Events]
@@ -168,6 +194,16 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         else:
             text = _esc(" ".join(w["w"] for w in g))
         ev.append(f"Dialogue: 0,{_fmt_ass(start)},{_fmt_ass(end)},Untertitel,,0,0,0,,{{\\pos({width // 2},{sub_y})}}{text}")
+
+    for h in hooks or []:
+        size = round(92 * unit)
+        chars_per_line = max(10, int((width * 810 / 1080) / (size * 0.42)))
+        n_lines = max(1, -(-len(h["text"].replace("*", "")) // chars_per_line))
+        y = hook_y(height, face_box, n_lines, size)
+        x = round(width * 495 / 1080) if portrait else width // 2
+        ev.append(f"Dialogue: 2,{_fmt_ass(h['s'])},{_fmt_ass(h['e'])},Hook,,0,0,0,,"
+                  f"{{\\an8\\pos({x},{y})\\fad(250,250)}}{_accent(h['text'])}")
+        buzz = [b for b in buzz if b["e"] <= h["s"] or b["s"] >= h["e"]]  # nie gleichzeitig mit der Hook-Karte
 
     for b in buzz:
         text = _esc(b["text"]).upper() if b.get("upper") else _esc(b["text"])
