@@ -32,7 +32,7 @@ SCHEMA = """{
   "chapters": [{"time": "0:00", "title": "Einleitung"}, {"time": "1:23", "title": "…"}],
   "description": "Beschreibung (mehrere Absätze, ohne Kapitel – die fügt die App an)",
   "tags": ["tag1", "tag2", "…"],
-  "hashtags": ["#tag1", "#tag2", "#tag3"]
+  "hashtags": ["#tag1", "#tag2", "#tag3", "#tag4", "#tag5"]
 }"""
 
 
@@ -45,8 +45,73 @@ def timed_text(sentences: list[tuple[float, str]]) -> str:
     return "\n".join(f"[{_fmt(t)}] {s}" for t, s in sentences)
 
 
+HASHTAG_COUNT = 5
+
+
+def _learned_file():
+    from .config import ROOT
+    return ROOT / "daten" / "hashtags_gelernt.json"
+
+
+def hashtag_bank(language: str) -> list[str]:
+    """Carinas Grund-Sammlung (vorlagen/hashtags.json) + automatisch gelernte (daten/, nur auf ihrem PC)."""
+    from .config import ROOT
+    out: list[str] = []
+    for f in (ROOT / "vorlagen" / "hashtags.json", _learned_file()):
+        try:
+            data = json.loads(f.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        for h in data.get(language) or []:
+            if h.lower() not in {x.lower() for x in out}:
+                out.append(h)
+    return out
+
+
+def learn_hashtags(tags: list[str], language: str, limit: int = 300) -> None:
+    """Neue Hashtags automatisch in die Sammlung aufnehmen (Carina muss nichts von Hand pflegen).
+    Gespeichert in daten/hashtags_gelernt.json (nicht im Git, damit "Git: Pull" nie hängen bleibt)."""
+    known = {b.lower() for b in hashtag_bank(language)}
+    added = [t for t in tags if t.lower() not in known and re.fullmatch(r"#[\wäöüß]{3,40}", t)]
+    if not added:
+        return
+    f = _learned_file()
+    try:
+        data = json.loads(f.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        data = {}
+    data[language] = (list(data.get(language, [])) + added)[-limit:]
+    try:
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    except OSError:
+        pass
+
+
+def fix_hashtags(tags: list[str], language: str, warnings: list[str]) -> list[str]:
+    """Immer genau 5 Hashtags: zu viele → kürzen, zu wenige → aus Carinas Sammlung auffüllen.
+    Neue, gute Hashtags lernt die Sammlung automatisch dazu."""
+    out: list[str] = []
+    for t in tags:
+        h = "#" + str(t).strip().lstrip("#").replace(" ", "").lower()
+        if len(h) > 1 and h not in out:
+            out.append(h)
+    learn_hashtags(out[:HASHTAG_COUNT], language)
+    if len(out) > HASHTAG_COUNT:
+        out = out[:HASHTAG_COUNT]
+    if len(out) < HASHTAG_COUNT:
+        for h in hashtag_bank(language):
+            if len(out) >= HASHTAG_COUNT:
+                break
+            if h.lower() not in out:
+                out.append(h.lower())
+        warnings.append("Hashtags auf genau 5 ergänzt (aus deiner Sammlung).")
+    return out
+
+
 def build_prompt(sentences: list[tuple[float, str]], language: str, duration: float, title_hint: str = "") -> str:
     lang = "Deutsch" if language == "de" else "Englisch"
+    bank = ", ".join(hashtag_bank(language)[:25])
     n_chapters = max(3, min(12, round(duration / 90)))
     return f"""Du bist YouTube-Strategin für Carina Dorca (Kanal @Cary-redet, Stress- und Burnout-Prävention).
 Hier ist das Transkript ihres fertig geschnittenen Videos (Sprache: {lang}, Länge {_fmt(duration)}).
@@ -59,7 +124,7 @@ Aufgabe (alles auf {lang}):
 2. Etwa {n_chapters} Kapitel. Das erste MUSS bei 0:00 beginnen, mindestens 10 Sekunden Abstand, Zeiten aus dem
    Transkript, kurze Kapitelnamen.
 3. Beschreibung: 2–4 kurze Absätze in Carinas Stimme, erster Satz = Hook, am Ende ihr Angebot / Call-to-Action.
-4. 10–15 Tags (Suchbegriffe), 3 Hashtags.
+4. 10–15 Tags (Suchbegriffe) und GENAU 5 Hashtags (bevorzugt aus dieser Sammlung: {bank}).
 {f'Arbeitstitel von Carina: {title_hint}' if title_hint else ''}
 
 Antworte NUR mit JSON in genau diesem Format, ohne weiteren Text:
@@ -78,7 +143,7 @@ def _seconds(text: str) -> float | None:
     return h * 3600 + mi * 60 + s
 
 
-def parse(text_or_obj, duration: float) -> dict:
+def parse(text_or_obj, duration: float, language: str = "en") -> dict:
     """Prüft eine KI-Antwort und gibt {titles, chapters, description, tags, hashtags, warnings} zurück."""
     if isinstance(text_or_obj, str):
         m = re.search(r"\{.*\}", text_or_obj, re.S)
@@ -111,7 +176,7 @@ def parse(text_or_obj, duration: float) -> dict:
     if len(chapters) < 3:
         warnings.append("YouTube zeigt Kapitel erst ab 3 Stück an.")
     tags = [str(t).strip().lstrip("#") for t in data.get("tags", []) if str(t).strip()][:20]
-    hashtags = ["#" + str(t).strip().lstrip("#").replace(" ", "") for t in data.get("hashtags", []) if str(t).strip()][:3]
+    hashtags = fix_hashtags(data.get("hashtags", []), language, warnings)
     description = str(data.get("description", "")).strip()
     all_text = " ".join(titles + [description] + [c["title"] for c in chapters]).lower()
     for pat in FORBIDDEN:
@@ -132,11 +197,11 @@ def full_description(meta: dict) -> str:
     return "\n\n".join(p for p in parts if p)
 
 
-def from_ollama(prompt: str, duration: float) -> dict:
+def from_ollama(prompt: str, duration: float, language: str = "en") -> dict:
     from . import llm
 
     data = llm.ask_json(prompt, "Du antwortest ausschließlich mit gültigem JSON.", timeout=600)
     if not isinstance(data, dict):
         raise UserError("Die lokale KI hat kein passendes Ergebnis geliefert. Bitte nochmal versuchen "
                         "oder den Weg über claude.ai nehmen.")
-    return parse(data, duration)
+    return parse(data, duration, language)

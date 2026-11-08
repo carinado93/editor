@@ -350,7 +350,7 @@ def meta_ollama(pid: str):
     p = projects.load(pid)
     t, v, sentences = _cut_context(pid)
     prompt = meta.build_prompt(sentences, t.get("language", "de"), v["evaluation"]["new_duration"], p["name"])
-    data = meta.from_ollama(prompt, v["evaluation"]["new_duration"])
+    data = meta.from_ollama(prompt, v["evaluation"]["new_duration"], t.get("language", "en"))
     data["source"] = "ollama"
     _meta_file(pid).write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
     return {"prompt": prompt, "meta": data, "full_description": meta.full_description(data)}
@@ -360,8 +360,8 @@ def meta_ollama(pid: str):
 def meta_import(pid: str, body: MetaImportBody):
     from . import meta
 
-    _, v, _ = _cut_context(pid)
-    data = meta.parse(body.text, v["evaluation"]["new_duration"])
+    t, v, _ = _cut_context(pid)
+    data = meta.parse(body.text, v["evaluation"]["new_duration"], t.get("language", "en"))
     data["source"] = "claude.ai"
     _meta_file(pid).write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
     return {"meta": data, "full_description": meta.full_description(data)}
@@ -371,8 +371,8 @@ def meta_import(pid: str, body: MetaImportBody):
 def meta_save(pid: str, body: MetaSaveBody):
     from . import meta
 
-    _, v, _ = _cut_context(pid)
-    data = meta.parse(body.model_dump(), v["evaluation"]["new_duration"])
+    t, v, _ = _cut_context(pid)
+    data = meta.parse(body.model_dump(), v["evaluation"]["new_duration"], t.get("language", "en"))
     data["source"] = "bearbeitet"
     _meta_file(pid).write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
     return {"meta": data, "full_description": meta.full_description(data)}

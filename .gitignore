@@ -8,6 +8,7 @@ frontend/node_modules/
 
 # Deine Projekte, Videos und Modelle bleiben nur auf deinem PC
 projekte/
+daten/
 modelle/
 tools/ffmpeg/
 .env
