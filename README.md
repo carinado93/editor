@@ -106,13 +106,14 @@ Gibt es eine neue Version, erscheint oben ein gelber Balken **„Jetzt aktualisi
 Die App holt die neue Version, startet sich neu und lädt die Seite von selbst neu.
 (Das klappt, wenn du die App über VS Code mit „Git: Clone“ geholt hast, nicht beim ZIP-Download.)
 
-## Texte mit Claude (dein claude.ai-Abo, kostenlos)
+## Texte mit Claude
 
-1. Idee eintippen → **„Mit Claude erstellen (claude.ai)“**.
-2. claude.ai öffnet sich in einem neuen Tab, der Auftrag steht im Eingabefeld (sonst **Strg+V**) → **Enter**.
-3. Unter der fertigen Antwort auf **„Kopieren“** klicken und zurück in die App wechseln.
-   Die App erkennt die Antwort von selbst und übernimmt sie.
-Beim ersten Mal fragt der Browser, ob die App die Zwischenablage lesen darf → **Zulassen**.
+- **Einmal einrichten:** oben **„Einstellungen“** → Schritt für Schritt: auf console.anthropic.com Guthaben aufladen
+  (z. B. 10 $, kein Abo), Schlüssel erstellen, in der App einfügen. Die App prüft ihn sofort.
+- **Danach ein Klick:** im Reel- oder YouTube-Paket **„Mit Claude erstellen“** → nach ca. 20–60 Sekunden sind alle
+  Texte da (Texte fürs Video, Caption, 5 Hashtags, Cover-Text, Shorts-Titel bzw. YouTube-Titel, Kapitel …).
+- **„Social Media Content“** (oben): Chat mit Claude direkt in der App, deine Regeln und dein Stil sind immer dabei.
+- Kosten: ca. 0,05–0,10 $ pro Reel-Text, ca. 3–8 $ im Monat. Kostenlos geht es weiterhin mit **„Kostenlos mit Ollama“**.
 
 ## Wenn etwas nicht klappt
 

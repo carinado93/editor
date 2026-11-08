@@ -1192,3 +1192,112 @@ kbd {
   padding: 10px 16px;
   font-weight: 500;
 }
+
+/* ---------- Claude: Navigation, Einstellungen, Chat ---------- */
+.topnav {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.topnav a {
+  color: var(--creme);
+  text-decoration: none;
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 15px;
+}
+
+.topnav a.on,
+.topnav a:hover {
+  background: rgba(205, 191, 224, 0.25);
+}
+
+.settings-card {
+  max-width: 720px;
+}
+
+.steps li {
+  margin-bottom: 6px;
+}
+
+.key-row {
+  display: flex;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.key-row input {
+  flex: 1;
+  font: inherit;
+  border: 1px solid var(--creme-2);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.chat-page {
+  max-width: 900px;
+}
+
+.chat-head {
+  display: flex;
+  align-items: baseline;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+
+.chat {
+  min-height: 50vh;
+  max-height: 65vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.chat-empty {
+  margin: auto;
+  text-align: center;
+  max-width: 520px;
+}
+
+.bubble {
+  max-width: 85%;
+  padding: 10px 14px;
+  border-radius: 14px;
+  white-space: pre-wrap;
+  line-height: 1.5;
+}
+
+.bubble.user {
+  align-self: flex-end;
+  background: var(--flieder);
+  color: var(--lila-tief);
+}
+
+.bubble.assistant {
+  align-self: flex-start;
+  background: var(--creme);
+}
+
+.chat-input {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  align-items: flex-end;
+}
+
+.chat-input textarea {
+  flex: 1;
+  font: inherit;
+  border: 1px solid var(--flieder);
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: var(--weiss);
+  color: var(--braun);
+}
+
+/* Hauptknopf (Claude) zuerst */
+.row-buttons .btn:not(.ghost) {
+  order: -1;
+}

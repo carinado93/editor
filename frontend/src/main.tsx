@@ -9,6 +9,8 @@ import "./styles.css";
 import { api, type SystemInfo } from "./api";
 import { ProjectList } from "./ProjectList";
 import { ProjectView } from "./ProjectView";
+import { ContentChat } from "./ContentChat";
+import { Settings } from "./Settings";
 
 function useHash() {
   const [hash, setHash] = useState(window.location.hash);
@@ -103,6 +105,17 @@ function App() {
             <span className="brand-sub">für Carina Dorca</span>
           </span>
         </a>
+        <nav className="topnav">
+          <a href="#/" className={!hash.startsWith("#/content") && !hash.startsWith("#/einstellungen") ? "on" : ""}>
+            Projekte
+          </a>
+          <a href="#/content" className={hash.startsWith("#/content") ? "on" : ""}>
+            Social Media Content
+          </a>
+          <a href="#/einstellungen" className={hash.startsWith("#/einstellungen") ? "on" : ""}>
+            Einstellungen
+          </a>
+        </nav>
         {system && (
           <div className="sysinfo small" title="Womit dein PC rechnet">
             <span className={`dot ${system.gpu ? "on" : ""}`} />
@@ -113,7 +126,15 @@ function App() {
       <UpdateBanner />
       {offline && <div className="banner error page">Keine Verbindung zum Motor. Bitte starte die App mit start.bat.</div>}
       {system && !system.ffmpeg && <div className="banner error page">ffmpeg fehlt. Bitte die App mit start.bat starten, das installiert es.</div>}
-      {match ? <ProjectView id={match[1]} /> : <ProjectList system={system} />}
+      {hash.startsWith("#/content") ? (
+        <ContentChat />
+      ) : hash.startsWith("#/einstellungen") ? (
+        <Settings />
+      ) : match ? (
+        <ProjectView id={match[1]} />
+      ) : (
+        <ProjectList system={system} />
+      )}
     </>
   );
 }

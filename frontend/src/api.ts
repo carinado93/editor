@@ -171,6 +171,16 @@ const json = (body: unknown): RequestInit => ({
 
 export const api = {
   system: () => call<SystemInfo>("/api/system"),
+  claudeSettings: () => call<{ configured: boolean; masked: string; model: string }>("/api/einstellungen/claude"),
+  claudeSaveKey: (key: string) =>
+    call<{ configured: boolean; masked: string; model: string }>("/api/einstellungen/claude", { ...json({ key }), method: "PUT" }),
+  claudeDeleteKey: () => call<{ configured: boolean; masked: string; model: string }>("/api/einstellungen/claude", { method: "DELETE" }),
+  claudeChat: (messages: { role: string; content: string }[], language: string) =>
+    call<{ text: string }>("/api/claude/chat", json({ messages, language })),
+  reelTextsClaude: (id: string, idea: string, language: string) =>
+    call<{ texts: ReelTexts; full_caption: string }>(`/api/projects/${id}/reel-texte/claude`, json({ idea, language })),
+  youtubeTextsClaude: (id: string) =>
+    call<{ prompt: string; meta: YoutubeMeta; full_description: string }>(`/api/projects/${id}/youtube-texte/claude`, { method: "POST" }),
   updateStatus: (force = false) =>
     call<{ current: string; available: boolean; behind: number; can_update: boolean; reason: string }>(`/api/update/status${force ? "?force=true" : ""}`),
   updateNow: () => call<{ ok: boolean; version: string }>("/api/update", { method: "POST" }),

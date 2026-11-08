@@ -629,6 +629,71 @@ def cover_color_used(body: ColorBody):
     return {"next": covers.advance_cover_color(body.used)}
 
 
+# ---------- Claude (Schnittstelle) ----------
+
+class KeyBody(BaseModel):
+    key: str
+
+
+class ChatBody(BaseModel):
+    messages: list[dict]
+    language: str = "en"
+
+
+@app.get("/api/einstellungen/claude")
+def claude_settings():
+    from . import claude
+
+    return {"configured": claude.available(), "masked": claude.masked(), "model": claude.MODEL}
+
+
+@app.put("/api/einstellungen/claude")
+def claude_save_key(body: KeyBody):
+    from . import claude
+
+    claude.save_key(body.key)
+    return {"configured": True, "masked": claude.masked(), "model": claude.MODEL}
+
+
+@app.delete("/api/einstellungen/claude")
+def claude_delete_key():
+    from . import claude
+
+    claude.delete_key()
+    return {"configured": False, "masked": "", "model": claude.MODEL}
+
+
+@app.post("/api/claude/chat")
+def claude_chat(body: ChatBody):
+    from . import claude
+
+    return {"text": claude.chat(body.messages, claude.chat_system(body.language))}
+
+
+@app.post("/api/projects/{pid}/reel-texte/claude")
+def reel_texts_claude(pid: str, body: ReelIdeaBody):
+    from . import captions, claude
+
+    prompt, lang = _reel_prompt(pid, body.idea, body.language)
+    schema = claude.REEL_SCHEMA
+    data = claude.ask_json(prompt, schema)
+    return _save_reel(pid, captions.parse(data, lang), "claude", body.idea)
+
+
+@app.post("/api/projects/{pid}/youtube-texte/claude")
+def youtube_texts_claude(pid: str):
+    from . import claude, meta
+
+    p = projects.load(pid)
+    t, v, sentences = _cut_context(pid)
+    prompt = meta.build_prompt(sentences, t.get("language", "de"), v["evaluation"]["new_duration"], p["name"])
+    data = meta.parse(claude.ask_json(prompt, claude.YOUTUBE_SCHEMA), v["evaluation"]["new_duration"],
+                      t.get("language", "en"))
+    data["source"] = "claude"
+    _meta_file(pid).write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
+    return {"prompt": prompt, "meta": data, "full_description": meta.full_description(data)}
+
+
 # ---------- Selbst-Aktualisierung ----------
 
 @app.get("/api/update/status")

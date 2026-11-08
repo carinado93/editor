@@ -140,6 +140,14 @@
   Motor endet mit Code 3 → start.bat macht uv sync und startet neu (ohne neuen Browser-Tab) → Seite lädt neu.
   Seite wird nie zwischengespeichert (kein Strg+F5 mehr). Nicht während Verarbeitung/Rendern.
 - **Arbeitsregel (8.11.): Carina will gefragt werden, bevor ich etwas umbaue oder entferne.**
+- [x] 8.11.: Weg B (claude.ai + Zwischenablage) scheiterte im Browser (leerer Tab, Kopieren blockiert, alter Motor).
+  Carina wollte Claude direkt in der App → claude.ai lässt sich nicht einbetten → **Entscheidung: Claude-API**
+  (ca. 3–8 $/Monat). `claude.py`: Schlüssel in `.env` (per Einstellungen-Seite, wird mit Mini-Anfrage geprüft),
+  Claude Opus 5.5, JSON-Schema-Antworten, Ausweichen bei Ablehnung (`fallbacks: "default"`, sonst normaler Aufruf).
+  „Mit Claude erstellen“ in Reel-/YouTube-Paket (ein Klick), Ollama als „Kostenlos mit Ollama“ daneben,
+  neuer Bereich **„Social Media Content“** (Chat mit Carinas Regeln/Stil), Seite **„Einstellungen“**.
+  claude.ai-Kopierweg entfernt (durch API ersetzt). Echter Aufruf mit gültigem Schlüssel noch nicht getestet
+  (kein Schlüssel hier); falscher Schlüssel → echte 401 von Anthropic → verständliche Meldung (getestet).
 
 ### Nächster Schritt
 M6 Vorlagen-Bibliothek + B2 (Reel aus Idee), M6b Karussell-Generator, M7 Politur. Carina wählt die Reihenfolge.

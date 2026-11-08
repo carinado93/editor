@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, formatTime, type CutView, type Overlay, type ReelTexts } from "./api";
 import { CoverStudio } from "./CoverStudio";
-import { useClaudeRoundtrip } from "./claudeRoundtrip";
 
 function copy(text: string, done: (msg: string) => void) {
   navigator.clipboard.writeText(text).then(
@@ -29,39 +28,12 @@ export function ReelPackage({
   const [silent, setSilent] = useState(false);
   const [texts, setTexts] = useState<ReelTexts | null>(null);
   const [full, setFull] = useState("");
-  const [promptText, setPromptText] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => setOverlays(cuts.cutlist.overlays ?? []), [cuts]);
 
-  // Auftrag für Claude schon beim Tippen vorbereiten, damit der Klick claude.ai sofort öffnen kann
-  useEffect(() => {
-    if (silent && !idea.trim()) {
-      setPromptText("");
-      return;
-    }
-    let alive = true;
-    const t = setTimeout(() => {
-      api
-        .reelPrompt(id, idea, lang)
-        .then((r) => {
-          if (!alive) return;
-          setPromptText(r.prompt);
-          setErr((e) => (e && e.startsWith("Auftrag konnte nicht") ? null : e));
-        })
-        .catch((e) => {
-          if (!alive) return;
-          setPromptText("");
-          setErr("Auftrag konnte nicht vorbereitet werden: " + (e as Error).message);
-        });
-    }, 400);
-    return () => {
-      alive = false;
-      clearTimeout(t);
-    };
-  }, [id, idea, lang, silent]);
   useEffect(() => {
     api
       .reelTexts(id)
@@ -74,14 +46,6 @@ export function ReelPackage({
       })
       .catch((e) => setErr(e.message));
   }, [id]);
-
-  const onClaudeAnswer = async (text: string) => {
-    const r = await api.importReelTexts(id, text, idea, lang);
-    setTexts(r.texts);
-    setFull(r.full_caption);
-    setMsg("Antwort von Claude übernommen ✓ – Vorschläge stehen unten.");
-  };
-  const claude = useClaudeRoundtrip(["scenes", "caption"], onClaudeAnswer);
 
   const act = async (label: string, fn: () => Promise<void>) => {
     setBusy(label);
@@ -178,39 +142,21 @@ export function ReelPackage({
             </select>
           </label>
           <div className="row-buttons">
-            <button className="btn" disabled={!!busy} onClick={() => {
+            <button className="btn ghost" disabled={!!busy} onClick={() => {
               if (silent && !idea.trim()) { setErr("Bitte zuerst oben deine Idee eintragen (in diesem Clip wird nicht gesprochen)."); return; }
               act("ollama", async () => { applyTexts(await api.reelTextsOllama(id, idea, lang)); setMsg("Fertig ✓ – Vorschläge stehen unten."); });
             }}>
-              {busy === "ollama" ? "Lokale KI schreibt … (1–2 Min)" : "Mit lokaler KI erstellen (Ollama)"}
+              {busy === "ollama" ? "Lokale KI schreibt … (1–2 Min)" : "Kostenlos mit Ollama"}
             </button>
-            <button className="btn ghost" disabled={!!busy} onClick={() => {
+            <button className="btn" disabled={!!busy} onClick={() => {
               if (silent && !idea.trim()) { setErr("Bitte zuerst oben deine Idee eintragen (in diesem Clip wird nicht gesprochen)."); return; }
-              setErr(null);
-              setMsg(null);
-              if (promptText) {
-                claude.start(promptText);
-              } else {
-                claude
-                  .startLate(async () => {
-                    const r = await api.reelPrompt(id, idea, lang);
-                    setPromptText(r.prompt);
-                    return r.prompt;
-                  })
-                  .catch((e) => {
-                    claude.cancel();
-                    setErr((e as Error).message);
-                  });
-              }
+              act("claude", async () => { applyTexts(await api.reelTextsClaude(id, idea, lang)); setMsg("Fertig ✓ – Claudes Vorschläge stehen unten."); });
             }}>
-              Mit Claude erstellen (claude.ai)
+              {busy === "claude" ? "Claude schreibt … (ca. 20–60 s)" : "Mit Claude erstellen"}
             </button>
           </div>
           <Status busy={busy} err={err} msg={msg} />
-          {claude.waiting && (
-            <ClaudeWaiting hint={claude.hint} promptText={promptText} onCancel={claude.cancel} onCopy={() => claude.copyAgain(promptText)}
-              onPaste={(text) => act("import", async () => { await onClaudeAnswer(text); claude.cancel(); })} />
-          )}
+          {err?.includes("Einstellungen") && <a className="small" href="#/einstellungen">→ zu den Einstellungen</a>}
           {!!texts?.scenes?.length && (
             <div className="scenes">
               <h4>Vorgeschlagene Texte fürs Video</h4>
@@ -278,37 +224,6 @@ export function Status({ busy, err, msg }: { busy: string | null; err: string | 
   return (
     <div className={`banner small ${err ? "error" : ""}`} role="status">
       {busy ? "⏳ Läuft … bitte warten." : err ? `⚠ ${err}` : msg}
-    </div>
-  );
-}
-
-/** Anleitung, solange die App auf die Antwort von claude.ai wartet (mit Einfügen als Notlösung). */
-export function ClaudeWaiting({ hint, promptText, onCancel, onPaste, onCopy }: {
-  hint: string | null; promptText: string; onCancel: () => void; onPaste: (text: string) => void; onCopy: () => void;
-}) {
-  const [paste, setPaste] = useState("");
-  return (
-    <div className="paste-box">
-      <p className="small">
-        <strong>claude.ai ist im neuen Tab offen.</strong> Dort: <strong>Enter</strong> drücken (steht der Auftrag nicht im Feld:
-        Strg+V), warten bis die Antwort fertig ist, darunter auf <strong>„Kopieren“</strong> klicken – und einfach hierher zurück.
-        Die App übernimmt die Antwort dann von selbst.
-      </p>
-      <p className="small muted">⏳ Warte auf die Antwort von Claude …</p>
-      {hint && <p className="small"><strong>{hint}</strong></p>}
-      <button className="btn ghost" disabled={!promptText} onClick={onCopy}>
-        Auftrag kopieren
-      </button>
-      <details className="small">
-        <summary>Klappt nicht? Antwort hier einfügen</summary>
-        <textarea rows={4} value={paste} onChange={(e) => setPaste(e.target.value)} placeholder='{"…": … }' />
-        <button className="btn" disabled={!paste.trim()} onClick={() => onPaste(paste)}>Antwort übernehmen</button>
-        <details>
-          <summary>Auftrag anzeigen</summary>
-          <textarea rows={5} readOnly value={promptText} onFocus={(e) => e.currentTarget.select()} />
-        </details>
-      </details>
-      <button className="link" onClick={onCancel}>abbrechen</button>
     </div>
   );
 }

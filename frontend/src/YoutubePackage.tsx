@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, type YoutubeMeta } from "./api";
 import { CoverStudio } from "./CoverStudio";
-import { ClaudeWaiting, Status } from "./ReelPackage";
-import { useClaudeRoundtrip } from "./claudeRoundtrip";
+import { Status } from "./ReelPackage";
 
 function copy(text: string, done: (msg: string) => void) {
   navigator.clipboard.writeText(text).then(
@@ -12,7 +11,6 @@ function copy(text: string, done: (msg: string) => void) {
 }
 
 export function YoutubePackage({ id }: { id: string }) {
-  const [prompt, setPrompt] = useState("");
   const [meta, setMeta] = useState<YoutubeMeta | null>(null);
   const [fullDesc, setFullDesc] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
@@ -24,21 +22,12 @@ export function YoutubePackage({ id }: { id: string }) {
     api
       .youtubeTexts(id)
       .then((r) => {
-        setPrompt(r.prompt);
         setMeta(r.meta);
         setFullDesc(r.full_description);
       })
       .catch((e) => setErr(e.message));
     api.project(id).then((p) => setThumbs(p.thumbnails ?? []));
   }, [id]);
-
-  const onClaudeAnswer = async (text: string) => {
-    const r = await api.importYoutubeTexts(id, text);
-    setMeta(r.meta);
-    setFullDesc(r.full_description);
-    setMsg("Antwort von Claude übernommen ✓");
-  };
-  const claude = useClaudeRoundtrip(["titles", "chapters"], onClaudeAnswer);
 
   const act = async (label: string, fn: () => Promise<void>) => {
     setBusy(label);
@@ -73,39 +62,24 @@ export function YoutubePackage({ id }: { id: string }) {
             Die Kapitel-Zeiten passen zum <strong>geschnittenen</strong> Video. Bitte erst die Schnitte fertig machen.
           </p>
           <div className="row-buttons">
-            <button className="btn" disabled={!!busy} onClick={() => act("ollama", async () => {
+            <button className="btn ghost" disabled={!!busy} onClick={() => act("ollama", async () => {
               const r = await api.youtubeTextsOllama(id);
               setMeta(r.meta);
               setFullDesc(r.full_description);
             })}>
-              {busy === "ollama" ? "Lokale KI schreibt … (1–3 Min)" : "Mit lokaler KI erstellen (Ollama)"}
+              {busy === "ollama" ? "Lokale KI schreibt … (1–3 Min)" : "Kostenlos mit Ollama"}
             </button>
-            <button className="btn ghost" disabled={!!busy} onClick={() => {
-              setErr(null);
-              setMsg(null);
-              if (prompt) {
-                claude.start(prompt);
-              } else {
-                claude
-                  .startLate(async () => {
-                    const r = await api.youtubeTexts(id);
-                    setPrompt(r.prompt);
-                    return r.prompt;
-                  })
-                  .catch((e) => {
-                    claude.cancel();
-                    setErr((e as Error).message);
-                  });
-              }
-            }}>
-              Mit Claude erstellen (claude.ai)
+            <button className="btn" disabled={!!busy} onClick={() => act("claude", async () => {
+              const r = await api.youtubeTextsClaude(id);
+              setMeta(r.meta);
+              setFullDesc(r.full_description);
+              setMsg("Fertig ✓ – Claudes Vorschläge stehen unten.");
+            })}>
+              {busy === "claude" ? "Claude schreibt … (ca. 20–60 s)" : "Mit Claude erstellen"}
             </button>
           </div>
           <Status busy={busy} err={err} msg={msg} />
-          {claude.waiting && (
-            <ClaudeWaiting hint={claude.hint} promptText={prompt} onCancel={claude.cancel} onCopy={() => claude.copyAgain(prompt)}
-              onPaste={(text) => act("import", async () => { await onClaudeAnswer(text); claude.cancel(); })} />
-          )}
+          {err?.includes("Einstellungen") && <a className="small" href="#/einstellungen">→ zu den Einstellungen</a>}
           {meta && (
             <MetaEditor meta={meta} fullDesc={fullDesc} busy={!!busy} onSave={save} onCopy={(t) => copy(t, setMsg)} />
           )}
