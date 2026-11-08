@@ -20,6 +20,7 @@ Meilenstein 1: Grundgerüst, `start.bat`, Upload, Transkription mit Wort-Zeitste
 
 ### Entscheidungen
 - 8.11.: **So wenig bezahlen wie möglich.** KI-Texte standardmäßig per "Kopieren & Einfügen" in claude.ai (bestehendes Abo, 0 € extra). Ollama (lokal) und Claude API nur als optionale Einstellung. Keine kostenpflichtigen Dienste einbauen.
+- 8.11.: Carina hat **Canva und CapCut** schon. Die App braucht beide nicht, liefert aber passende Dateien: für CapCut MP4 + SRT (+ Text-Ebenen als transparente PNG/MOV, falls sinnvoll), für Canva das Cover zusätzlich als PNG ohne Text zum Weiterbearbeiten.
 
 ### Notizen für die nächste Sitzung
 - Retake-Logik aus `carinado93/app: tools/audio/clean_recordings.py` (Signalwörter + Satzanfang-Vergleich) wiederverwenden.
