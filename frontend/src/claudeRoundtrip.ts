@@ -57,22 +57,18 @@ export function useClaudeRoundtrip(keys: string[], onAnswer: (text: string) => P
     };
   }, [waiting, check]);
 
-  /** Muss direkt im Klick aufgerufen werden (sonst blockiert der Browser das neue Fenster). */
-  const start = useCallback(async (getPrompt: () => Promise<string>) => {
-    const tab = window.open("about:blank", "_blank");
-    const prompt = await getPrompt();
+  /** Direkt im Klick aufrufen, mit dem schon vorbereiteten Auftrag: claude.ai öffnet sich sofort (kein leerer Tab). */
+  const start = useCallback((prompt: string) => {
     lastPrompt.current = prompt;
-    try {
-      await navigator.clipboard.writeText(prompt);
-    } catch {
-      /* Zwischenablage nicht erlaubt: Auftrag steht trotzdem im Eingabefeld */
-    }
-    const url = "https://claude.ai/new?q=" + encodeURIComponent(prompt);
-    if (tab) tab.location.href = url;
-    else window.open(url, "_blank");
+    const encoded = encodeURIComponent(prompt);
+    // Sehr lange Adressen lehnen Browser/claude.ai ab → dann ohne Auftrag in der Adresse (Strg+V aus der Zwischenablage)
+    const url = encoded.length < 7000 ? "https://claude.ai/new?q=" + encoded : "https://claude.ai/new";
+    window.open(url, "_blank");
+    navigator.clipboard.writeText(prompt).catch(() => {
+      /* Zwischenablage nicht erlaubt: Auftrag steht im Feld bzw. unter "Auftrag anzeigen" */
+    });
     setWaiting(true);
-    setHint(null);
-    return prompt;
+    setHint(encoded.length < 7000 ? null : "Der Auftrag ist lang – bitte in claude.ai mit Strg+V einfügen.");
   }, []);
 
   const cancel = useCallback(() => setWaiting(false), []);

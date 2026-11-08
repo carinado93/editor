@@ -83,7 +83,8 @@ export function YoutubePackage({ id }: { id: string }) {
             <button className="btn ghost" disabled={!!busy} onClick={() => {
               setErr(null);
               setMsg(null);
-              claude.start(async () => prompt).catch((e) => setErr((e as Error).message));
+              if (!prompt) { setErr("Der Auftrag wird noch vorbereitet – bitte gleich nochmal klicken."); return; }
+              claude.start(prompt);
             }}>
               Mit Claude erstellen (claude.ai)
             </button>

@@ -35,6 +35,22 @@ export function ReelPackage({
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => setOverlays(cuts.cutlist.overlays ?? []), [cuts]);
+
+  // Auftrag für Claude schon beim Tippen vorbereiten, damit der Klick claude.ai sofort öffnen kann
+  useEffect(() => {
+    if (silent && !idea.trim()) {
+      setPromptText("");
+      return;
+    }
+    let alive = true;
+    const t = setTimeout(() => {
+      api.reelPrompt(id, idea, lang).then((r) => alive && setPromptText(r.prompt)).catch(() => alive && setPromptText(""));
+    }, 400);
+    return () => {
+      alive = false;
+      clearTimeout(t);
+    };
+  }, [id, idea, lang, silent]);
   useEffect(() => {
     api
       .reelTexts(id)
@@ -161,11 +177,8 @@ export function ReelPackage({
               if (silent && !idea.trim()) { setErr("Bitte zuerst oben deine Idee eintragen (in diesem Clip wird nicht gesprochen)."); return; }
               setErr(null);
               setMsg(null);
-              claude.start(async () => {
-                const r = await api.reelPrompt(id, idea, lang);
-                setPromptText(r.prompt);
-                return r.prompt;
-              }).catch((e) => setErr((e as Error).message));
+              if (!promptText) { setErr("Der Auftrag wird noch vorbereitet – bitte in 1–2 Sekunden nochmal klicken."); return; }
+              claude.start(promptText);
             }}>
               Mit Claude erstellen (claude.ai)
             </button>
