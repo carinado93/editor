@@ -20,6 +20,68 @@ function useHash() {
   return hash;
 }
 
+function UpdateBanner() {
+  const [st, setSt] = useState<{ available: boolean; behind: number } | null>(null);
+  const [phase, setPhase] = useState<"idle" | "laeuft" | "neustart" | "fehler">("idle");
+  const [err, setErr] = useState("");
+
+  useEffect(() => {
+    const check = () => api.updateStatus().then(setSt).catch(() => {});
+    check();
+    const t = setInterval(check, 15 * 60 * 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  const go = async () => {
+    setPhase("laeuft");
+    try {
+      const old = (await api.version()).version;
+      await api.updateNow();
+      setPhase("neustart");
+      // Warten, bis der Motor mit der neuen Version wieder da ist, dann Seite neu laden
+      const start = Date.now();
+      const poll = setInterval(async () => {
+        try {
+          const v = (await api.version()).version;
+          if (v !== old || Date.now() - start > 120000) {
+            clearInterval(poll);
+            window.location.reload();
+          }
+        } catch {
+          /* Motor startet noch */
+        }
+      }, 2000);
+    } catch (e) {
+      setErr((e as Error).message);
+      setPhase("fehler");
+    }
+  };
+
+  if (!st?.available && phase === "idle") return null;
+  return (
+    <div className="update-banner">
+      {phase === "idle" && (
+        <>
+          ✨ Es gibt eine neue Version der App.
+          <button className="btn" onClick={go}>
+            Jetzt aktualisieren
+          </button>
+        </>
+      )}
+      {phase === "laeuft" && <>⏳ Neue Version wird geladen …</>}
+      {phase === "neustart" && <>⏳ Die App startet neu, die Seite lädt gleich von selbst neu …</>}
+      {phase === "fehler" && (
+        <>
+          ⚠ {err}{" "}
+          <button className="link" onClick={() => setPhase("idle")}>
+            ok
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
 function App() {
   const hash = useHash();
   const [system, setSystem] = useState<SystemInfo | null>(null);
@@ -48,6 +110,7 @@ function App() {
           </div>
         )}
       </header>
+      <UpdateBanner />
       {offline && <div className="banner error page">Keine Verbindung zum Motor. Bitte starte die App mit start.bat.</div>}
       {system && !system.ffmpeg && <div className="banner error page">ffmpeg fehlt. Bitte die App mit start.bat starten, das installiert es.</div>}
       {match ? <ProjectView id={match[1]} /> : <ProjectList system={system} />}

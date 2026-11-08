@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 import time
@@ -628,12 +629,46 @@ def cover_color_used(body: ColorBody):
     return {"next": covers.advance_cover_color(body.used)}
 
 
+# ---------- Selbst-Aktualisierung ----------
+
+@app.get("/api/update/status")
+def update_status(force: bool = False):
+    from . import updater
+
+    return updater.status(force)
+
+
+@app.post("/api/update")
+def update_now():
+    from . import updater
+
+    busy = any(p["status"] in ("warteschlange", "arbeitet")
+               or (p.get("render") or {}).get("status") in ("warteschlange", "arbeitet") for p in projects.list_all())
+    return updater.update_and_restart(busy)
+
+
+@app.get("/api/version")
+def app_version():
+    from . import updater
+
+    return {"version": updater.version()}
+
+
+@app.middleware("http")
+async def no_cache_for_page(request: Request, call_next):
+    """Die Seite selbst nie zwischenspeichern, damit nach einem Update sofort die neue Oberfläche kommt."""
+    response = await call_next(request)
+    if not request.url.path.startswith(("/api", "/assets")):
+        response.headers["Cache-Control"] = "no-cache"
+    return response
+
+
 # Unbekannte Adresse unter /api: meist läuft noch ein alter Motor mit neuer Oberfläche (nach "Git: Pull")
 @app.api_route("/api/{rest:path}", methods=["GET", "POST", "PUT", "DELETE"])
 def unknown_api(rest: str):
-    return JSONResponse({"fehler": "Diese Funktion kennt der laufende Motor noch nicht. Bitte die App neu starten: "
-                                   "schwarzes Fenster bzw. Terminal schließen und start.bat erneut starten, "
-                                   "dann im Browser Strg+F5."}, status_code=404)
+    return JSONResponse({"fehler": "Diese Funktion kennt der laufende Motor noch nicht. Bitte oben auf "
+                                   "„Jetzt aktualisieren“ klicken oder die App neu starten (start.bat)."},
+                        status_code=404)
 
 
 # ---------- Oberfläche ----------
@@ -659,7 +694,7 @@ def run() -> None:
             webbrowser.open(url)
             return
     print(f"\n  Carinas Video-Editor läuft:  {url}\n  Zum Beenden dieses Fenster schließen.\n")
-    if config.HOST in ("127.0.0.1", "localhost"):
+    if config.HOST in ("127.0.0.1", "localhost") and not os.environ.get("EDITOR_NO_BROWSER"):
         try:
             webbrowser.open(url)
         except Exception:

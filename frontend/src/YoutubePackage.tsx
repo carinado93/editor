@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { api, type YoutubeMeta } from "./api";
 import { CoverStudio } from "./CoverStudio";
-import { Status } from "./ReelPackage";
+import { ClaudeWaiting, Status } from "./ReelPackage";
+import { useClaudeRoundtrip } from "./claudeRoundtrip";
 
 function copy(text: string, done: (msg: string) => void) {
   navigator.clipboard.writeText(text).then(
@@ -14,12 +15,10 @@ export function YoutubePackage({ id }: { id: string }) {
   const [prompt, setPrompt] = useState("");
   const [meta, setMeta] = useState<YoutubeMeta | null>(null);
   const [fullDesc, setFullDesc] = useState("");
-  const [paste, setPaste] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [thumbs, setThumbs] = useState<{ file: string; t: number }[]>([]);
-  const [showPaste, setShowPaste] = useState(false);
 
   useEffect(() => {
     api
@@ -32,6 +31,14 @@ export function YoutubePackage({ id }: { id: string }) {
       .catch((e) => setErr(e.message));
     api.project(id).then((p) => setThumbs(p.thumbnails ?? []));
   }, [id]);
+
+  const onClaudeAnswer = async (text: string) => {
+    const r = await api.importYoutubeTexts(id, text);
+    setMeta(r.meta);
+    setFullDesc(r.full_description);
+    setMsg("Antwort von Claude übernommen ✓");
+  };
+  const claude = useClaudeRoundtrip(["titles", "chapters"], onClaudeAnswer);
 
   const act = async (label: string, fn: () => Promise<void>) => {
     setBusy(label);
@@ -74,37 +81,18 @@ export function YoutubePackage({ id }: { id: string }) {
               {busy === "ollama" ? "Lokale KI schreibt … (1–3 Min)" : "Mit lokaler KI erstellen (Ollama)"}
             </button>
             <button className="btn ghost" disabled={!!busy} onClick={() => {
-              const tab = window.open("https://claude.ai/new", "_blank");
-              copy(prompt, (m) => setMsg(m.startsWith("Kopiert") ? "Auftrag kopiert ✓ – in claude.ai (neuer Tab) mit Strg+V einfügen, dann die Antwort unten einfügen." + (tab ? "" : " (claude.ai bitte selbst öffnen)") : m));
-              setShowPaste(true);
+              setErr(null);
+              setMsg(null);
+              claude.start(async () => prompt).catch((e) => setErr((e as Error).message));
             }}>
-              Auftrag für claude.ai kopieren
+              Mit Claude erstellen (claude.ai)
             </button>
           </div>
           <Status busy={busy} err={err} msg={msg} />
-          {showPaste && (
-            <div className="paste-box">
-              <details className="small">
-                <summary>Auftrag anzeigen (falls Kopieren nicht ging)</summary>
-                <textarea rows={6} readOnly value={prompt} onFocus={(e) => e.currentTarget.select()} />
-              </details>
-              <p className="small">
-                1. In <a href="https://claude.ai/new" target="_blank" rel="noreferrer">claude.ai</a> einfügen (Strg+V) und abschicken.
-                2. Die komplette Antwort kopieren und hier einfügen:
-              </p>
-              <textarea rows={5} value={paste} onChange={(e) => setPaste(e.target.value)} placeholder='{"titles": [ … ] }' />
-              <button className="btn" disabled={!paste.trim() || !!busy} onClick={() => act("import", async () => {
-                const r = await api.importYoutubeTexts(id, paste);
-                setMeta(r.meta);
-                setFullDesc(r.full_description);
-                setPaste("");
-                setShowPaste(false);
-              })}>
-                Antwort übernehmen
-              </button>
-            </div>
+          {claude.waiting && (
+            <ClaudeWaiting hint={claude.hint} promptText={prompt} onCancel={claude.cancel}
+              onPaste={(text) => act("import", async () => { await onClaudeAnswer(text); claude.cancel(); })} />
           )}
-
           {meta && (
             <MetaEditor meta={meta} fullDesc={fullDesc} busy={!!busy} onSave={save} onCopy={(t) => copy(t, setMsg)} />
           )}

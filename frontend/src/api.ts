@@ -171,6 +171,10 @@ const json = (body: unknown): RequestInit => ({
 
 export const api = {
   system: () => call<SystemInfo>("/api/system"),
+  updateStatus: (force = false) =>
+    call<{ current: string; available: boolean; behind: number; can_update: boolean; reason: string }>(`/api/update/status${force ? "?force=true" : ""}`),
+  updateNow: () => call<{ ok: boolean; version: string }>("/api/update", { method: "POST" }),
+  version: () => call<{ version: string }>("/api/version"),
   projects: () => call<Project[]>("/api/projects"),
   project: (id: string) => call<Project>(`/api/projects/${id}`),
   transcript: (id: string) => call<Transcript>(`/api/projects/${id}/transcript`),

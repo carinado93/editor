@@ -56,6 +56,7 @@ if not exist "tools\ffmpeg\bin\ffmpeg.exe" (
   )
 )
 
+:bausteine
 rem ---- 3. Python-Bausteine (mit Grafikkarten-Unterstuetzung, wenn Nvidia da ist) ----
 echo   [3/4] Bausteine werden geprueft (beim ersten Mal dauert das einige Minuten) ...
 where nvidia-smi >nul 2>nul
@@ -84,6 +85,13 @@ echo   Dieses Fenster bitte offen lassen, solange du mit der App arbeitest.
 echo   Zum Beenden einfach das Fenster schliessen.
 echo.
 uv run backend\app.py
+if "%ERRORLEVEL%"=="3" (
+  echo.
+  echo   Update geladen - die App startet neu ...
+  echo.
+  set "EDITOR_NO_BROWSER=1"
+  goto bausteine
+)
 if errorlevel 1 (
   echo.
   echo   Die App wurde mit einem Fehler beendet. Bitte schick Claude ein Foto von diesem Fenster.

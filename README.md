@@ -100,6 +100,20 @@ zusammen mit der Untertitel-Datei (`.srt`, z. B. zum Hochladen bei YouTube oder 
 Vorschau-Video und Transkript laufen gleichzeitig. Oben rechts in der App steht, ob die Grafikkarte benutzt wird.
 Bricht etwas ab (z. B. PC aus), macht die App beim nächsten Start dort weiter, wo sie war.
 
+## Updates
+
+Gibt es eine neue Version, erscheint oben ein gelber Balken **„Jetzt aktualisieren“**. Ein Klick genügt:
+Die App holt die neue Version, startet sich neu und lädt die Seite von selbst neu.
+(Das klappt, wenn du die App über VS Code mit „Git: Clone“ geholt hast, nicht beim ZIP-Download.)
+
+## Texte mit Claude (dein claude.ai-Abo, kostenlos)
+
+1. Idee eintippen → **„Mit Claude erstellen (claude.ai)“**.
+2. claude.ai öffnet sich in einem neuen Tab, der Auftrag steht im Eingabefeld (sonst **Strg+V**) → **Enter**.
+3. Unter der fertigen Antwort auf **„Kopieren“** klicken und zurück in die App wechseln.
+   Die App erkennt die Antwort von selbst und übernimmt sie.
+Beim ersten Mal fragt der Browser, ob die App die Zwischenablage lesen darf → **Zulassen**.
+
 ## Wenn etwas nicht klappt
 
 - **Die App zeigt eine Fehlermeldung:** Sie sagt auf Deutsch, was los ist. Oft hilft „nochmal versuchen“.

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, formatTime, type CutView, type Overlay, type ReelTexts } from "./api";
 import { CoverStudio } from "./CoverStudio";
+import { useClaudeRoundtrip } from "./claudeRoundtrip";
 
 function copy(text: string, done: (msg: string) => void) {
   navigator.clipboard.writeText(text).then(
@@ -28,8 +29,6 @@ export function ReelPackage({
   const [silent, setSilent] = useState(false);
   const [texts, setTexts] = useState<ReelTexts | null>(null);
   const [full, setFull] = useState("");
-  const [paste, setPaste] = useState("");
-  const [showPaste, setShowPaste] = useState(false);
   const [promptText, setPromptText] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
@@ -48,6 +47,14 @@ export function ReelPackage({
       })
       .catch((e) => setErr(e.message));
   }, [id]);
+
+  const onClaudeAnswer = async (text: string) => {
+    const r = await api.importReelTexts(id, text, idea, lang);
+    setTexts(r.texts);
+    setFull(r.full_caption);
+    setMsg("Antwort von Claude übernommen ✓ – Vorschläge stehen unten.");
+  };
+  const claude = useClaudeRoundtrip(["scenes", "caption"], onClaudeAnswer);
 
   const act = async (label: string, fn: () => Promise<void>) => {
     setBusy(label);
@@ -152,42 +159,21 @@ export function ReelPackage({
             </button>
             <button className="btn ghost" disabled={!!busy} onClick={() => {
               if (silent && !idea.trim()) { setErr("Bitte zuerst oben deine Idee eintragen (in diesem Clip wird nicht gesprochen)."); return; }
-              const tab = window.open("https://claude.ai/new", "_blank");
-              act("prompt", async () => {
+              setErr(null);
+              setMsg(null);
+              claude.start(async () => {
                 const r = await api.reelPrompt(id, idea, lang);
                 setPromptText(r.prompt);
-                setShowPaste(true);
-                try {
-                  await navigator.clipboard.writeText(r.prompt);
-                  setMsg("Auftrag kopiert ✓ – in claude.ai (neuer Tab) mit Strg+V einfügen und abschicken, dann die Antwort unten einfügen.");
-                } catch {
-                  setMsg("Bitte den Auftrag unten markieren (Strg+A) und kopieren (Strg+C).");
-                }
-                if (!tab) setMsg((m) => (m ?? "") + " (claude.ai bitte selbst öffnen: claude.ai/new)");
-              });
+                return r.prompt;
+              }).catch((e) => setErr((e as Error).message));
             }}>
-              Auftrag für claude.ai kopieren
+              Mit Claude erstellen (claude.ai)
             </button>
           </div>
           <Status busy={busy} err={err} msg={msg} />
-          {showPaste && (
-            <div className="paste-box">
-              <details className="small">
-                <summary>Auftrag anzeigen (falls Kopieren nicht ging)</summary>
-                <textarea rows={6} readOnly value={promptText} onFocus={(e) => e.currentTarget.select()} />
-              </details>
-              <p className="small">
-                1. In <a href="https://claude.ai/new" target="_blank" rel="noreferrer">claude.ai</a> einfügen und abschicken. 2. Die komplette Antwort hier einfügen:
-              </p>
-              <textarea rows={5} value={paste} onChange={(e) => setPaste(e.target.value)} placeholder='{"caption": … }' />
-              <button className="btn" disabled={!paste.trim() || !!busy} onClick={() => act("import", async () => {
-                applyTexts(await api.importReelTexts(id, paste, idea, lang));
-                setPaste("");
-                setShowPaste(false);
-              })}>
-                Antwort übernehmen
-              </button>
-            </div>
+          {claude.waiting && (
+            <ClaudeWaiting hint={claude.hint} promptText={promptText} onCancel={claude.cancel}
+              onPaste={(text) => act("import", async () => { await onClaudeAnswer(text); claude.cancel(); })} />
           )}
           {!!texts?.scenes?.length && (
             <div className="scenes">
@@ -256,6 +242,34 @@ export function Status({ busy, err, msg }: { busy: string | null; err: string | 
   return (
     <div className={`banner small ${err ? "error" : ""}`} role="status">
       {busy ? "⏳ Läuft … bitte warten." : err ? `⚠ ${err}` : msg}
+    </div>
+  );
+}
+
+/** Anleitung, solange die App auf die Antwort von claude.ai wartet (mit Einfügen als Notlösung). */
+export function ClaudeWaiting({ hint, promptText, onCancel, onPaste }: {
+  hint: string | null; promptText: string; onCancel: () => void; onPaste: (text: string) => void;
+}) {
+  const [paste, setPaste] = useState("");
+  return (
+    <div className="paste-box">
+      <p className="small">
+        <strong>claude.ai ist im neuen Tab offen.</strong> Dort: <strong>Enter</strong> drücken (steht der Auftrag nicht im Feld:
+        Strg+V), warten bis die Antwort fertig ist, darunter auf <strong>„Kopieren“</strong> klicken – und einfach hierher zurück.
+        Die App übernimmt die Antwort dann von selbst.
+      </p>
+      <p className="small muted">⏳ Warte auf die Antwort von Claude …</p>
+      {hint && <p className="small error-text">{hint}</p>}
+      <details className="small">
+        <summary>Klappt nicht? Antwort hier einfügen</summary>
+        <textarea rows={4} value={paste} onChange={(e) => setPaste(e.target.value)} placeholder='{"…": … }' />
+        <button className="btn" disabled={!paste.trim()} onClick={() => onPaste(paste)}>Antwort übernehmen</button>
+        <details>
+          <summary>Auftrag anzeigen</summary>
+          <textarea rows={5} readOnly value={promptText} onFocus={(e) => e.currentTarget.select()} />
+        </details>
+      </details>
+      <button className="link" onClick={onCancel}>abbrechen</button>
     </div>
   );
 }

@@ -127,6 +127,17 @@
   (Ollama oder claude.ai). Szenen kommen erst nach „Passt – ins Video übernehmen“ ins Video (Freigabe).
   Clips ohne Tonspur: kein Transkript, Render ohne Ton. Auch bei Clips mit Sprechen kann eine Idee mitgegeben werden.
 
+- [x] 8.11.: Carina: zu viel Handarbeit → **Weg B** gewählt (claude.ai-Abo, kein API-Geld):
+  Knopf „Mit Claude erstellen“ öffnet claude.ai/new?q=<Auftrag> (Auftrag zusätzlich in der Zwischenablage),
+  Carina drückt Enter + „Kopieren“, die App liest beim Zurückwechseln die Zwischenablage und übernimmt die Antwort
+  automatisch (Einfügefeld nur noch als Notlösung). Ob claude.ai das ?q= wirklich ins Feld schreibt, konnte ich
+  hier nicht prüfen (claude.ai nicht erreichbar) → Fallback Strg+V.
+  Claude-API (ganz automatisch, ca. 3–8 $/Monat) als spätere Option angeboten, nicht gebaut.
+- [x] 8.11.: **„Jetzt aktualisieren“-Knopf** (`updater.py`): git fetch alle 15 Min, Klick → git pull --ff-only →
+  Motor endet mit Code 3 → start.bat macht uv sync und startet neu (ohne neuen Browser-Tab) → Seite lädt neu.
+  Seite wird nie zwischengespeichert (kein Strg+F5 mehr). Nicht während Verarbeitung/Rendern.
+- **Arbeitsregel (8.11.): Carina will gefragt werden, bevor ich etwas umbaue oder entferne.**
+
 ### Nächster Schritt
 M6 Vorlagen-Bibliothek + B2 (Reel aus Idee), M6b Karussell-Generator, M7 Politur. Carina wählt die Reihenfolge.
 
