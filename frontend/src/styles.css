@@ -966,3 +966,73 @@ kbd {
   align-items: center;
   padding-top: 4px;
 }
+
+/* ---------- Meilenstein 4: YouTube-Paket ---------- */
+.package {
+  margin-top: 32px;
+}
+
+.package-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 20px;
+  align-items: start;
+}
+
+.row-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 10px 0;
+}
+
+.paste-box {
+  background: #f1ebf8;
+  border-radius: 12px;
+  padding: 12px;
+  margin: 10px 0;
+}
+
+.paste-box textarea,
+.meta textarea,
+.meta input {
+  font: inherit;
+  width: 100%;
+  border: 1px solid var(--creme-2);
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: var(--weiss);
+  color: var(--braun);
+}
+
+.meta h4 {
+  margin: 14px 0 4px;
+  font-size: 15px;
+}
+
+.copy-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.copy-row input {
+  flex: 1;
+}
+
+.thumb-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.thumb-grid img {
+  width: 100%;
+  border-radius: 8px;
+  display: block;
+  aspect-ratio: 9 / 16;
+  object-fit: cover;
+  background: var(--creme-2);
+}

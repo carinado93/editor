@@ -1,4 +1,5 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { YoutubePackage } from "./YoutubePackage";
 import { api, formatSize, formatTime, type CutType, type CutView, type Detection, type Project, type Transcript, type Word } from "./api";
 
 interface FlatWord extends Word {
@@ -669,6 +670,7 @@ export function ProjectView({ id }: { id: string }) {
           )}
         </div>
       </div>
+      {cutMode && <YoutubePackage id={id} />}
     </div>
   );
 }

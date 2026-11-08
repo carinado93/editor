@@ -29,6 +29,7 @@ export interface Project {
   settings: { model: string; language: string };
   transcript: { language: string; model: string; device: string; words: number } | null;
   render?: { status: "warteschlange" | "arbeitet" | "fertig" | "fehler"; progress: number; message: string; error: string | null; quality: string; file?: string };
+  thumbnails?: { file: string; t: number }[];
   exports?: { file: string; duration: number; segments: number; size: number; quality: string; created: number }[];
 }
 
@@ -49,6 +50,16 @@ export interface CutSettings {
   max_gap: number;
   signal_words: string[];
   fillers: Record<string, boolean>;
+}
+
+export interface YoutubeMeta {
+  titles: string[];
+  chapters: { time: string; title: string; t?: number }[];
+  description: string;
+  tags: string[];
+  hashtags: string[];
+  warnings?: string[];
+  source?: string;
 }
 
 export interface RenderOptions {
@@ -164,6 +175,19 @@ export const api = {
   buzzword: (id: string, start: number, end: number, on: boolean) => call<CutView>(`/api/projects/${id}/cuts/buzzword`, json({ start, end, on })),
   suggestBuzz: (id: string) => call<CutView>(`/api/projects/${id}/cuts/buzzwords-suggest`, { method: "POST" }),
   blick: (id: string) => call<{ events: { start: number; end: number }[]; face_box: number[] | null; ready: boolean }>(`/api/projects/${id}/blick`),
+  youtubeTexts: (id: string) => call<{ prompt: string; meta: YoutubeMeta | null; full_description: string }>(`/api/projects/${id}/youtube-texte`),
+  youtubeTextsOllama: (id: string) =>
+    call<{ prompt: string; meta: YoutubeMeta; full_description: string }>(`/api/projects/${id}/youtube-texte/ollama`, { method: "POST" }),
+  importYoutubeTexts: (id: string, text: string) =>
+    call<{ meta: YoutubeMeta; full_description: string }>(`/api/projects/${id}/youtube-texte/import`, json({ text })),
+  saveYoutubeTexts: (id: string, m: YoutubeMeta) =>
+    call<{ meta: YoutubeMeta; full_description: string }>(`/api/projects/${id}/youtube-texte`, {
+      ...json({ titles: m.titles, chapters: m.chapters, description: m.description, tags: m.tags, hashtags: m.hashtags }),
+      method: "PUT",
+    }),
+  thumbnails: (id: string) => call<{ thumbnails: { file: string; t: number }[] }>(`/api/projects/${id}/thumbnails`, { method: "POST" }),
+  thumbnailUrl: (id: string, file: string) => `/api/projects/${id}/thumbnails/${encodeURIComponent(file)}`,
+  exportCutlist: (id: string) => call<{ files: string[] }>(`/api/projects/${id}/export-schnittliste`, { method: "POST" }),
   render: (id: string, quality: string) => call<Project>(`/api/projects/${id}/render`, json({ quality })),
   openFolder: (id: string) => call<{ ok: boolean }>(`/api/projects/${id}/open-folder`, { method: "POST" }),
   exportUrl: (id: string, file: string) => `/api/projects/${id}/export/${encodeURIComponent(file)}`,

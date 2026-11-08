@@ -80,9 +80,24 @@
 - Blick-Stellen mit Zoom „überdecken“ statt schneiden (aktuell nur Schneiden als Vorschlag)
 - Buzzword-Varianten (Durchstreichen, Wort-Slam, Karte) kommen mit der Vorlagen-Bibliothek (M6) auch für YouTube
 
-### Nächster Schritt: Meilenstein 4
-Export-Optionen (FCPXML/EDL für DaVinci), Kapitel, 3 Titel, Beschreibung, Tags (Ollama + claude.ai-Kopierweg),
-Thumbnail-Vorschläge (Augen offen, Blick in Kamera, Lächeln).
+### Neu geplant
+- **M6b Karussell-Generator** (Wunsch 8.11.): Prompt → Folien im bisherigen Stil + Caption. Erste Beispiele erhalten,
+  Stil in `docs/KARUSSELL_STIL.md`. Carina schickt weitere Beispiele.
+- **M4b Thumbnail- & Cover-Generator** (Wunsch 8.11.): Standbild aus dem Video → Thumbnail/Reel-Cover im Stil ihrer
+  bisherigen. Beispiele erhalten (8.11.), Stil festgehalten in `docs/THUMBNAIL_STIL.md`.
+
+- [x] **Meilenstein 4** (YouTube-Paket)
+  - `export.py`: FCPXML 1.9 (DaVinci/Final Cut) + EDL CMX3600 (Drop-Frame bei 29,97/59,94), verweisen aufs Original
+  - `meta.py`: Auftrag mit Leitplanken (Prävention, keine Heilversprechen, Hinweis „keine Diagnose oder Therapie“),
+    Zeiten im geschnittenen Video; Ollama oder claude.ai-Kopierweg; Prüfung: 3 Titel, Kapitel ab 0:00 mit ≥ 10 s
+    Abstand, Warnung bei Heilversprechen-Wörtern; Beschreibung + Kapitel + Hashtags zum Kopieren
+  - `thumbs.py`: 6 Bild-Vorschläge (Augen offen, Blick in Kamera, Lächeln, Gesichtsgröße, Schärfe, ≥ 5 s Abstand,
+    nur aus behaltenen Stellen), volle Auflösung aus dem Original
+  - UI „YouTube-Paket“ unter der Schnittansicht; 29 automatische Tests
+  - Ollama-Weg hier nicht testbar (läuft nur auf Carinas PC); claude.ai-Weg mit einer Test-Antwort geprüft
+
+### Nächster Schritt
+M4b Thumbnail-/Cover-Generator (Beispiele da) oder M5 Reel-Modus – Carina entscheidet die Reihenfolge.
 
 ### Entscheidungen
 - 8.11.: **So wenig bezahlen wie möglich.** Keine kostenpflichtigen Dienste einbauen.

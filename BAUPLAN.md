@@ -65,6 +65,15 @@ Nach jedem Meilenstein bekommst du: **Screenshots der App + Vorschau-Bilder/Vide
 - Thumbnail-Vorschläge: Frames mit offenen Augen, Blick in Kamera, Lächeln, scharf
 - **Demo:** Export-Ordner, Beispiel-Texte, 6 Thumbnail-Kandidaten
 
+### M4b – Thumbnail- & Cover-Generator (neu, Wunsch 8.11.)
+- Bestes Standbild aus dem Video (aus M4: Augen offen, Blick in Kamera, Lächeln, scharf), Carina auf Wunsch
+  freigestellt (lokal, kostenlos), dazu Text und Gestaltung im Stil ihrer bisherigen Thumbnails bzw. Reel-Cover
+- YouTube-Thumbnail 1280×720 und Reel-Cover 1080×1920 (Cover-Rotation lila → hell → oliv, nächstes: hell)
+- Mehrere Varianten zur Auswahl, Text aus dem Titel/Hook, alles editierbar, keine KI-generierten Gesichter
+- Stil-Beschreibung aus ihren Beispielen: `docs/THUMBNAIL_STIL.md` (YouTube: „Talking Head“ und „Meditation“,
+  Reel-Cover mit Farbschleier lila/hell/oliv)
+- **Demo:** 3 Thumbnail- und 3 Cover-Varianten aus ihrem Testvideo
+
 ### M5 – Reel-Modus B1 "Veredeln" (ca. 2 Sitzungen)
 - `style.json` mit deinen Farben, Schriften, Safe Zone, Lesezeit (4,4 s), Cover-Rotation (nächstes: **hell**)
 - Video bleibt exakt wie es ist (Länge, Tempo, Format, kein Filter, Ton unangetastet)
@@ -78,6 +87,14 @@ Nach jedem Meilenstein bekommst du: **Screenshots der App + Vorschau-Bilder/Vide
 - Prompt → Claude → Szenen-JSON (mit Leitplanken) → **deine Freigabe** → Vorschau-Standbilder → Render, EN + DE aus einer Vorlage
 - Inspirations-Reel → eigene Version in deinen Worten (nie 1:1)
 - **Demo:** pro Vorlage ein Beispiel-GIF, ein komplettes Reel EN+DE
+
+### M6b – Karussell-Generator (neu, Wunsch 8.11.)
+- Aus einem Prompt (z. B. „Karussell über Coping-Tools vs. Ursachen, EN“) → Folientexte + Caption + 5 Hashtags
+  (Vorschlag per Ollama oder claude.ai-Kopierweg, **erst nach Carinas Freigabe** wird gestaltet)
+- Folien 1080×1350 exakt im bisherigen Stil (`docs/KARUSSELL_STIL.md`): Creme mit Goldrahmen, Profil-Kopf,
+  Cormorant mit Lila-Kursiv-Akzent, „BUT…“-Wendepunkt, Foto-Variante, Fuß mit Website + SWIPE
+- Vorschau aller Folien, Texte direkt editierbar, Export als PNGs (+ ZIP) und Caption zum Kopieren, EN + DE
+- **Braucht von Carina:** weitere Beispiele (kommen), Profilfoto in hoher Auflösung
 
 ### M7 – Politur (ca. 1–2 Sitzungen)
 - Verständliche deutsche Fehlermeldungen überall, Fortschritt für jeden Schritt

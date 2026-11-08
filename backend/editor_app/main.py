@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import webbrowser
 from contextlib import asynccontextmanager
@@ -287,6 +288,128 @@ def open_folder(pid: str):
     else:
         raise UserError(f"Der Ordner liegt hier: {folder}")
     return {"ok": True}
+
+
+# ---------- YouTube-Paket: Export, Texte, Thumbnails ----------
+
+def _cut_context(pid: str):
+    """Transkript, Schnittliste, Auswertung und Sätze in der neuen Zeit."""
+    from . import subtitles
+
+    t = cutstore._transcript(pid)
+    v = cutstore.view(pid)
+    words = cuts.flat_words(t)
+    tmap = subtitles.TimeMap([tuple(x) for x in v["evaluation"]["keep"]])
+    sentences, cur, start = [], [], None
+    for w, f in zip(words, v["evaluation"]["flags"]):
+        if f:
+            continue
+        if start is None:
+            start = tmap.clamp(w["s"])
+        cur.append(w["w"])
+        if re.search(r"[.!?…]$", w["w"]) and len(cur) >= 3:
+            sentences.append((start, " ".join(cur)))
+            cur, start = [], None
+    if cur:
+        sentences.append((start or 0.0, " ".join(cur)))
+    return t, v, sentences
+
+
+class MetaImportBody(BaseModel):
+    text: str
+
+
+class MetaSaveBody(BaseModel):
+    titles: list[str]
+    chapters: list[dict]
+    description: str
+    tags: list[str]
+    hashtags: list[str]
+
+
+def _meta_file(pid: str):
+    return projects.path(pid, "youtube_texte.json")
+
+
+@app.post("/api/projects/{pid}/export-schnittliste")
+def export_cutlist(pid: str):
+    from . import export
+
+    p = projects.load(pid)
+    _, v, _ = _cut_context(pid)
+    stem = render.safe_name(p["name"])
+    files = export.write_all(p["name"], projects.path(pid, p["original_file"]), p["info"], v["evaluation"]["keep"],
+                             projects.path(pid, "export"), stem)
+    return {"files": files}
+
+
+@app.get("/api/projects/{pid}/youtube-texte")
+def get_meta(pid: str):
+    from . import meta
+
+    p = projects.load(pid)
+    t, v, sentences = _cut_context(pid)
+    prompt = meta.build_prompt(sentences, t.get("language", "de"), v["evaluation"]["new_duration"], p["name"])
+    f = _meta_file(pid)
+    data = json.loads(f.read_text(encoding="utf-8")) if f.exists() else None
+    return {"prompt": prompt, "meta": data, "full_description": meta.full_description(data) if data else ""}
+
+
+@app.post("/api/projects/{pid}/youtube-texte/ollama")
+def meta_ollama(pid: str):
+    from . import meta
+
+    p = projects.load(pid)
+    t, v, sentences = _cut_context(pid)
+    prompt = meta.build_prompt(sentences, t.get("language", "de"), v["evaluation"]["new_duration"], p["name"])
+    data = meta.from_ollama(prompt, v["evaluation"]["new_duration"])
+    data["source"] = "ollama"
+    _meta_file(pid).write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
+    return {"prompt": prompt, "meta": data, "full_description": meta.full_description(data)}
+
+
+@app.post("/api/projects/{pid}/youtube-texte/import")
+def meta_import(pid: str, body: MetaImportBody):
+    from . import meta
+
+    _, v, _ = _cut_context(pid)
+    data = meta.parse(body.text, v["evaluation"]["new_duration"])
+    data["source"] = "claude.ai"
+    _meta_file(pid).write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
+    return {"meta": data, "full_description": meta.full_description(data)}
+
+
+@app.put("/api/projects/{pid}/youtube-texte")
+def meta_save(pid: str, body: MetaSaveBody):
+    from . import meta
+
+    _, v, _ = _cut_context(pid)
+    data = meta.parse(body.model_dump(), v["evaluation"]["new_duration"])
+    data["source"] = "bearbeitet"
+    _meta_file(pid).write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
+    return {"meta": data, "full_description": meta.full_description(data)}
+
+
+@app.post("/api/projects/{pid}/thumbnails")
+def make_thumbnails(pid: str):
+    from . import thumbs
+
+    p = projects.load(pid)
+    _, v, _ = _cut_context(pid)
+    gf = projects.path(pid, "blick.json")
+    data = json.loads(gf.read_text(encoding="utf-8")) if gf.exists() else {}
+    shots = thumbs.make(projects.path(pid, p["original_file"]), data, v["evaluation"]["keep"],
+                        projects.path(pid, "export") / "thumbnails")
+    projects.update(pid, thumbnails=shots)
+    return {"thumbnails": shots}
+
+
+@app.get("/api/projects/{pid}/thumbnails/{name}")
+def get_thumbnail(pid: str, name: str):
+    f = projects.path(pid, "export") / "thumbnails" / name
+    if "/" in name or "\\" in name or not f.is_file():
+        raise HTTPException(404)
+    return FileResponse(f, media_type="image/jpeg")
 
 
 # ---------- Oberfläche ----------
