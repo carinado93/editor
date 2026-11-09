@@ -178,3 +178,20 @@ def thumbnail(src: Path, dst: Path, at: float) -> None:
              "-vf", "scale=360:-2", "-q:v", "4", str(dst)])
     if r.returncode != 0:
         raise UserError("Vorschaubild konnte nicht erstellt werden.")
+
+
+def stills_base64(video: Path, duration: float, n: int = 5, width: int = 512) -> list[str]:
+    """Gleichmäßig verteilte Standbilder als JPEG-Base64 (für Claude/Ollama: "Was passiert im Clip?")."""
+    import base64
+    import tempfile
+
+    out = []
+    with tempfile.TemporaryDirectory() as tmp:
+        for k in range(n):
+            t = duration * (k + 0.5) / n
+            f = Path(tmp) / f"s{k}.jpg"
+            r = run([ffmpeg(), "-hide_banner", "-y", "-ss", f"{t:.2f}", "-i", str(video), "-frames:v", "1",
+                     "-vf", f"scale={width}:-2", "-q:v", "5", str(f)])
+            if r.returncode == 0 and f.exists():
+                out.append(base64.b64encode(f.read_bytes()).decode())
+    return out

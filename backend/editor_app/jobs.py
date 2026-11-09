@@ -63,7 +63,8 @@ def _render_clip(pid: str, cid: str) -> None:
     out = projects.path(pid, "export") / f"reel_{name}_{time.strftime('%H%M%S')}.mp4"
     res = render.render_clip(projects.path(pid, p["original_file"]), p["info"], c["segments"], out,
                              projects.path(pid, "cache"), cuts.flat_words(t), v["evaluation"]["flags"],
-                             c.get("hook_text", ""), face, str(config.ROOT / "assets" / "fonts"), rep)
+                             c.get("hook_text", ""), face, str(config.ROOT / "assets" / "fonts"), rep,
+                             c.get("texts", []))
     clips.update_clip(pid, cid, status="fertig", progress=1.0, message="Fertig", file=res["file"],
                       size=res["size"], srt=res["srt"])
 

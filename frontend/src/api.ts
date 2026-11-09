@@ -69,6 +69,7 @@ export interface Overlay {
   end: number;
   text: string;
   on: boolean;
+  anim?: "pop" | "karte" | "wort" | "slide";
 }
 
 export interface ReelTexts {
@@ -200,7 +201,7 @@ export const api = {
   claudeChat: (messages: { role: string; content: string }[], language: string) =>
     call<{ text: string }>("/api/claude/chat", json({ messages, language })),
   reelTextsClaude: (id: string, idea: string, language: string) =>
-    call<{ texts: ReelTexts; full_caption: string }>(`/api/projects/${id}/reel-texte/claude`, json({ idea, language })),
+    call<{ texts: ReelTexts; full_caption: string; cuts?: CutView & { warnings?: string[] } }>(`/api/projects/${id}/reel-texte/claude`, json({ idea, language })),
   youtubeTextsClaude: (id: string) =>
     call<{ prompt: string; meta: YoutubeMeta; full_description: string }>(`/api/projects/${id}/youtube-texte/claude`, { method: "POST" }),
   updateStatus: (force = false) =>
@@ -255,7 +256,7 @@ export const api = {
     call<{ texts: ReelTexts | null; full_caption: string; silent: boolean; language: string; idea: string }>(`/api/projects/${id}/reel-texte`),
   reelPrompt: (id: string, idea: string, language: string) => call<{ prompt: string }>(`/api/projects/${id}/reel-texte/auftrag`, json({ idea, language })),
   reelTextsOllama: (id: string, idea: string, language: string) =>
-    call<{ texts: ReelTexts; full_caption: string }>(`/api/projects/${id}/reel-texte/ollama`, json({ idea, language })),
+    call<{ texts: ReelTexts; full_caption: string; cuts?: CutView & { warnings?: string[] } }>(`/api/projects/${id}/reel-texte/ollama`, json({ idea, language })),
   importReelTexts: (id: string, text: string, idea: string, language: string) =>
     call<{ texts: ReelTexts; full_caption: string }>(`/api/projects/${id}/reel-texte/import`, json({ text, idea, language })),
   applyScenes: (id: string) => call<CutView & { warnings: string[] }>(`/api/projects/${id}/reel-texte/szenen-uebernehmen`, { method: "POST" }),

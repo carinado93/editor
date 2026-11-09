@@ -228,7 +228,7 @@ def render(src: Path, info: dict, segments: list[list[float]], out: Path, work: 
         extra_files.append(srt_path.name)
     buzz = subtitles.buzz_events(opts.get("buzzwords") or [], words, tmap) if words else []
     burn_subs = opts["subtitles"] == "einbrennen" and groups
-    hooks = [{"s": tmap.clamp(o["start"]), "e": tmap.clamp(o["end"]), "text": o["text"]}
+    hooks = [{"s": tmap.clamp(o["start"]), "e": tmap.clamp(o["end"]), "text": o["text"], "anim": o.get("anim", "karte")}
              for o in opts.get("overlays") or []]
     ass_filter = ""
     if burn_subs or buzz or hooks:
@@ -301,7 +301,7 @@ def render(src: Path, info: dict, segments: list[list[float]], out: Path, work: 
 
 def render_clip(src: Path, info: dict, segments: list[list[float]], out: Path, work: Path, words: list[dict],
                 flags: list, hook_text: str, face_box: list[float] | None, fonts_dir: str | None,
-                progress: Callable[[float, str], None] | None = None) -> dict:
+                progress: Callable[[float, str], None] | None = None, texts: list[str] | None = None) -> dict:
     """Reel aus Stücken eines langen Videos (Reihenfolge frei). 1080×1920; Querformat ohne Zoom mittig mit
     schwarzen Balken (Hook-Text im oberen Balken), Untertitel mit Karaoke, Ton auf -14 LUFS, < 30 MB."""
     from . import subtitles
@@ -346,7 +346,8 @@ def render_clip(src: Path, info: dict, segments: list[list[float]], out: Path, w
     else:
         layout = f"scale={W}:{H}:force_original_aspect_ratio=decrease:flags=lanczos,pad={W}:{H}:(ow-iw)/2:(oh-ih)/2:black"
         sub_y, hook_y, fb = round(H * 0.70), None, face_box
-    hooks = [{"s": 0.0, "e": min(total, 4.6), "text": hook_text}] if hook_text.strip() else []
+    from .clips import overlay_plan
+    hooks = overlay_plan(hook_text, texts or [], total)
     ass_path = work / "clip.ass"
     ass_path.write_text(subtitles.ass(W, H, groups, [], fb, True, hooks, sub_y_override=sub_y,
                                       hook_y_override=hook_y), encoding="utf-8")

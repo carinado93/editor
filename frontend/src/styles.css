@@ -1389,3 +1389,42 @@ kbd {
     grid-template-columns: 1fr;
   }
 }
+
+.ov-hook.anim-pop {
+  animation: buzz-pop-hook 0.28s ease-out;
+}
+
+@keyframes buzz-pop-hook {
+  0% {
+    transform: translateX(-50%) scale(0.4);
+  }
+  60% {
+    transform: translateX(-50%) scale(1.08);
+  }
+  100% {
+    transform: translateX(-50%) scale(1);
+  }
+}
+
+.ov-hook.anim-slide {
+  animation: hook-slide 0.32s ease-out;
+}
+
+@keyframes hook-slide {
+  from {
+    opacity: 0;
+    margin-top: 4%;
+  }
+  to {
+    opacity: 1;
+    margin-top: 0;
+  }
+}
+
+.overlay-times select {
+  font: inherit;
+  font-size: 13px;
+  border: 1px solid var(--creme-2);
+  border-radius: 6px;
+  padding: 2px 4px;
+}

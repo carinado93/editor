@@ -340,7 +340,9 @@ def set_overlays(pid: str, overlays: list[dict]) -> dict:
                 continue
             s_, e_ = max(0.0, float(o.get("start", 0))), float(o.get("end", 0))
             e_ = min(dur, max(s_ + 1.0, e_)) if dur else max(s_ + 1.0, e_)
+            anim = o.get("anim") if o.get("anim") in ("pop", "karte", "wort", "slide") else "karte"
             clean.append({"id": str(o.get("id") or f"text-{len(clean)}"), "kind": o.get("kind", "hook"),
-                          "start": round(s_, 2), "end": round(e_, 2), "text": text, "on": bool(o.get("on", True))})
+                          "start": round(s_, 2), "end": round(e_, 2), "text": text, "on": bool(o.get("on", True)),
+                          "anim": anim})
         cl["overlays"] = clean
     return _change(pid, fn)

@@ -137,9 +137,15 @@ def _text(resp) -> str:
     return "".join(b.text for b in resp.content if getattr(b, "type", "") == "text").strip()
 
 
-def ask_json(prompt: str, schema: dict, system: str = "", effort: str = "medium") -> dict:
+def ask_json(prompt: str, schema: dict, system: str = "", effort: str = "medium",
+             images: list[str] | None = None) -> dict:
+    """images: JPEG-Bilder als Base64 (z. B. Standbilder aus dem Clip), damit Claude sieht, worum es geht."""
+    content: list | str = prompt
+    if images:
+        content = [{"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": b}}
+                   for b in images] + [{"type": "text", "text": prompt}]
     resp = _create(model=MODEL, max_tokens=16000, system=system or "Du antwortest ausschließlich im verlangten JSON.",
-                   messages=[{"role": "user", "content": prompt}],
+                   messages=[{"role": "user", "content": content}],
                    output_config={"effort": effort, "format": {"type": "json_schema", "schema": schema}})
     text = _text(resp)
     try:

@@ -125,6 +125,21 @@ def _accent(text: str) -> str:
     return "".join(out)
 
 
+def _words_reveal(text: str, step_ms: int = 180) -> str:
+    """Wort für Wort einblenden (je ~0,18 s), *Akzent* bleibt lila-kursiv."""
+    out, i = [], 0
+    for part in re.split(r"(\*[^*]+\*)", _esc_keep_stars(text)):
+        if not part:
+            continue
+        accent = part.startswith("*") and part.endswith("*") and len(part) > 2
+        for w in (part[1:-1] if accent else part).split():
+            t0 = i * step_ms
+            style = f"\\i1\\c{ass_color(LILA)}" if accent else f"\\i0\\c{ass_color(BRAUN)}"
+            out.append(f"{{\\alpha&HFF&\\t({t0},{t0 + 120},\\alpha&H00&){style}}}{w} ")
+            i += 1
+    return "".join(out).rstrip()
+
+
 def _esc_keep_stars(text: str) -> str:
     return text.replace("\\", "").replace("{", "(").replace("}", ")")
 
@@ -206,8 +221,20 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         n_lines = max(1, -(-len(h["text"].replace("*", "")) // chars_per_line))
         y = hook_y_override if hook_y_override is not None else hook_y(height, face_box, n_lines, size)
         x = round(width * 495 / 1080) if portrait else width // 2
-        ev.append(f"Dialogue: 2,{_fmt_ass(h['s'])},{_fmt_ass(h['e'])},Hook,,0,0,0,,"
-                  f"{{\\an8\\pos({x},{y})\\fad(250,250)}}{_accent(h['text'])}")
+        anim = h.get("anim", "karte")
+        if anim == "pop":
+            tags = f"\\an8\\pos({x},{y})\\fscx40\\fscy40\\t(0,160,\\fscx108\\fscy108)\\t(160,260,\\fscx100\\fscy100)\\fad(0,250)"
+            body = _accent(h["text"])
+        elif anim == "slide":
+            tags = f"\\an8\\move({x},{y + round(70 * unit)},{x},{y},0,320)\\fad(200,250)"
+            body = _accent(h["text"])
+        elif anim == "wort":
+            tags = f"\\an8\\pos({x},{y})\\fad(0,250)"
+            body = _words_reveal(h["text"])
+        else:  # karte
+            tags = f"\\an8\\pos({x},{y})\\fad(300,250)"
+            body = _accent(h["text"])
+        ev.append(f"Dialogue: 2,{_fmt_ass(h['s'])},{_fmt_ass(h['e'])},Hook,,0,0,0,,{{{tags}}}{body}")
         buzz = [b for b in buzz if b["e"] <= h["s"] or b["s"] >= h["e"]]  # nie gleichzeitig mit der Hook-Karte
 
     for b in buzz:

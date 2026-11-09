@@ -96,6 +96,12 @@ export function ReelPackage({
                 bis
                 <input type="number" step={0.1} min={0} value={o.end} onChange={(e) => upd(i, { end: Number(e.target.value) })} />
                 Sek.
+                <select value={o.anim ?? "karte"} onChange={(e) => upd(i, { anim: e.target.value as Overlay["anim"] })}>
+                  <option value="pop">Pop</option>
+                  <option value="karte">Karte (weich)</option>
+                  <option value="wort">Wort für Wort</option>
+                  <option value="slide">Gleiten</option>
+                </select>
                 <span className={o.end - o.start < 4.4 ? "error-text" : "muted"}>({(o.end - o.start).toFixed(1).replace(".", ",")} s)</span>
                 <button className="link danger" onClick={() => setOverlays(overlays.filter((_, j) => j !== i))}>
                   entfernen
@@ -109,7 +115,7 @@ export function ReelPackage({
               onClick={() =>
                 setOverlays([
                   ...overlays,
-                  { id: `text-${Date.now()}`, kind: "hook", start: Math.round(time * 10) / 10, end: Math.min(duration, Math.round((time + 4.6) * 10) / 10), text: "", on: true },
+                  { id: `text-${Date.now()}`, kind: "hook", anim: "karte", start: Math.round(time * 10) / 10, end: Math.min(duration, Math.round((time + 4.6) * 10) / 10), text: "", on: true },
                 ])
               }
             >
@@ -124,9 +130,9 @@ export function ReelPackage({
 
         <div className="card">
           <h3>Deine Idee & Texte</h3>
-          {silent && <div className="banner small">In diesem Clip sprichst du nicht. Schreib kurz deine Idee, daraus entstehen die Texte im Video, Caption, Hashtags und Cover.</div>}
+          {silent && <div className="banner small">In diesem Clip sprichst du nicht. Claude schaut sich Standbilder aus dem Clip an. Mit einer Idee wird es noch genauer.</div>}
           <label className="small idea-box">
-            Idee / Anweisung {silent ? "" : "(optional – sonst nimmt die App, was du im Video sagst)"}
+            Idee / Anweisung (optional – sonst leitet Claude das Thema aus dem Clip ab)
             <textarea
               rows={3}
               value={idea}
@@ -143,14 +149,22 @@ export function ReelPackage({
           </label>
           <div className="row-buttons">
             <button className="btn ghost" disabled={!!busy} onClick={() => {
-              if (silent && !idea.trim()) { setErr("Bitte zuerst oben deine Idee eintragen (in diesem Clip wird nicht gesprochen)."); return; }
-              act("ollama", async () => { applyTexts(await api.reelTextsOllama(id, idea, lang)); setMsg("Fertig ✓ – Vorschläge stehen unten."); });
+              act("ollama", async () => {
+                const r = await api.reelTextsOllama(id, idea, lang);
+                applyTexts(r);
+                if (r.cuts?.cutlist) onCuts(r.cuts);
+                setMsg(r.cuts?.warnings?.length ? r.cuts.warnings.join(" ") : "Fertig ✓ – Hook und Texte sind im Video (Vorschau links).");
+              });
             }}>
               {busy === "ollama" ? "Lokale KI schreibt … (1–2 Min)" : "Kostenlos mit Ollama"}
             </button>
             <button className="btn" disabled={!!busy} onClick={() => {
-              if (silent && !idea.trim()) { setErr("Bitte zuerst oben deine Idee eintragen (in diesem Clip wird nicht gesprochen)."); return; }
-              act("claude", async () => { applyTexts(await api.reelTextsClaude(id, idea, lang)); setMsg("Fertig ✓ – Claudes Vorschläge stehen unten."); });
+              act("claude", async () => {
+                const r = await api.reelTextsClaude(id, idea, lang);
+                applyTexts(r);
+                if (r.cuts?.cutlist) onCuts(r.cuts);
+                setMsg(r.cuts?.warnings?.length ? r.cuts.warnings.join(" ") : "Fertig ✓ – Hook und Texte sind im Video (Vorschau links).");
+              });
             }}>
               {busy === "claude" ? "Claude schreibt … (ca. 20–60 s)" : "Mit Claude erstellen"}
             </button>
@@ -159,7 +173,7 @@ export function ReelPackage({
           {err?.includes("Einstellungen") && <a className="small" href="#/einstellungen">→ zu den Einstellungen</a>}
           {!!texts?.scenes?.length && (
             <div className="scenes">
-              <h4>Vorgeschlagene Texte fürs Video</h4>
+              <h4>Texte im Video (Hook zuerst)</h4>
               <ol className="small">
                 {texts.scenes.map((sc, i) => (
                   <li key={i}>{sc}</li>
@@ -170,7 +184,7 @@ export function ReelPackage({
                 onCuts(r);
                 setMsg(r.warnings?.length ? r.warnings.join(" ") : "Texte ins Video übernommen ✓ – links kannst du sie noch ändern.");
               })}>
-                Passt – ins Video übernehmen
+                Texte nochmal neu verteilen
               </button>
             </div>
           )}

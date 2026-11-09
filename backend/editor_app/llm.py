@@ -13,9 +13,12 @@ OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://127.0.0.1:11434")
 OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "gemma3:12b")
 
 
-def ask_json(prompt: str, system: str = "", timeout: float = 300) -> dict | list:
-    body = json.dumps({"model": OLLAMA_MODEL, "prompt": prompt, "system": system, "stream": False,
-                       "format": "json", "options": {"temperature": 0.3}}).encode()
+def ask_json(prompt: str, system: str = "", timeout: float = 300, images: list[str] | None = None) -> dict | list:
+    payload = {"model": OLLAMA_MODEL, "prompt": prompt, "system": system, "stream": False,
+               "format": "json", "options": {"temperature": 0.3}}
+    if images:
+        payload["images"] = images  # Gemma 3 kann Bilder lesen
+    body = json.dumps(payload).encode()
     req = urllib.request.Request(f"{OLLAMA_URL}/api/generate", data=body, headers={"Content-Type": "application/json"})
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:

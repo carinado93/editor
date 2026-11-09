@@ -77,7 +77,20 @@ def cover_fit(img: Image.Image, w: int, h: int, focus: tuple[float, float] = (0.
 def parse_marked(text: str) -> list[tuple[str, bool]]:
     """"REST DIDN'T FIX MY *BURNOUT*" → [("REST DIDN'T FIX MY ", False), ("BURNOUT", True)]."""
     parts = re.split(r"(\*[^*]+\*)", text)
-    return [(p.strip("*"), p.startswith("*")) for p in parts if p]
+    out: list[tuple[str, bool]] = []
+    for p in parts:
+        if not p:
+            continue
+        key = p.startswith("*")
+        seg = p.strip("*")
+        # Satzzeichen direkt nach dem Schlüsselwort ("*ANXIETY*?") gehören zu ihm, nicht in eine neue Zeile
+        m = re.match(r"^([?!.,:;…]+)(.*)$", seg)
+        if not key and m and out and out[-1][1]:
+            out[-1] = (out[-1][0] + m.group(1), True)
+            seg = m.group(2)
+        if seg.strip():
+            out.append((seg, key))
+    return out
 
 
 def wrap(words: list[str], fnt: ImageFont.FreeTypeFont, max_w: int, draw: ImageDraw.ImageDraw) -> list[str]:
@@ -110,60 +123,96 @@ def watercolor(size: tuple[int, int], blobs: list[tuple[float, float, float, tup
     return layer.filter(ImageFilter.GaussianBlur(blur))
 
 
-# ---------- YouTube A: "Talking Head" ----------
+def soft_background(size: tuple[int, int], top=(249, 241, 236), bottom=(246, 231, 228)) -> Image.Image:
+    """Saubere helle Fläche mit leichtem Verlauf (kein Fleck hinter dem Text)."""
+    W, H = size
+    grad = Image.linear_gradient("L").resize((W, H))
+    a, b = Image.new("RGB", size, top), Image.new("RGB", size, bottom)
+    return Image.composite(b, a, grad)
+
+
+def brush_band(size: tuple[int, int], y: float, height: float, color=(233, 160, 175), x0: float = -0.05,
+               x1: float = 0.62, seed: int = 3) -> Image.Image:
+    """Aquarell-Pinselstrich (waagrecht) mit unruhigem Rand, wie in Carinas Thumbnails."""
+    rnd = random.Random(seed)
+    W, H = size
+    layer = Image.new("RGBA", size, (0, 0, 0, 0))
+    for pass_, alpha in enumerate((70, 55, 45)):
+        d = ImageDraw.Draw(layer)
+        pts_top, pts_bot = [], []
+        steps = 40
+        for i in range(steps + 1):
+            x = (x0 + (x1 - x0) * i / steps) * W
+            taper = min(1.0, i / 6, (steps - i) / 6)  # Enden laufen dünn aus
+            h = height * H * (0.55 + 0.45 * taper) * rnd.uniform(0.85, 1.1)
+            yc = y * H + rnd.uniform(-0.04, 0.04) * height * H + pass_ * 3
+            pts_top.append((x, yc - h / 2))
+            pts_bot.append((x, yc + h / 2))
+        d.polygon(pts_top + pts_bot[::-1], fill=(*color, alpha))
+    return layer.filter(ImageFilter.GaussianBlur(5))
+
+
+def corner_wash(size: tuple[int, int], color=(236, 178, 188)) -> Image.Image:
+    W, H = size
+    layer = Image.new("RGBA", size, (0, 0, 0, 0))
+    d = ImageDraw.Draw(layer)
+    d.ellipse((-0.10 * W, -0.22 * H, 0.10 * W, 0.16 * H), fill=(*color, 120))
+    d.ellipse((-0.06 * W, -0.10 * H, 0.16 * W, 0.08 * H), fill=(*color, 70))
+    return layer.filter(ImageFilter.GaussianBlur(14))
+
+
+def fit_text(d: ImageDraw.ImageDraw, segs: list[tuple[str, bool]], max_w: int, max_h: int,
+             font_name: str = "Poppins-ExtraBold.ttf", start: int = 124, key_scale: float = 1.15):
+    """Größte Schrift finden, bei der alle Zeilen in max_w × max_h passen (nie abgeschnitten)."""
+    for size in range(start, 30, -4):
+        nf, kf = font(font_name, size), font(font_name, round(size * key_scale))
+        lines: list[tuple[str, bool]] = []
+        for seg, key in segs:
+            for ln in wrap(seg.split(), kf if key else nf, max_w, d):
+                lines.append((ln, key))
+        widths_ok = all(d.textlength(ln, font=kf if k else nf) <= max_w for ln, k in lines)
+        heights = [round((kf if k else nf).size * 1.02) for _, k in lines]
+        if widths_ok and sum(heights) <= max_h and len(lines) <= 5:
+            return lines, heights, nf, kf
+    return lines, heights, nf, kf
+
 
 def youtube_talking(photo: Image.Image, face: tuple[float, float, float, float] | None, text: str,
                     pill: str = "") -> Image.Image:
     W, H = 1280, 720
-    canvas = Image.new("RGB", (W, H), CREME_ROSA)
+    canvas = soft_background((W, H))
+    # Aquarell nur am Rand: Ecke oben links + Pinselstrich ganz unten (nie hinter dem Text)
+    for layer in (corner_wash((W, H)), brush_band((W, H), 0.985, 0.07)):
+        canvas.paste(layer, (0, 0), layer)
     fx = ((face[0] + face[2]) / 2) if face else 0.5
     fy = ((face[1] + face[3]) / 2) if face else 0.35
-    # Foto rechts: volle Höhe (Hochformat-Videos sind Nahaufnahmen), leicht vergrößert, Gesicht im oberen Teil
-    ph_h = round(H * 1.12)
-    ph_w = round(photo.width * ph_h / photo.height)
-    if ph_w < W * 0.36:  # sehr schmal → etwas breiter zuschneiden
-        ph_w = round(W * 0.36)
-    ph = cover_fit(photo, ph_w, ph_h, (fx, fy))
-    top_off = round(min(ph_h - H, max(0, (fy * ph_h) - H * 0.42)))
-    ph = ph.crop((0, top_off, ph.width, top_off + H))
-    if ph.width > W * 0.62:
-        cut = ph.width - round(W * 0.62)
-        ph = ph.crop((cut // 2, 0, cut // 2 + round(W * 0.62), H))
-    fade = min(220, ph.width // 3)
+    # Foto rechts in der rechten Hälfte, Gesicht im oberen Drittel, scharf
+    region_w = round(W * 0.50)
+    ph = cover_fit(photo, region_w, H, (fx, max(0.3, fy - 0.02)))
+    fade = 90
     mask = Image.new("L", ph.size, 255)
     md = ImageDraw.Draw(mask)
     for i in range(fade):
-        md.line((i, 0, i, H), fill=int(255 * (i / fade) ** 1.4))
-    canvas.paste(ph, (W - ph.width, 0), mask)
-    # Aquarell-Akzente: Ecke oben links, Streifen unten
-    wc = watercolor((W, H), [(0.0, 0.0, 0.10, (238, 170, 182), 200), (0.18, 1.0, 0.16, (236, 160, 175), 210),
-                             (0.45, 1.02, 0.12, (240, 185, 195), 170)], blur=28)
-    canvas.paste(wc, (0, 0), wc)
+        md.line((i, 0, i, H), fill=int(255 * (i / fade) ** 1.6))
+    canvas.paste(ph, (W - region_w, 0), mask)
     d = ImageDraw.Draw(canvas)
-    # Text links
-    max_w, top, bottom = 610, 70, H - (170 if pill else 80)
-    segs = parse_marked(text.upper())
-    for size in range(124, 40, -4):
-        normal_f = font("Poppins-ExtraBold.ttf", size)
-        key_f = font("Poppins-ExtraBold.ttf", round(size * 1.18))
-        lines: list[tuple[str, bool]] = []
-        for seg, key in segs:
-            fnt = key_f if key else normal_f
-            for ln in wrap(seg.split(), fnt, max_w, d):
-                lines.append((ln, key))
-        heights = [(key_f if k else normal_f).getbbox("ÄGJ")[3] * 0.98 for _, k in lines]
-        if sum(heights) <= bottom - top and len(lines) <= 5:
-            break
-    y = top + max(0, (bottom - top - sum(heights)) / 2) - 10
+    # Text: nur in der linken Hälfte, nie im Foto, nie abgeschnitten
+    left, max_w = 60, round(W * 0.50) - 60 - 30
+    top, bottom = 60, H - (150 if pill else 70)
+    lines, heights, nf, kf = fit_text(d, parse_marked(text.upper()), max_w, bottom - top)
+    y = top + max(0, (bottom - top - sum(heights)) / 2)
     for (ln, key), h in zip(lines, heights):
-        d.text((62, y), ln, font=key_f if key else normal_f, fill=ROSA if key else BRAUN_DUNKEL)
+        d.text((left, y), ln, font=kf if key else nf, fill=ROSA if key else BRAUN_DUNKEL)
         y += h
     if pill:
-        pf = font("Poppins-Bold.ttf", 34)
-        tw = d.textlength(pill.upper(), font=pf)
-        py = min(H - 110, y + 22)
-        d.rounded_rectangle((56, py, 56 + tw + 56, py + 66), radius=14, fill=WEINROT)
-        d.text((56 + 28, py + 12), pill.upper(), font=pf, fill=(255, 255, 255))
+        pf = font("Poppins-Bold.ttf", 32)
+        label = pill.upper()
+        while d.textlength(label, font=pf) > max_w - 48 and pf.size > 18:
+            pf = font("Poppins-Bold.ttf", pf.size - 2)
+        tw = d.textlength(label, font=pf)
+        py = min(H - 100, y + 18)
+        d.rounded_rectangle((left - 4, py, left - 4 + tw + 48, py + pf.size + 30), radius=14, fill=WEINROT)
+        d.text((left + 20, py + 13), label, font=pf, fill=(255, 255, 255))
     return canvas
 
 
@@ -178,7 +227,7 @@ def youtube_meditation(photo: Image.Image, face, title: str, subtitle: str = "",
     grad = Image.linear_gradient("L").rotate(90, expand=True).resize((W, H))
     grad = ImageOps.invert(grad).point(lambda v: min(245, int(v * 1.35)))
     canvas.paste(veil, (0, 0), grad)
-    wc = watercolor((W, H), [(0.0, 0.0, 0.12, (236, 170, 182), 200), (1.0, 0.0, 0.10, (236, 190, 196), 160)], blur=30)
+    wc = corner_wash((W, H))
     canvas.paste(wc, (0, 0), wc)
     d = ImageDraw.Draw(canvas)
     x, y = 64, 70

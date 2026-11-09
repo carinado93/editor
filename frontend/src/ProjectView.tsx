@@ -276,6 +276,9 @@ export function ProjectView({ id }: { id: string }) {
 
   // ---------- Rendern ----------
   const startRender = async () => {
+    if (reelMode && !(cuts?.cutlist.overlays ?? []).some((o) => o.on)) {
+      if (!confirm("Kein Hook und kein Text im Video. Tipp: unten im Reel-Paket „Mit Claude erstellen“. Trotzdem rendern?")) return;
+    }
     try {
       const p = await api.render(id, quality);
       setProject(p);
@@ -729,7 +732,7 @@ function TextOverlay({
   return (
     <div className="text-overlay" aria-hidden>
       {hook && (
-        <span key={hook.id} className="ov-hook" style={{ top: `${hookTop}%` }}>
+        <span key={hook.id} className={`ov-hook anim-${hook.anim ?? "karte"}`} style={{ top: `${hookTop}%` }}>
           {hook.text.split(/(\*[^*]+\*)/).map((part, k) =>
             part.startsWith("*") && part.endsWith("*") ? <em key={k}>{part.slice(1, -1)}</em> : <span key={k}>{part}</span>,
           )}

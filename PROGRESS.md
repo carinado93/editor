@@ -159,6 +159,15 @@
   Getestet: Hochformat-Clip aus Carinas Video (Hook-Karte, Karaoke, −14 LUFS, A/V gleich lang), Querformat-Test
   mit Balken, Ablauf in der Oberfläche mit nachgestellter KI-Antwort. 53 Tests.
 
+- [x] 9.11.: Carina: Reels ohne Text verstehen keinen Kontext → **Hook ab Sekunde 0 + weitere Texte mit
+  Animationen** (Pop, Karte, Wort für Wort, Gleiten; wechseln sich ab, je 4,4–6 s). „Mit Claude erstellen“ (Klick,
+  Carinas Wahl b) legt Hook + Texte direkt ins Video; Claude/Ollama bekommen 5 Standbilder aus dem Clip (versteht
+  auch Clips ohne Sprechen, Idee optional). Warnung vor dem Rendern ohne Text. Reels aus YouTube-Videos bekommen
+  zusätzlich 2–3 Einblendungen nach dem Hook. Getestet: Animationen im gerenderten Reel sichtbar.
+- [x] 9.11.: Thumbnails: Hintergrund war „shitty“ (Flecken hinter dem Text, Text lief ins Foto/abgeschnitten) →
+  saubere helle Fläche, Aquarell nur Ecke oben links + Pinselstrich unten, Foto genau rechte Hälfte, Text nur links
+  und automatisch so groß, dass nichts abgeschnitten wird; „*WORT*?“ bleibt zusammen (Carinas Wahl: nachbauen).
+
 ### Nächster Schritt
 M6 Vorlagen-Bibliothek + B2 (Reel aus Idee), M6b Karussell-Generator, M7 Politur. Carina wählt die Reihenfolge.
 

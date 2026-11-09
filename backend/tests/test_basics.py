@@ -157,8 +157,9 @@ def test_silent_reel_with_idea(client, tmp_path):
     assert p["status"] == "fertig", p["error"]
     r = client.get(f"/api/projects/{pid}/reel-texte").json()
     assert r["silent"] is True
-    # ohne Idee: verständliche Meldung
-    assert client.post(f"/api/projects/{pid}/reel-texte/auftrag", json={"idea": ""}).status_code == 400
+    # ohne Idee: Claude leitet das Thema aus den Standbildern ab
+    empty = client.post(f"/api/projects/{pid}/reel-texte/auftrag", json={"idea": ""}).json()["prompt"]
+    assert "leite das Thema aus dem Clip ab" in empty
     prompt = client.post(f"/api/projects/{pid}/reel-texte/auftrag", json={"idea": "Sunday scaries", "language": "en"}).json()["prompt"]
     assert "Sunday scaries" in prompt and "höchstens 2 Szenen" in prompt
     answer = '{"scenes": ["Sunday *scaries*?", "Plan one calm thing."], "caption": "Hi 🤍 not a diagnosis or therapy", "hashtags": ["#burnout"], "cover_text": "Sunday scaries", "shorts_title": "Sunday scaries"}'

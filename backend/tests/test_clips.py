@@ -66,3 +66,11 @@ def test_landscape_clip_has_bars_and_right_length(tmp_path):
     raw = subprocess.run(["ffmpeg", "-v", "error", "-ss", "2", "-i", str(out), "-frames:v", "1", "-vf", "scale=1:96",
                           "-f", "rawvideo", "-pix_fmt", "gray", "-"], capture_output=True).stdout
     assert raw[2] < 30 and raw[int(96 * 1000 / 1920)] > 60 and raw[-2] < 30
+
+
+
+def test_overlay_plan_hook_first_then_texts():
+    plan = clips.overlay_plan("Ein *Hook*", ["Zwei", "Drei"], 18.0)
+    assert plan[0]["s"] == 0.0 and plan[0]["anim"] == "pop"
+    assert [p["anim"] for p in plan[1:]] == ["karte", "wort"]
+    assert all(a["e"] <= b["s"] for a, b in zip(plan, plan[1:])) and plan[-1]["e"] <= 18.0

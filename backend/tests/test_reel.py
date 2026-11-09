@@ -63,3 +63,9 @@ def test_idea_prompt_and_scene_distribution():
 def test_parse_keeps_scenes():
     d = captions.parse('{"scenes": ["A *b*", "C"], "caption": "x not a diagnosis", "hashtags": [], "cover_text": "c", "shorts_title": "t"}', "en")
     assert d["scenes"] == ["A *b*", "C"] and len(d["hashtags"]) == 5
+
+
+
+def test_long_clip_texts_are_not_shown_forever():
+    ov, _ = captions.distribute_scenes(["A", "B", "C"], 160)
+    assert all(4.4 <= o["end"] - o["start"] <= 6.0 for o in ov) and ov[0]["start"] == 0.2

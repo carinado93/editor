@@ -93,7 +93,9 @@ Regeln für jedes Reel:
 - Jedes Stück besteht aus aufeinanderfolgenden ganzen Sätzen (Liste von Satz-Nummern, z. B. [12, 13]).
 - Keine Bezüge, die ohne Kontext keinen Sinn ergeben ("wie gesagt", "das zweite", "dieser Punkt").
 - Schluss mit klarer Aussage oder Mini-Aufgabe.
-- Pro Reel: kurzer Hook-Text für die Einblendung oben (max. 8 Wörter, *ein Wort in Sternchen* wird lila),
+- Pro Reel: kurzer Hook-Text für die Einblendung ab Sekunde 0, der sofort sagt, worum es geht (max. 8 Wörter,
+  *ein Wort in Sternchen* wird lila), dazu 2–3 weitere kurze Einblendungen ("texts", je max. 8 Wörter), die die
+  Kernaussage verstärken und nacheinander gezeigt werden,
   Caption in Carinas Stimme (Hook + 🤍, 2 kurze Absätze, "📌 Save this…", "Follow …", letzte Zeile
   "Educational and my own experience, not a diagnosis or therapy." – auf Deutsch sinngemäß),
   GENAU 5 Hashtags (bevorzugt aus: {", ".join(meta.hashtag_bank(language)[:25])}), YouTube-Shorts-Titel.
@@ -106,7 +108,7 @@ Sätze des Videos:
 {listing}
 
 Antworte NUR mit JSON:
-{{"clips": [{{"title": "kurzer Arbeitstitel", "hook_text": "…", "parts": [[12], [3, 4, 5]], "why": "warum stark",
+{{"clips": [{{"title": "kurzer Arbeitstitel", "hook_text": "…", "texts": ["…", "…"], "parts": [[12], [3, 4, 5]], "why": "warum stark",
   "caption": "…", "hashtags": ["#a", "#b", "#c", "#d", "#e"], "shorts_title": "…"}}]}}
 """
 
@@ -117,11 +119,12 @@ CLIP_SCHEMA = {
         "type": "object",
         "properties": {
             "title": {"type": "string"}, "hook_text": {"type": "string"},
+            "texts": {"type": "array", "items": {"type": "string"}},
             "parts": {"type": "array", "items": {"type": "array", "items": {"type": "integer"}}},
             "why": {"type": "string"}, "caption": {"type": "string"},
             "hashtags": {"type": "array", "items": {"type": "string"}}, "shorts_title": {"type": "string"},
         },
-        "required": ["title", "hook_text", "parts", "why", "caption", "hashtags", "shorts_title"],
+        "required": ["title", "hook_text", "texts", "parts", "why", "caption", "hashtags", "shorts_title"],
         "additionalProperties": False,
     }}},
     "required": ["clips"],
@@ -158,6 +161,7 @@ def validate(raw: dict, words: list[dict], flags: list, sent: list[dict], durati
             "id": f"clip-{int(time.time() * 1000) % 10_000_000}-{n}",
             "title": str(c.get("title", f"Reel {n + 1}")).strip()[:80],
             "hook_text": str(c.get("hook_text", "")).strip(),
+            "texts": [str(x).strip() for x in c.get("texts", []) if str(x).strip()][:3],
             "parts": parts,
             "segments": [[round(s, 3), round(e, 3)] for s, e in segs],
             "duration": dur,
@@ -243,3 +247,18 @@ def get_clip(pid: str, cid: str) -> dict:
         if c["id"] == cid:
             return c
     raise UserError("Diesen Reel-Vorschlag gibt es nicht mehr.")
+
+
+def overlay_plan(hook_text: str, texts: list[str], total: float) -> list[dict]:
+    """Hook ab Sekunde 0 (Pop), danach die weiteren Texte gleichmäßig verteilt mit wechselnden Animationen."""
+    plan = []
+    hook_end = min(total, 4.6)
+    if hook_text.strip():
+        plan.append({"s": 0.0, "e": hook_end, "text": hook_text, "anim": "pop"})
+    rest = [t for t in texts if t.strip()]
+    if rest and total - hook_end > 2.5:
+        slot = (total - hook_end) / len(rest)
+        for i, t in enumerate(rest):
+            plan.append({"s": round(hook_end + i * slot + 0.15, 2), "e": round(hook_end + (i + 1) * slot - 0.1, 2),
+                         "text": t, "anim": ["karte", "wort", "slide"][i % 3]})
+    return plan

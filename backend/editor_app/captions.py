@@ -60,7 +60,11 @@ SCENE_SCHEMA = """{
 READ_SECONDS = 4.4  # so lange muss eine Aussage stehen (Carinas Erfahrung)
 
 
-def build_idea_prompt(idea: str, language: str, duration: float, transcript_text: str = "") -> str:
+ANIMS = ["pop", "karte", "wort", "slide"]
+
+
+def build_idea_prompt(idea: str, language: str, duration: float, transcript_text: str = "",
+                      with_images: bool = False) -> str:
     """Für Reels, in denen Carina nicht (oder nur wenig) spricht: aus ihrer Idee Szenen-Texte + Caption machen."""
     lang = "Deutsch" if language == "de" else "Englisch"
     account = "@carinadorca.coach" if language == "de" else "@carina.dorca"
@@ -69,15 +73,17 @@ def build_idea_prompt(idea: str, language: str, duration: float, transcript_text
     n = max(1, min(max_scenes, 6))
     return f"""Du schreibst für Carina Dorca (Instagram {account}, YouTube Shorts), Stress- und Burnout-Prävention.
 Sie hat einen Clip von {duration:.0f} Sekunden gefilmt{', in dem sie nicht spricht' if not transcript_text else ''}.
+{'Angehängt sind Standbilder aus dem Clip (in zeitlicher Reihenfolge): Schau genau hin, worum es geht.' if with_images else ''}
 Ihre Idee / Anweisung für das Reel:
->>> {idea.strip()} <<<
+>>> {idea.strip() or '(keine – leite das Thema aus dem Clip ab)'} <<<
 {f'Was im Clip gesagt wird: {transcript_text}' if transcript_text else ''}
 
 {meta.GUARDRAILS}
 
 Schreibe auf {lang}:
 1. Texte, die nacheinander im Video eingeblendet werden: höchstens {n} Szenen (jede steht ca. {READ_SECONDS} s).
-   Szene 1 = polarisierender, konkreter Hook (kein "in case no one told you"). Kurze Sätze (max. 12 Wörter),
+   Szene 1 = Hook ab Sekunde 0: sagt sofort, worum es im Reel geht, polarisierend und konkret
+   (kein "in case no one told you"). Kurze Sätze (max. 12 Wörter),
    die letzte Szene sagt klar, was Carina anbietet oder was die Zuschauerin tun soll.
    Ein Schlüsselwort pro Szene in *Sternchen* (wird lila-kursiv).
 2. Caption in Carinas Stimme: erste Zeile Hook + 🤍, 2–3 sehr kurze Absätze, eine kleine Aufgabe für diese Woche,
@@ -106,11 +112,13 @@ def distribute_scenes(scenes: list[str], duration: float) -> tuple[list[dict], l
         scenes = scenes[:keep]
         slot = duration / len(scenes)
     out = []
+    show = max(READ_SECONDS, min(6.0, slot - 0.2))  # jeder Text 4,4–6 s sichtbar, nie ewig lange
     for i, text in enumerate(scenes):
         start = round(i * slot + (0.2 if i == 0 else 0.1), 2)
-        end = round(min(duration, (i + 1) * slot - 0.1), 2)
+        end = round(min(duration, start + show, (i + 1) * slot - 0.05), 2)
+        anim = "pop" if i == 0 else ["karte", "wort", "slide"][(i - 1) % 3]  # Animationen wechseln sich ab
         out.append({"id": f"szene-{i + 1}", "kind": "hook" if i == 0 else "szene", "start": start, "end": end,
-                    "text": text, "on": True})
+                    "text": text, "on": True, "anim": anim})
     return out, warnings
 
 

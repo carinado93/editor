@@ -18,6 +18,7 @@ def test_sizes_and_styles():
 
 def test_marked_text_and_default():
     assert covers.parse_marked("REST DIDN'T FIX MY *BURNOUT*") == [("REST DIDN'T FIX MY ", False), ("BURNOUT", True)]
+    assert covers.parse_marked("WHAT HELPED MY *ANXIETY*?") == [("WHAT HELPED MY ", False), ("ANXIETY?", True)]
     t = covers.default_thumb_text("Why burnout is not about rest | stress", {"burnout"})
     assert "*burnout*" in t and "|" not in t
 

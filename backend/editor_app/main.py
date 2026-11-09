@@ -419,19 +419,34 @@ def _reel_file(pid: str):
     return projects.path(pid, "reel_texte.json")
 
 
-def _reel_prompt(pid: str, idea: str = "", language: str = "") -> tuple[str, str]:
+def _reel_prompt(pid: str, idea: str = "", language: str = "", with_images: bool = False) -> tuple[str, str]:
+    """Auftrag für Reel-Texte: immer Hook ab Sekunde 0 + weitere Texte über das Reel verteilt."""
     from . import captions
 
     t, v, sentences = _cut_context(pid)
-    hook = next((o["text"].replace("*", "") for o in v["cutlist"].get("overlays", []) if o.get("on", True)), "")
     lang = language if language in ("de", "en") else t.get("language", "en")
     spoken = " ".join(s for _, s in sentences)
-    if idea.strip():
-        return captions.build_idea_prompt(idea, lang, v["evaluation"]["new_duration"], spoken), lang
-    if not spoken:
-        raise UserError("In diesem Clip wird nicht gesprochen. Bitte schreib oben kurz deine Idee "
-                        "(z. B. „Sonntags-Scaries, polarisierender Hook“).")
-    return captions.build_prompt(spoken, lang, hook), lang
+    return captions.build_idea_prompt(idea, lang, v["evaluation"]["new_duration"], spoken, with_images), lang
+
+
+def _reel_stills(pid: str) -> list[str]:
+    p = projects.load(pid)
+    proxy = projects.path(pid, "vorschau.mp4")
+    src = proxy if proxy.exists() else projects.path(pid, p["original_file"])
+    return media.stills_base64(src, (p.get("info") or {}).get("duration", 10), n=5)
+
+
+def _apply_scenes(pid: str, data: dict) -> dict:
+    """Szenen-Texte direkt ins Video legen (Hook ab Sekunde 0, weitere verteilt, wechselnde Animationen)."""
+    from . import captions
+
+    if not data.get("scenes"):
+        return {}
+    _, v, _ = _cut_context(pid)
+    overlays, warnings = captions.distribute_scenes(data["scenes"], v["evaluation"]["new_duration"])
+    view = cutstore.set_overlays(pid, overlays)
+    view["warnings"] = warnings
+    return view
 
 
 class ReelIdeaBody(BaseModel):
@@ -479,10 +494,15 @@ def _save_reel(pid: str, data: dict, source: str, idea: str = "") -> dict:
 
 @app.post("/api/projects/{pid}/reel-texte/ollama")
 def reel_texts_ollama(pid: str, body: ReelIdeaBody):
-    from . import captions
+    from . import captions, llm
 
-    prompt, lang = _reel_prompt(pid, body.idea, body.language)
-    return _save_reel(pid, captions.from_ollama(prompt, lang), "ollama", body.idea)
+    images = _reel_stills(pid)
+    prompt, lang = _reel_prompt(pid, body.idea, body.language, bool(images))
+    raw = llm.ask_json(prompt, "Du antwortest ausschließlich mit gültigem JSON.", timeout=600, images=images)
+    data = captions.parse(raw if isinstance(raw, dict) else {}, lang)
+    res = _save_reel(pid, data, "ollama", body.idea)
+    res["cuts"] = _apply_scenes(pid, data)
+    return res
 
 
 @app.post("/api/projects/{pid}/reel-texte/import")
@@ -674,10 +694,12 @@ def claude_chat(body: ChatBody):
 def reel_texts_claude(pid: str, body: ReelIdeaBody):
     from . import captions, claude
 
-    prompt, lang = _reel_prompt(pid, body.idea, body.language)
-    schema = claude.REEL_SCHEMA
-    data = claude.ask_json(prompt, schema)
-    return _save_reel(pid, captions.parse(data, lang), "claude", body.idea)
+    images = _reel_stills(pid)
+    prompt, lang = _reel_prompt(pid, body.idea, body.language, bool(images))
+    data = captions.parse(claude.ask_json(prompt, claude.REEL_SCHEMA, images=images), lang)
+    res = _save_reel(pid, data, "claude", body.idea)
+    res["cuts"] = _apply_scenes(pid, data)
+    return res
 
 
 @app.post("/api/projects/{pid}/youtube-texte/claude")
