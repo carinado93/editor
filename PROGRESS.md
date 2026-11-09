@@ -157,7 +157,7 @@
   Ton per numpy mit Blenden + −14 LUFS, Querformat ohne Zoom mittig mit schwarzen Balken (Video endet bei y=1250,
   Hook im oberen Balken, Untertitel unten im Video), Hochformat voll; Karaoke-Untertitel; < 30 MB; SRT dazu.
   Getestet: Hochformat-Clip aus Carinas Video (Hook-Karte, Karaoke, −14 LUFS, A/V gleich lang), Querformat-Test
-  mit Balken, Ablauf in der Oberfläche mit nachgestellter KI-Antwort. 56 Tests.
+  mit Balken, Ablauf in der Oberfläche mit nachgestellter KI-Antwort. 53 Tests.
 
 ### Nächster Schritt
 M6 Vorlagen-Bibliothek + B2 (Reel aus Idee), M6b Karussell-Generator, M7 Politur. Carina wählt die Reihenfolge.
