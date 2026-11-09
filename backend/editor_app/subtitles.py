@@ -140,7 +140,8 @@ def hook_y(height: int, face_box: list[float] | None, n_lines: int, size: int) -
 
 
 def ass(width: int, height: int, groups: list[list[dict]] | None, buzz: list[dict], face_box: list[float] | None,
-        karaoke: bool = False, hooks: list[dict] | None = None) -> str:
+        karaoke: bool = False, hooks: list[dict] | None = None, sub_y_override: int | None = None,
+        hook_y_override: int | None = None) -> str:
     """ASS-Datei mit Untertiteln und Buzzword-Pops.
 
     Platzierung: Hochformat → Untertitel bei ~70 % Höhe (Instagram/Shorts-Safe-Zone endet bei ~1250/1920),
@@ -152,7 +153,11 @@ def ass(width: int, height: int, groups: list[list[dict]] | None, buzz: list[dic
     buzz_size = round((96 if portrait else 84) * unit)
     fx0, fy0, fx1, fy1 = face_box or [0.3, 0.1, 0.7, 0.5]
 
-    if portrait:
+    if portrait and sub_y_override:
+        sub_y = sub_y_override
+        buzz_y = round(height * 0.62)
+        buzz_x = width // 2
+    elif portrait:
         sub_y = round(height * 0.70)
         buzz_y = round(height * min(0.62, max(fy1 + 0.04, 0.50)))
         buzz_x = width // 2
@@ -199,7 +204,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         size = round(92 * unit)
         chars_per_line = max(10, int((width * 810 / 1080) / (size * 0.42)))
         n_lines = max(1, -(-len(h["text"].replace("*", "")) // chars_per_line))
-        y = hook_y(height, face_box, n_lines, size)
+        y = hook_y_override if hook_y_override is not None else hook_y(height, face_box, n_lines, size)
         x = round(width * 495 / 1080) if portrait else width // 2
         ev.append(f"Dialogue: 2,{_fmt_ass(h['s'])},{_fmt_ass(h['e'])},Hook,,0,0,0,,"
                   f"{{\\an8\\pos({x},{y})\\fad(250,250)}}{_accent(h['text'])}")

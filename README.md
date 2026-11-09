@@ -68,6 +68,14 @@ Im Transkript ist alles **durchgestrichen**, was geschnitten wird. Die Farbe zei
 - **Thumbnail-Vorschläge** (beste Standbilder) und **Thumbnail gestalten** im Stil deiner bisherigen
   (Aussage mit *Schlüsselwort* in Rosa, oder Meditation), 3 Varianten zum Herunterladen.
 
+### Reels aus einem YouTube-Video
+
+Im YouTube-Projekt unter **„Reels aus diesem Video“**: **„Mit Claude vorschlagen“** (oder kostenlos mit Ollama).
+Die App findet die stärksten 15–20-Sekunden-Momente, Hook in Sekunde 0, Stücke auch aus verschiedenen Stellen.
+- **▶ Vorschau** spielt den Vorschlag ab, **Hook-Text** ist änderbar, **Wünsche zur Verfeinerung** → „Neu vorschlagen“.
+- **„Passt – Reel rendern“**: 1080×1920, Querformat ohne Zoom mittig mit schwarzen Balken (Hook oben im Balken),
+  Untertitel mit lila Karaoke-Wort, Lautstärke −14 LUFS, unter 30 MB. Caption, 5 Hashtags und Shorts-Titel zum Kopieren.
+
 ### Reel veredeln (Modus „Reel veredeln“)
 
 - **Nichts wird gekürzt**: Länge, Tempo, Format und Ton bleiben genau wie im Original, kein Filter.

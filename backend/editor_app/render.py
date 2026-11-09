@@ -299,5 +299,85 @@ def render(src: Path, info: dict, segments: list[list[float]], out: Path, work: 
             "buzzwords": len(buzz)}
 
 
+def render_clip(src: Path, info: dict, segments: list[list[float]], out: Path, work: Path, words: list[dict],
+                flags: list, hook_text: str, face_box: list[float] | None, fonts_dir: str | None,
+                progress: Callable[[float, str], None] | None = None) -> dict:
+    """Reel aus Stücken eines langen Videos (Reihenfolge frei). 1080×1920; Querformat ohne Zoom mittig mit
+    schwarzen Balken (Hook-Text im oberen Balken), Untertitel mit Karaoke, Ton auf -14 LUFS, < 30 MB."""
+    from . import subtitles
+
+    report = progress or (lambda f, m: None)
+    if not segments:
+        raise UserError("Der Clip ist leer.")
+    work.mkdir(parents=True, exist_ok=True)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    fps = frame_rate(info)
+    last = int(info["duration"] * fps)
+    frames = [(max(0, round(Fraction(a).limit_denominator(100000) * fps)),
+               min(last, round(Fraction(b).limit_denominator(100000) * fps))) for a, b in segments]
+    frames = [(a, b) for a, b in frames if b > a]
+    total = float(sum(b - a for a, b in frames) / fps)
+    fps_str = f"{fps.numerator}/{fps.denominator}"
+    W, H = 1080, 1920
+
+    report(0.02, "Ton wird zusammengesetzt …")
+    audio = build_audio(src, info, frames, fps, work)
+    audio = process_audio(audio, work / "clip_ton.pcm", True, False)
+
+    # Wörter in die Clip-Zeit umrechnen (Stücke können aus verschiedenen Stellen kommen)
+    clip_words, offset = [], 0.0
+    for a, b in frames:
+        ta, tb = float(Fraction(a) / fps), float(Fraction(b) / fps)
+        for k, w in enumerate(words):
+            if not flags[k] and ta <= (w["s"] + w["e"]) / 2 <= tb:
+                clip_words.append({"i": k, "w": w["w"], "s": offset + max(0.0, w["s"] - ta),
+                                   "e": offset + min(tb, w["e"]) - ta})
+        offset += tb - ta
+    groups = subtitles.lines(clip_words, max_chars=26)
+
+    landscape = info["width"] > info["height"]
+    if landscape:
+        vh = int(round(W * info["height"] / info["width"] / 2)) * 2
+        top = 1250 - vh  # Video endet am Rand der Safe Zone, darüber der Balken für den Hook
+        layout = f"scale={W}:{vh}:flags=lanczos,pad={W}:{H}:0:{top}:black"
+        sub_y = top + round(vh * 0.86)
+        hook_y = max(290, top - 300)
+        fb = None
+    else:
+        layout = f"scale={W}:{H}:force_original_aspect_ratio=decrease:flags=lanczos,pad={W}:{H}:(ow-iw)/2:(oh-ih)/2:black"
+        sub_y, hook_y, fb = round(H * 0.70), None, face_box
+    hooks = [{"s": 0.0, "e": min(total, 4.6), "text": hook_text}] if hook_text.strip() else []
+    ass_path = work / "clip.ass"
+    ass_path.write_text(subtitles.ass(W, H, groups, [], fb, True, hooks, sub_y_override=sub_y,
+                                      hook_y_override=hook_y), encoding="utf-8")
+    ass_f = f",ass={_filter_path(ass_path)}" + (f":fontsdir={_filter_path(Path(fonts_dir))}" if fonts_dir else "")
+    n = len(frames)
+    parts = [f"[0:{info['video_index']}]fps={fps_str},split={n}" + "".join(f"[i{k}]" for k in range(n))]
+    for k, (a, b) in enumerate(frames):
+        parts.append(f"[i{k}]trim=start_frame={a}:end_frame={b},setpts=PTS-STARTPTS[s{k}]")
+    parts.append("".join(f"[s{k}]" for k in range(n)) + f"concat=n={n}:v=1:a=0[c]")
+    parts.append(f"[c]{layout},setsar=1,format=yuv420p{ass_f}[v]")
+    script = work / "clip_filter.txt"
+    script.write_text(";".join(parts), encoding="utf-8")
+
+    audio_kbps = 192
+    max_kbps = max(800, min(5000, int(30 * 8 * 1000 * 0.88 / max(1.0, total)) - audio_kbps))
+    enc = _encoder()
+    rate = ["-maxrate", f"{max_kbps}k", "-bufsize", f"{max_kbps * 2}k"]
+    enc = (["-c:v", "h264_nvenc", "-preset", "p5", "-rc", "vbr", "-cq", "20", *rate] if enc[1] == "h264_nvenc"
+           else ["-c:v", "libx264", "-preset", "fast", "-crf", "20", *rate])
+    tmp = out.with_suffix(".tmp.mp4")
+    args = ["-i", str(src), "-f", "s16le", "-ar", str(SR), "-ac", str(CH), "-i", str(audio),
+            *media.filter_script_args(script), "-map", "[v]", "-map", "1:a", *enc, "-profile:v", "high",
+            "-r", fps_str, "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", "-map_metadata", "-1",
+            "-shortest", str(tmp)]
+    media._run_with_progress(args, total, lambda f: report(0.05 + 0.95 * f, f"Reel wird berechnet ({f:.0%})"))
+    tmp.replace(out)
+    srt = out.with_suffix(".srt")
+    srt.write_text(subtitles.srt(groups), encoding="utf-8")
+    report(1.0, "Fertig")
+    return {"file": out.name, "duration": round(total, 2), "size": out.stat().st_size, "srt": srt.name}
+
+
 def safe_name(name: str) -> str:
     return re.sub(r"[^\w\-. ]+", "_", name).strip()[:60] or "video"

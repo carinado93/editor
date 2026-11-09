@@ -41,6 +41,33 @@ def enqueue_render(pid: str, quality: str) -> None:
     _queue.put((pid, "rendern", {"quality": quality}))
 
 
+def enqueue_clip(pid: str, cid: str) -> None:
+    _queue.put((pid, "clip", {"cid": cid}))
+
+
+def _render_clip(pid: str, cid: str) -> None:
+    from . import clips, config, cuts, gaze
+
+    p = projects.load(pid)
+    c = clips.get_clip(pid, cid)
+
+    def rep(f: float, msg: str):
+        clips.update_clip(pid, cid, status="arbeitet", progress=round(f, 3), message=msg)
+
+    rep(0.0, "Startet …")
+    t = json.loads(projects.path(pid, "transkript.json").read_text(encoding="utf-8"))
+    v = cutstore.view(pid)
+    gf = projects.path(pid, "blick.json")
+    face = gaze.face_box(json.loads(gf.read_text(encoding="utf-8"))) if gf.exists() else None
+    name = render.safe_name(c.get("title") or p["name"])
+    out = projects.path(pid, "export") / f"reel_{name}_{time.strftime('%H%M%S')}.mp4"
+    res = render.render_clip(projects.path(pid, p["original_file"]), p["info"], c["segments"], out,
+                             projects.path(pid, "cache"), cuts.flat_words(t), v["evaluation"]["flags"],
+                             c.get("hook_text", ""), face, str(config.ROOT / "assets" / "fonts"), rep)
+    clips.update_clip(pid, cid, status="fertig", progress=1.0, message="Fertig", file=res["file"],
+                      size=res["size"], srt=res["srt"])
+
+
 def _render(pid: str, quality: str) -> None:
     p = projects.load(pid)
 
@@ -220,6 +247,8 @@ def _worker() -> None:
         try:
             if kind == "rendern":
                 _render(pid, opts["quality"])
+            elif kind == "clip":
+                _render_clip(pid, opts["cid"])
             elif kind == "blick":
                 _gaze(pid)
                 _buzz(pid)
@@ -230,7 +259,10 @@ def _worker() -> None:
         except Exception as exc:  # noqa: BLE001 – alles abfangen und verständlich anzeigen
             traceback.print_exc()
             try:
-                if kind == "rendern":
+                if kind == "clip":
+                    from . import clips
+                    clips.update_clip(pid, opts["cid"], status="fehler", error=explain(exc), message="Fehler")
+                elif kind == "rendern":
                     r = projects.load(pid).get("render") or {}
                     projects.update(pid, render={**r, "status": "fehler", "error": explain(exc), "message": "Fehler"})
                 else:

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api, type YoutubeMeta } from "./api";
 import { CoverStudio } from "./CoverStudio";
 import { Status } from "./ReelPackage";
+import { ClipsPanel } from "./ClipsPanel";
 
 function copy(text: string, done: (msg: string) => void) {
   navigator.clipboard.writeText(text).then(
@@ -55,6 +56,7 @@ export function YoutubePackage({ id }: { id: string }) {
       <h2>YouTube-Paket</h2>
 
 
+      <ClipsPanel id={id} />
       <div className="package-grid">
         <div className="card">
           <h3>Titel, Beschreibung, Kapitel, Tags</h3>

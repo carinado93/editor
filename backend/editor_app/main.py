@@ -694,6 +694,80 @@ def youtube_texts_claude(pid: str):
     return {"prompt": prompt, "meta": data, "full_description": meta.full_description(data)}
 
 
+# ---------- Reels aus YouTube-Videos ----------
+
+class ClipSuggestBody(BaseModel):
+    engine: str = "claude"  # claude | ollama
+    feedback: str = ""
+
+
+class ClipEditBody(BaseModel):
+    title: str | None = None
+    hook_text: str | None = None
+    caption: str | None = None
+    shorts_title: str | None = None
+    hashtags: list[str] | None = None
+
+
+@app.get("/api/projects/{pid}/clips")
+def get_clips(pid: str):
+    from . import clips
+
+    return clips.load(pid)
+
+
+@app.post("/api/projects/{pid}/clips/vorschlagen")
+def suggest_clips(pid: str, body: ClipSuggestBody):
+    from . import clips
+
+    if body.engine not in ("claude", "ollama"):
+        raise UserError("Unbekannte KI.")
+    t = cutstore._transcript(pid)
+    v = cutstore.view(pid)
+    data = clips.load(pid)
+    keep = [c for c in data["clips"] if c.get("status") != "vorschlag"]  # freigegebene/gerenderte bleiben
+    previous = [c for c in data["clips"] if c.get("status") == "vorschlag"] if body.feedback.strip() else None
+    new = clips.suggest(body.engine, t, v["cutlist"], v["evaluation"]["flags"], body.feedback, previous)
+    if body.feedback.strip():
+        data.setdefault("feedback", []).append(body.feedback.strip())
+    data["clips"] = keep + new
+    return clips.save(pid, data)
+
+
+@app.put("/api/projects/{pid}/clips/{cid}")
+def edit_clip(pid: str, cid: str, body: ClipEditBody):
+    from . import clips, meta
+
+    fields = {k: v for k, v in body.model_dump().items() if v is not None}
+    if "hashtags" in fields:
+        fields["hashtags"] = meta.fix_hashtags(fields["hashtags"], cutstore._transcript(pid).get("language", "en"), [])
+    clips.update_clip(pid, cid, **fields)
+    return clips.load(pid)
+
+
+@app.delete("/api/projects/{pid}/clips/{cid}")
+def delete_clip(pid: str, cid: str):
+    from . import clips
+
+    with clips._lock:
+        data = clips.load(pid)
+        data["clips"] = [c for c in data["clips"] if c["id"] != cid]
+        clips.save(pid, data)
+    return data
+
+
+@app.post("/api/projects/{pid}/clips/{cid}/render")
+def render_clip(pid: str, cid: str):
+    from . import clips
+
+    c = clips.get_clip(pid, cid)
+    if c.get("status") in ("warteschlange", "arbeitet"):
+        raise UserError("Dieses Reel wird schon gerendert.")
+    clips.update_clip(pid, cid, status="warteschlange", progress=0.0, message="Wartet …", error=None)
+    jobs.enqueue_clip(pid, cid)
+    return clips.load(pid)
+
+
 # ---------- Selbst-Aktualisierung ----------
 
 @app.get("/api/update/status")
@@ -707,7 +781,11 @@ def update_status(force: bool = False):
 def update_now():
     from . import updater
 
-    busy = any(p["status"] in ("warteschlange", "arbeitet")
+    from . import clips as _clips
+
+    clip_busy = any(c.get("status") in ("warteschlange", "arbeitet")
+                    for p in projects.list_all() for c in _clips.load(p["id"]).get("clips", []))
+    busy = clip_busy or any(p["status"] in ("warteschlange", "arbeitet")
                or (p.get("render") or {}).get("status") in ("warteschlange", "arbeitet") for p in projects.list_all())
     return updater.update_and_restart(busy)
 

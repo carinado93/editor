@@ -149,6 +149,16 @@
   claude.ai-Kopierweg entfernt (durch API ersetzt). Echter Aufruf mit gültigem Schlüssel noch nicht getestet
   (kein Schlüssel hier); falscher Schlüssel → echte 401 von Anthropic → verständliche Meldung (getestet).
 
+- [x] 9.11.: **Reels aus YouTube-Videos** (`clips.py`, `render.render_clip`, UI „Reels aus diesem Video“):
+  Claude (Opus 5.5, effort high) oder Ollama wählen aus dem bereinigten Transkript (Sätze mit genauen Längen)
+  so viele starke 15–20-s-Reels wie es gibt, Hook zuerst, Stücke aus beliebigen Stellen in beliebiger Reihenfolge.
+  Prüfung: Länge 10–26 s (Hinweis außerhalb 15–20), keine doppelt laufenden Momente, genau 5 Hashtags.
+  Verfeinerung per Wunsch-Text (bisherige Vorschläge gehen mit). Render: Stücke per trim/concat in freier Reihenfolge,
+  Ton per numpy mit Blenden + −14 LUFS, Querformat ohne Zoom mittig mit schwarzen Balken (Video endet bei y=1250,
+  Hook im oberen Balken, Untertitel unten im Video), Hochformat voll; Karaoke-Untertitel; < 30 MB; SRT dazu.
+  Getestet: Hochformat-Clip aus Carinas Video (Hook-Karte, Karaoke, −14 LUFS, A/V gleich lang), Querformat-Test
+  mit Balken, Ablauf in der Oberfläche mit nachgestellter KI-Antwort. 56 Tests.
+
 ### Nächster Schritt
 M6 Vorlagen-Bibliothek + B2 (Reel aus Idee), M6b Karussell-Generator, M7 Politur. Carina wählt die Reihenfolge.
 

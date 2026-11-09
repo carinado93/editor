@@ -80,6 +80,28 @@ export interface ReelTexts {
   warnings?: string[];
 }
 
+export interface Clip {
+  id: string;
+  title: string;
+  hook_text: string;
+  parts: number[][];
+  segments: [number, number][];
+  duration: number;
+  why: string;
+  caption: string;
+  hashtags: string[];
+  shorts_title: string;
+  text: string;
+  warnings?: string[];
+  status: "vorschlag" | "warteschlange" | "arbeitet" | "fertig" | "fehler";
+  progress?: number;
+  message?: string;
+  error?: string | null;
+  file?: string;
+  size?: number;
+  srt?: string;
+}
+
 export interface RenderOptions {
   zoom: boolean;
   loudness: boolean;
@@ -242,6 +264,13 @@ export const api = {
       ...json({ caption: t.caption, hashtags: t.hashtags, cover_text: t.cover_text, shorts_title: t.shorts_title }),
       method: "PUT",
     }),
+  clips: (id: string) => call<{ clips: Clip[]; feedback: string[] }>(`/api/projects/${id}/clips`),
+  suggestClips: (id: string, engine: string, feedback: string) =>
+    call<{ clips: Clip[]; feedback: string[] }>(`/api/projects/${id}/clips/vorschlagen`, json({ engine, feedback })),
+  editClip: (id: string, cid: string, patch: Partial<Clip>) =>
+    call<{ clips: Clip[] }>(`/api/projects/${id}/clips/${cid}`, { ...json(patch), method: "PUT" }),
+  deleteClip: (id: string, cid: string) => call<{ clips: Clip[] }>(`/api/projects/${id}/clips/${cid}`, { method: "DELETE" }),
+  renderClip: (id: string, cid: string) => call<{ clips: Clip[] }>(`/api/projects/${id}/clips/${cid}/render`, { method: "POST" }),
   render: (id: string, quality: string) => call<Project>(`/api/projects/${id}/render`, json({ quality })),
   openFolder: (id: string) => call<{ ok: boolean }>(`/api/projects/${id}/open-folder`, { method: "POST" }),
   exportUrl: (id: string, file: string) => `/api/projects/${id}/export/${encodeURIComponent(file)}`,
