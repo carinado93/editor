@@ -93,7 +93,10 @@ So schneidet Carina (aus ihrem eigenen Video):
   bzw. auf Englisch "Carina Dorca|Stress & Burnout Coach").
 - Texte kurz, konkret, in ihren Worten, auf {lang}. Keine Heilversprechen, keine Diagnosen.
 - Nie zwei Einblendungen gleichzeitig: mindestens 4 Sekunden zwischen den Startpunkten (Listen zählen als eine).
-- "word" = Nummer in eckigen Klammern des Worts, bei dem die Einblendung erscheinen soll (der Moment, in dem sie es sagt).
+- "word" = Nummer in eckigen Klammern des LETZTEN Worts der Stelle, die die Einblendung zeigt. Die Einblendung
+  erscheint erst, wenn Carina dieses Wort ausgesprochen hat – NIE bevor sie es gesagt hat. Beispiel: Sie sagt
+  "[40]Coaching [41]ist [42]Prävention, [43]nicht [44]Behandlung" → Text "COACHING = PRÄVENTION", word = 42.
+  Bei Listen gilt das für jeden Punkt einzeln: word = das Wort, mit dem sie den Punkt fertig gesagt hat.
 - Für alle Stile außer sticker/check ist "list" leer; "number" ist leer, außer bei style "number".
 
 Transkript (Zeit in Klammern, [Nummer] vor jedem Wort):
@@ -105,6 +108,11 @@ Antworte NUR mit JSON nach dem Schema."""
 def _duration(style: str, text: str) -> float:
     base = {"label": 2.8, "quote": 3.6, "number": 3.0, "name": 4.5}.get(style, 3.0)
     return base + min(1.5, len(text) / 40)
+
+
+def _said(w: dict) -> float:
+    """Zeitpunkt, an dem das Wort gesagt ist: kurz vor seinem Ende (nie vor dem Wort)."""
+    return max(w["s"] + 0.15, w["e"] - 0.1)
 
 
 def parse(data: dict, words: list[dict], flags: list) -> list[dict]:
@@ -122,13 +130,13 @@ def parse(data: dict, words: list[dict], flags: list) -> list[dict]:
         k = it.get("word")
         if style not in STYLES or not text or not ok(k):
             continue
-        start = words[k]["s"]
+        start = _said(words[k])
         item = {"id": f"yt-{stamp}-{i}", "kind": "yt", "style": style, "text": text[:80], "on": True,
                 "start": round(start, 2), "number": str(it.get("number") or "").strip()[:12], "list": []}
         if style in ("sticker", "check"):
             pts = [p for p in it.get("list") or [] if ok(p.get("word")) and str(p.get("text") or "").strip()]
             pts.sort(key=lambda p: p["word"])
-            item["list"] = [{"text": str(p["text"]).strip()[:48], "t": round(words[p["word"]]["s"], 2)}
+            item["list"] = [{"text": str(p["text"]).strip()[:48], "t": round(_said(words[p["word"]]), 2)}
                             for p in pts[:6]]
             if not item["list"]:
                 item["list"] = [{"text": text[:48], "t": round(start, 2)}]
