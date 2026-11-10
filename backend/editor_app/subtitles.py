@@ -156,7 +156,8 @@ def hook_y(height: int, face_box: list[float] | None, n_lines: int, size: int) -
 
 def ass(width: int, height: int, groups: list[list[dict]] | None, buzz: list[dict], face_box: list[float] | None,
         karaoke: bool = False, hooks: list[dict] | None = None, sub_y_override: int | None = None,
-        hook_y_override: int | None = None) -> str:
+        hook_y_override: int | None = None, extra_styles: list[str] | None = None,
+        extra_events: list[str] | None = None) -> str:
     """ASS-Datei mit Untertiteln und Buzzword-Pops.
 
     Platzierung: Hochformat → Untertitel bei ~70 % Höhe (Instagram/Shorts-Safe-Zone endet bei ~1250/1920),
@@ -194,6 +195,7 @@ Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour,
 Style: Untertitel,Poppins SemiBold,{sub_size},{ass_color(LILA if karaoke else BRAUN)},{ass_color(BRAUN)},{ass_color(CREME, 0x18)},{ass_color("#000000", 0xB0)},0,0,0,0,100,100,0,0,3,{round(14 * unit)},0,5,40,40,0,1
 Style: Hook,Cormorant Garamond SemiBold,{round(92 * unit)},{ass_color(BRAUN)},{ass_color(BRAUN)},{ass_color(CREME, 0x14)},{ass_color("#000000", 0xC0)},0,0,0,0,100,100,0,0,3,{round(26 * unit)},0,8,{round(width * 90 / 1080)},{round(width * 180 / 1080)},0,1
 Style: Buzz,Cormorant Garamond Bold,{buzz_size},{ass_color(LILA_TIEF)},{ass_color(LILA_TIEF)},{ass_color(FLIEDER, 0x10)},{ass_color("#000000", 0xA0)},-1,0,0,0,100,100,1,0,3,{round(20 * unit)},0,5,40,40,0,1
+{chr(10).join(extra_styles or [])}
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -241,6 +243,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         text = _esc(b["text"]).upper() if b.get("upper") else _esc(b["text"])
         pop = "{\\fscx40\\fscy40\\t(0,160,\\fscx112\\fscy112)\\t(160,260,\\fscx100\\fscy100)\\fad(0,220)}"
         ev.append(f"Dialogue: 1,{_fmt_ass(b['s'])},{_fmt_ass(b['e'])},Buzz,,0,0,0,,{{\\pos({buzz_x},{buzz_y})}}{pop}{text}")
+    ev.extend(extra_events or [])
     return head + "\n".join(ev) + "\n"
 
 

@@ -182,7 +182,7 @@ def render(src: Path, info: dict, segments: list[list[float]], out: Path, work: 
            progress: Callable[[float, str], None] | None = None, options: dict | None = None) -> dict:
     """options: zoom, loudness, denoise (bool), subtitles ("aus"/"srt"/"einbrennen"), karaoke (bool),
     words + flags (Transkript), buzzwords ([{start,end,text?}]), gaze (blick.json-Daten), fonts_dir."""
-    from . import gaze, subtitles
+    from . import animations, gaze, subtitles
 
     opts = {"zoom": True, "loudness": True, "denoise": False, "subtitles": "srt", "karaoke": False,
             "audio_copy": False, "reel": False, **(options or {})}
@@ -229,12 +229,20 @@ def render(src: Path, info: dict, segments: list[list[float]], out: Path, work: 
     buzz = subtitles.buzz_events(opts.get("buzzwords") or [], words, tmap) if words else []
     burn_subs = opts["subtitles"] == "einbrennen" and groups
     hooks = [{"s": tmap.clamp(o["start"]), "e": tmap.clamp(o["end"]), "text": o["text"], "anim": o.get("anim", "karte")}
-             for o in opts.get("overlays") or []]
+             for o in opts.get("overlays") or [] if o.get("kind") != "yt"]
+    face = gaze.face_box(gaze_data) if gaze_data else None
+    yt_items = [o for o in opts.get("overlays") or [] if o.get("kind") == "yt"]
+    yt_events = animations.ass_events(yt_items, tmap, out_w, out_h, face) if yt_items else []
+    if yt_events:
+        # Buzzwords nie gleichzeitig mit einer Animation
+        spans = [(tmap.clamp(o["start"]), tmap.clamp(o["end"])) for o in yt_items if o.get("on", True)]
+        buzz = [b for b in buzz if all(b["e"] <= s or b["s"] >= e for s, e in spans)]
     ass_filter = ""
-    if burn_subs or buzz or hooks:
+    if burn_subs or buzz or hooks or yt_events:
         ass_path = work / "texte.ass"
-        ass_path.write_text(subtitles.ass(out_w, out_h, groups if burn_subs else None, buzz,
-                                          gaze.face_box(gaze_data) if gaze_data else None, opts["karaoke"], hooks),
+        ass_path.write_text(subtitles.ass(out_w, out_h, groups if burn_subs else None, buzz, face, opts["karaoke"],
+                                          hooks, extra_styles=animations.ass_styles(out_h / 1080) if yt_events else None,
+                                          extra_events=yt_events),
                             encoding="utf-8")
         ass_filter = f",ass={_filter_path(ass_path)}"
         if opts.get("fonts_dir"):

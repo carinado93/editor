@@ -15,6 +15,7 @@ from __future__ import annotations
 import re
 import unicodedata
 from dataclasses import asdict, dataclass
+from difflib import SequenceMatcher
 
 DEFAULT_SIGNAL_WORDS = ["again", "nochmal", "noch mal", "noch einmal", "von vorne", "stopp", "stop", "cut"]
 
@@ -37,6 +38,11 @@ TEMPO = {
 
 # Wörter, die man absichtlich doppelt sagt ("sehr sehr") → nur Vorschlag
 INTENSIFIERS = {"very", "really", "so", "sehr", "ganz", "viel", "much", "many", "ja", "nein", "no", "yes", "bye", "tschüss"}
+
+# Wörter, mit denen man sich selbst korrigiert ("beim dritten, nein, beim zweiten")
+CORRECTION_WORDS = {"nein", "nee", "egal", "sorry", "quatsch", "falsch", "no", "wait", "nope"}
+
+ALL_FILLERS = {f for lang in DEFAULT_FILLERS.values() for f, on in lang.items() if on and " " not in f}
 
 REASON_TEXT = {
     "retake": "Retake: you started again, the last version stays",
@@ -98,6 +104,45 @@ def _starts_clause(words: list[dict], i: int) -> bool:
     return ends_clause(prev["w"]) or words[i]["s"] - prev["e"] >= 0.25
 
 
+def _overlap(tokens: list[str], i: int, j: int) -> float:
+    """Wie sehr der erste Versuch (i..j-1) dem Neuanfang ab j gleicht (0..1).
+    Neuanfang: "Mein Lehrgang war stattlich zugelassen" → "Mein Lehrgang war stattlich geprüft" (hoch).
+    Absichtliche Aufzählung: "ich wollte nicht mehr nur …" → "ich wollte nicht wieder …" (niedrig)."""
+    a = [t for t in tokens[i:j] if t and t not in ALL_FILLERS]
+    b = [t for t in tokens[j:j + 2 * len(a) + 2] if t and t not in ALL_FILLERS]
+    if not a:
+        return 1.0
+    same = sum(m.size for m in SequenceMatcher(None, a, b, autojunk=False).get_matching_blocks())
+    return same / len(a)
+
+
+def detect_chains(words: list[dict], tokens: list[str], max_gap: float) -> list[tuple[int, int]]:
+    """Mehrere Anläufe mit demselben Satzanfang hintereinander ("Mein Lehrgang war … Mein Lehrgang war … Mein
+    Lehrgang war …"): alles vom ersten bis zum letzten Anlauf wird geschnitten, nur der letzte bleibt."""
+    n = len(tokens)
+    starts: dict[tuple[str, ...], list[int]] = {}
+    for p in range(n - 2):
+        key = tuple(tokens[p:p + 3])
+        if all(key) and not any(t in ALL_FILLERS for t in key) and _starts_clause(words, p):
+            starts.setdefault(key, []).append(p)
+    links: dict[int, int] = {}
+    for pos in starts.values():
+        for p, q in zip(pos, pos[1:]):
+            if _speech_between(words, p, q) <= 2 * max_gap and _overlap(tokens, p, q) >= 0.7:
+                links[p] = q
+    out = []
+    used: set[int] = set()
+    for p in sorted(links):
+        if p in used:
+            continue
+        q = p
+        while q in links:
+            used.add(q)
+            q = links[q]
+        out.append((p, q))
+    return out
+
+
 def detect_retakes(words: list[dict], tokens: list[str], max_gap: float) -> list[tuple[int, int, int, bool]]:
     """Findet Neuanfänge. Gibt (i, j, k, sicher) zurück: Wörter i..j-1 schneiden, ab j (k Wörter gleich) bleibt."""
     n = len(tokens)
@@ -120,9 +165,11 @@ def detect_retakes(words: list[dict], tokens: list[str], max_gap: float) -> list
                 if i != j - 1:
                     continue  # einzelnes Wort nur, wenn direkt doppelt (eigene Regel unten)
                 continue
-            if k == 2 and not (_starts_clause(words, i) and _starts_clause(words, j)):
+            after_filler = j > 0 and tokens[j - 1] in ALL_FILLERS
+            if k == 2 and not (_starts_clause(words, i) and _starts_clause(words, j)) and not after_filler:
                 continue  # zwei gleiche Wörter mitten im Satz ("in the … in the") sind meist kein Retake
-            sure = True
+            # Kurze Übereinstimmung, aber der Rest ist ganz anders: eher eine Aufzählung → nur Vorschlag
+            sure = k > 2 or _overlap(tokens, i, j) >= 0.7 or any(t in CORRECTION_WORDS for t in tokens[i:j])
             if best is None or k > best[2]:
                 best = (i, j, k, sure)
         if best:
@@ -197,6 +244,8 @@ def detect(transcript: dict, settings: dict, gaze_events: list[dict] | None = No
         add("signal", start, b, True, " ".join(w["w"] for w in words[a:b]))
 
     # 2. Retakes (Neuanfang mit denselben Wörtern)
+    for i, j in detect_chains(words, tokens, max_gap):
+        add("retake", i, j, True, f"several attempts, the last one stays: \"{' '.join(w['w'] for w in words[j:j + 4])}…\"")
     for i, j, k, sure in detect_retakes(words, tokens, max_gap):
         add("retake", i, j, sure, f"same start: \"{' '.join(w['w'] for w in words[j:j + min(k, 6)])}…\"")
 
@@ -228,7 +277,9 @@ def detect(transcript: dict, settings: dict, gaze_events: list[dict] | None = No
     for ev in gaze_events or []:
         inside = [k for k, w in enumerate(words) if ev["start"] <= (w["s"] + w["e"]) / 2 <= ev["end"]]
         if inside:
-            add("blick", inside[0], inside[-1] + 1, False, f"{ev['length']:.1f} s, {ev['reason']}")
+            # Wegschauen ohne richtigen Inhalt (nichts oder nur "und", "hm" …) wird gleich geschnitten
+            filler_only = len(inside) <= 2 and all(len(tokens[k]) <= 4 for k in inside)
+            add("blick", inside[0], inside[-1] + 1, filler_only, f"{ev['length']:.1f} s, {ev['reason']}")
 
     # Doppelte Treffer zusammenfassen: gleiche Wörter nur einmal (der erste Grund gewinnt)
     seen: set[str] = set()
@@ -284,6 +335,8 @@ def timeline(words: list[dict], flags: list[str | None], duration: float, tempo:
             pauses.append({"after": a, "start": round(wa["e"], 3), "end": round(wb["s"], 3),
                            "length": round(gap, 2), "kept": False, "noise": bool(loud)})
         half = min(target / 2, max(gap, 0) / 2)
+        if not removed_between and gap > 1.5 and not ends_clause(wa["w"]):
+            half = min(half, 0.05)  # lange Denkpause mitten im Satz ("Ich … bin Carina"): fast ganz zu
         after, before = half, half
         if removed_between:
             # Die Luft darf nicht in ein geschnittenes Nachbarwort hineinreichen (sonst bleibt "I m…" hörbar)

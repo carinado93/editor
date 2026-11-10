@@ -1428,3 +1428,160 @@ kbd {
   border-radius: 6px;
   padding: 2px 4px;
 }
+
+/* ---------- YouTube-Animationen (Stil aus Carinas eigenem Schnitt) ---------- */
+@font-face {
+  font-family: "Caveat";
+  src: url("./fonts/Caveat.ttf") format("truetype");
+  font-weight: 400 700;
+}
+@font-face {
+  font-family: "Poppins XB";
+  src: url("./fonts/Poppins-ExtraBold.ttf") format("truetype");
+}
+@font-face {
+  font-family: "Poppins Black";
+  src: url("./fonts/Poppins-Black.ttf") format("truetype");
+}
+
+.ov-yt {
+  display: inline-block;
+  white-space: nowrap;
+  line-height: 1.2;
+  animation: yt-pop 0.26s ease-out;
+}
+.ov-yt-label,
+.ov-yt-quote {
+  position: absolute;
+  transform: translateX(-50%);
+}
+.ov-yt-side .ov-yt-label {
+  position: static;
+  transform: none;
+}
+.ov-yt-label {
+  background: var(--lila);
+  color: #fff;
+  font-family: "Poppins XB", "Poppins", sans-serif;
+  font-size: 2.9cqw;
+  padding: 0.12em 0.4em;
+}
+.ov-yt-quote {
+  background: rgba(244, 238, 228, 0.96);
+  color: var(--braun);
+  font-family: "Cormorant Garamond", serif;
+  font-weight: 600;
+  font-size: 2.9cqw;
+  padding: 0.25em 0.6em;
+  border-radius: 0.35em;
+}
+.ov-yt-quote em {
+  color: var(--lila);
+  font-style: italic;
+}
+.ov-yt-side {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5cqw;
+}
+.ov-yt-number {
+  background: var(--lila-tief);
+  color: #f2c14e;
+  font-family: "Poppins Black", "Poppins", sans-serif;
+  font-size: 6.8cqw;
+  line-height: 1;
+  padding: 0.1em 0.25em;
+}
+.ov-yt-name {
+  background: rgba(244, 238, 228, 0.96);
+  color: var(--braun);
+  font-family: "Cormorant Garamond", serif;
+  font-weight: 600;
+  font-size: 2.4cqw;
+  padding: 0.1em 0.45em;
+}
+.ov-yt-title {
+  background: var(--lila);
+  color: #fff;
+  font-family: "Poppins", sans-serif;
+  font-weight: 600;
+  font-size: 1.15cqw;
+  padding: 0.15em 0.5em;
+}
+.ov-yt-sticker {
+  background: #fff;
+  color: var(--braun);
+  font-family: "Caveat", cursive;
+  font-weight: 700;
+  font-size: 2.3cqw;
+  padding: 0.05em 0.45em;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+}
+.ov-yt-sticker.check::before {
+  content: "✓";
+  display: inline-block;
+  width: 1em;
+  margin-right: 0.35em;
+  color: #5e8c4a;
+  border: 0.12em solid var(--lila);
+  background: #fff;
+  text-align: center;
+  line-height: 0.95;
+}
+@keyframes yt-pop {
+  0% {
+    scale: 0.6;
+  }
+  60% {
+    scale: 1.06;
+  }
+  100% {
+    scale: 1;
+  }
+}
+
+.anim-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+  max-height: 520px;
+  overflow-y: auto;
+}
+.anim-row {
+  display: grid;
+  grid-template-columns: auto auto 120px 1fr auto;
+  gap: 10px;
+  align-items: center;
+}
+.anim-row.off {
+  opacity: 0.5;
+}
+.anim-row .pill {
+  text-align: center;
+}
+.anim-text {
+  display: flex;
+  gap: 6px;
+}
+.anim-text input,
+.anim-text textarea {
+  flex: 1;
+  min-width: 0;
+}
+.anim-text input.num {
+  flex: 0 0 70px;
+}
+.anim-card {
+  margin-top: 16px;
+}
+@media (max-width: 700px) {
+  .anim-row {
+    grid-template-columns: auto auto 1fr;
+  }
+  .anim-row .anim-text {
+    grid-column: 1 / -1;
+  }
+}

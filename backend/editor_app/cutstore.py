@@ -231,6 +231,25 @@ def undo(pid: str) -> dict:
         return view(pid, prev)
 
 
+def remap_words(pid: str, old_to_new: list[int]) -> None:
+    """Nach dem Nachhören sind Wörter dazugekommen: Carinas Änderungen (Wort-Nummern) auf die neuen Nummern umrechnen."""
+    if not _file(pid).exists():
+        return
+
+    def m(i: int) -> int:
+        return old_to_new[i] if 0 <= i < len(old_to_new) else i
+
+    with _lock:
+        cl = load(pid)
+        man = cl.get("manual", {})
+        cl["manual"] = {"cut": [m(i) for i in man.get("cut", [])], "keep": [m(i) for i in man.get("keep", [])]}
+        cl["pause_keep"] = [m(i) for i in cl.get("pause_keep", [])]
+        cl["buzzwords"] = [dict(b, start=m(b["start"]), end=m(b["end"] - 1) + 1) for b in cl.get("buzzwords", [])]
+        cl["overrides"] = {}
+        cl["history"] = []
+        _save(pid, cl)
+
+
 def refresh(pid: str) -> None:
     """Erkennung neu laufen lassen (z. B. wenn die Blick-Erkennung fertig ist), Änderungen bleiben erhalten."""
     if not _file(pid).exists():
@@ -328,6 +347,51 @@ def auto_buzzwords(pid: str) -> None:
         _save(pid, c)
 
 
+def set_animations(pid: str, items: list[dict]) -> dict:
+    """YouTube-Animationen ersetzen (andere Texte bleiben)."""
+    others = [o for o in load(pid).get("overlays", []) if o.get("kind") != "yt"]
+    return set_overlays(pid, others + items)
+
+
+def suggest_animations(pid: str, engine: str) -> dict:
+    from . import animations
+    t = _transcript(pid)
+    flags = cuts.evaluate(t, load(pid))["flags"]
+    items = animations.suggest_claude(t, flags) if engine == "claude" else animations.suggest_ollama(t, flags)
+    view_ = set_animations(pid, items)
+    with _lock:
+        c = load(pid)
+        c["anim_auto"] = engine
+        _save(pid, c)
+    return view_
+
+
+def auto_animations(pid: str) -> None:
+    """Einmal pro YouTube-Projekt automatisch Animationen setzen: mit Claude, wenn der Schlüssel da ist,
+    sonst kostenlos mit Ollama. Klappt beides nicht, bleibt es leer (Knopf im YouTube-Paket)."""
+    from . import claude
+    cl = load(pid)
+    if cl.get("anim_auto") or cl["settings"].get("no_cuts"):
+        return
+    if cl.get("buzz_auto") == "ollama":
+        # Die alten automatischen Buzzwords der lokalen KI waren unbrauchbar (nur am Videoende) → weg damit
+        with _lock:
+            c = load(pid)
+            c["buzzwords"] = []
+            c["buzz_auto"] = "ersetzt"
+            _save(pid, c)
+    for engine in (["claude"] if claude.available() else []) + ["ollama"]:
+        try:
+            suggest_animations(pid, engine)
+            return
+        except UserError:
+            continue
+    with _lock:
+        c = load(pid)
+        c["anim_auto"] = "fehlgeschlagen"
+        _save(pid, c)
+
+
 def set_overlays(pid: str, overlays: list[dict]) -> dict:
     t = _transcript(pid)
     dur = t.get("duration", 0)
@@ -341,8 +405,15 @@ def set_overlays(pid: str, overlays: list[dict]) -> dict:
             s_, e_ = max(0.0, float(o.get("start", 0))), float(o.get("end", 0))
             e_ = min(dur, max(s_ + 1.0, e_)) if dur else max(s_ + 1.0, e_)
             anim = o.get("anim") if o.get("anim") in ("pop", "karte", "wort", "slide") else "karte"
-            clean.append({"id": str(o.get("id") or f"text-{len(clean)}"), "kind": o.get("kind", "hook"),
-                          "start": round(s_, 2), "end": round(e_, 2), "text": text, "on": bool(o.get("on", True)),
-                          "anim": anim})
+            item = {"id": str(o.get("id") or f"text-{len(clean)}"), "kind": o.get("kind", "hook"),
+                    "start": round(s_, 2), "end": round(e_, 2), "text": text, "on": bool(o.get("on", True)),
+                    "anim": anim}
+            if item["kind"] == "yt":  # YouTube-Animation: Stil, Zahl und Listenpunkte behalten
+                from . import animations
+                item["style"] = o.get("style") if o.get("style") in animations.STYLES else "label"
+                item["number"] = str(o.get("number") or "")[:12]
+                item["list"] = [{"text": str(p.get("text", "")).strip()[:48], "t": round(float(p.get("t", s_)), 2)}
+                                for p in o.get("list") or [] if str(p.get("text", "")).strip()]
+            clean.append(item)
         cl["overlays"] = clean
     return _change(pid, fn)

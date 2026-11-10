@@ -199,7 +199,7 @@ def _process(pid: str) -> None:
         cutstore.create(pid, result)  # Schnittvorschläge (Reel: Texte, ohne Schnitte) gleich mit berechnen
         projects.update(pid, status="arbeitet", step="blick", progress=0.97, message="Gaze detection …")
         _gaze(pid)
-        projects.update(pid, message="Picking buzzwords …", progress=0.99)
+        projects.update(pid, message="Planning animations and buzzwords …", progress=0.99)
         _buzz(pid)
     projects.update(pid, status="fertig", step="", progress=1.0, message="Done",
                     transcript={"language": result["language"], "model": result["model"],
@@ -235,8 +235,51 @@ def _gaze_current(pid: str) -> bool:
         return False
 
 
+def _relisten_needed(p: dict) -> bool:
+    if p["mode"] != "youtube" or not projects.path(p["id"], "ton.wav").exists():
+        return False
+    try:
+        t = json.loads(projects.path(p["id"], "transkript.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    from . import relisten
+    return bool(t.get("segments")) and t.get("relisten", 0) < relisten.VERSION
+
+
+def _relisten(pid: str) -> None:
+    """Ältere Projekte: versteckte Retakes und "äh"s nachträglich finden (einmalig)."""
+    from . import cuts, relisten
+    p = projects.load(pid)
+    if not _relisten_needed(p):
+        return
+    tf = projects.path(pid, "transkript.json")
+    t = json.loads(tf.read_text(encoding="utf-8"))
+    status = {k: p.get(k) for k in ("status", "message", "progress")}
+    try:
+        def rep(f: float, msg: str):
+            projects.update(pid, message=f"{msg} ({f:.0%})")
+        transcribe.relisten_existing(projects.path(pid, "ton.wav"), t, rep)
+        new_words = cuts.flat_words(t)
+        old_to_new = [k for k, w in enumerate(new_words) if not w.get("neu")]
+        tf.write_text(json.dumps(t, ensure_ascii=False), encoding="utf-8")
+        cutstore.remap_words(pid, old_to_new)
+        cutstore.refresh(pid)
+        if p.get("transcript"):
+            projects.update(pid, transcript={**p["transcript"], "words": len(new_words)})
+    except Exception:  # noqa: BLE001 – Zusatz, darf nichts kaputt machen
+        traceback.print_exc()
+    finally:
+        projects.update(pid, message=status["message"] or "Done")
+
+
 def _buzz(pid: str) -> None:
     try:
+        p = projects.load(pid)
+        if p["mode"] == "youtube":
+            if p["status"] == "arbeitet":
+                projects.update(pid, message="Planning animations …")
+            cutstore.auto_animations(pid)  # YouTube: Animationen im Stil von Carinas eigenem Schnitt
+            return
         cutstore.auto_buzzwords(pid)
     except Exception:  # noqa: BLE001 – Zusatzfunktion, darf nichts stoppen
         traceback.print_exc()
@@ -255,6 +298,8 @@ def _worker() -> None:
                 _buzz(pid)
             elif kind == "buzz":
                 _buzz(pid)
+            elif kind == "nachhoeren":
+                _relisten(pid)
             else:
                 _process(pid)
         except Exception as exc:  # noqa: BLE001 – alles abfangen und verständlich anzeigen
@@ -287,6 +332,8 @@ def start() -> None:
         elif p["status"] == "fertig" and p["mode"] in ("youtube", "reel") and not _gaze_current(p["id"]):
             _queue.put((p["id"], "blick", {}))  # ältere Projekte bekommen die Blick-Erkennung nachträglich
         elif p["status"] == "fertig" and p["mode"] in ("youtube", "reel"):
+            if _relisten_needed(p):
+                _queue.put((p["id"], "nachhoeren", {}))  # ältere Projekte: versteckte Retakes nachträglich finden
             _queue.put((p["id"], "buzz", {}))  # einmalig automatische Buzzwords (macht nichts, wenn schon erledigt)
         elif (p.get("render") or {}).get("status") in ("warteschlange", "arbeitet"):
             projects.update(p["id"], render={**p["render"], "status": "fehler",

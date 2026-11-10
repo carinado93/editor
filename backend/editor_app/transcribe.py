@@ -215,6 +215,27 @@ def transcribe(wav: Path, cache_dir: Path, model_name: str = "auto", language: s
         done_seconds = b / SR
         report(min(0.999, done_seconds / total), f"Part {i + 1} of {len(bounds)} done")
 
+    result = {"language": lang, "model": name, "device": "GPU" if use_gpu else "CPU",
+              "duration": total, "segments": segments}
+    from . import relisten
+    try:
+        relisten.apply(result, audio, model, report)
+    except Exception:  # noqa: BLE001 – Nachhören ist ein Zusatz, das Transkript gibt es auch ohne
+        import traceback
+        traceback.print_exc()
     report(1.0, "Transcript done")
-    return {"language": lang, "model": name, "device": "GPU" if use_gpu else "CPU",
-            "duration": total, "segments": segments}
+    return result
+
+
+def relisten_existing(wav: Path, transcript: dict, progress: Progress | None = None) -> int:
+    """Nachhören für ein schon fertiges Transkript (ältere Projekte)."""
+    from . import relisten
+    use_gpu = gpu_available()
+    name = transcript.get("model") if transcript.get("model") not in (None, "-") else default_model(use_gpu)
+    try:
+        model = load_model(name, use_gpu)
+    except Exception:
+        if not use_gpu:
+            raise
+        model = load_model(default_model(False), False)
+    return relisten.apply(transcript, read_wav(wav), model, progress)

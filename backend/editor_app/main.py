@@ -243,6 +243,13 @@ def buzzword(pid: str, body: BuzzBody):
     return cutstore.set_buzzword(pid, body.start, body.end, body.on)
 
 
+@app.post("/api/projects/{pid}/animations/{engine}")
+def animations_suggest(pid: str, engine: str):
+    if engine not in ("claude", "ollama"):
+        raise UserError("Unknown AI.")
+    return cutstore.suggest_animations(pid, engine)
+
+
 @app.post("/api/projects/{pid}/cuts/buzzwords-suggest")
 def buzzwords_suggest(pid: str):
     return cutstore.suggest_buzzwords(pid)

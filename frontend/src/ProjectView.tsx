@@ -1,6 +1,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { YoutubePackage } from "./YoutubePackage";
 import { ReelPackage } from "./ReelPackage";
+import { YoutubeAnimations } from "./YoutubeAnimations";
 import { api, formatSize, formatTime, type CutType, type CutView, type Detection, type Project, type Transcript, type Word } from "./api";
 
 interface FlatWord extends Word {
@@ -695,6 +696,7 @@ export function ProjectView({ id }: { id: string }) {
           )}
         </div>
       </div>
+      {cutMode && cuts && <YoutubeAnimations id={id} cuts={cuts} onCuts={setCuts} onSeek={(t) => seek(t, false)} />}
       {cutMode && <YoutubePackage id={id} />}
       {reelMode && cuts && <ReelPackage id={id} cuts={cuts} onCuts={setCuts} time={time} duration={duration} />}
     </div>
@@ -724,7 +726,17 @@ function TextOverlay({
     return time >= s && time <= e;
   });
   const fb = faceBox ?? [0.3, 0.1, 0.7, 0.5];
-  const hook = (cuts.cutlist.overlays ?? []).find((h) => h.on && time >= h.start && time <= h.end);
+  const hook = (cuts.cutlist.overlays ?? []).find((h) => h.on && h.kind !== "yt" && time >= h.start && time <= h.end);
+  const yt = (cuts.cutlist.overlays ?? []).find((h) => h.on && h.kind === "yt" && time >= h.start && time <= h.end);
+  const right = (fb[0] + fb[2]) / 2 < 0.55;
+  const sideStyle: React.CSSProperties = right
+    ? { left: `${Math.min(80, (fb[2] + 0.05) * 100)}%`, top: `${Math.max(18, ((fb[1] + fb[3]) / 2) * 100)}%` }
+    : { right: `${100 - Math.max(20, (fb[0] - 0.05) * 100)}%`, top: `${Math.max(18, ((fb[1] + fb[3]) / 2) * 100)}%`, alignItems: "flex-end" };
+  const chestStyle: React.CSSProperties = { left: `${((fb[0] + fb[2]) / 2) * 100}%`, top: `${Math.min(80, Math.max(56, (fb[3] + 0.26) * 100))}%` };
+  const accent = (t: string) =>
+    t.split(/(\*[^*]+\*)/).map((part, k) =>
+      part.startsWith("*") && part.endsWith("*") ? <em key={k}>{part.slice(1, -1)}</em> : <span key={k}>{part}</span>,
+    );
   const hookTop = !faceBox || fb[1] * 1920 > 280 + 300 ? 300 / 19.2 : Math.min(1250 - 300, fb[3] * 1920 + 40) / 19.2;
   const buzzStyle: React.CSSProperties = portrait
     ? { left: "50%", top: `${Math.min(62, Math.max((fb[3] + 0.04) * 100, 50))}%` }
@@ -739,7 +751,36 @@ function TextOverlay({
           )}
         </span>
       )}
-      {buzz && !hook && (
+      {yt && (yt.style === "label" || yt.style === "quote") && (
+        <span key={yt.id} className={`ov-yt ov-yt-${yt.style}`} style={chestStyle}>
+          {yt.style === "label" ? yt.text.toUpperCase() : accent(yt.text)}
+        </span>
+      )}
+      {yt && yt.style !== "label" && yt.style !== "quote" && (
+        <div key={yt.id} className="ov-yt-side" style={sideStyle}>
+          {yt.style === "number" && (
+            <>
+              <span className="ov-yt ov-yt-label">{yt.text.toUpperCase()}</span>
+              <span className="ov-yt ov-yt-number">{yt.number}</span>
+            </>
+          )}
+          {yt.style === "name" && (
+            <>
+              <span className="ov-yt ov-yt-name">{yt.text.split("|")[0]}</span>
+              {yt.text.includes("|") && <span className="ov-yt ov-yt-title">{yt.text.split("|")[1]}</span>}
+            </>
+          )}
+          {(yt.style === "sticker" || yt.style === "check") &&
+            (yt.list ?? [])
+              .filter((p) => time >= p.t)
+              .map((p, k) => (
+                <span key={k} className={`ov-yt ov-yt-sticker ${yt.style === "check" ? "check" : ""}`} style={{ rotate: k % 2 ? "1.5deg" : "-2deg" }}>
+                  {yt.style === "sticker" ? p.text.toUpperCase() : p.text}
+                </span>
+              ))}
+        </div>
+      )}
+      {buzz && !hook && !yt && (
         <span key={buzz.start} className="ov-buzz" style={buzzStyle}>
           {buzzText}
         </span>

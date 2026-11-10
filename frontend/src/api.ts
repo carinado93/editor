@@ -70,6 +70,10 @@ export interface Overlay {
   text: string;
   on: boolean;
   anim?: "pop" | "karte" | "wort" | "slide";
+  /** nur YouTube-Animationen (kind "yt") */
+  style?: "label" | "sticker" | "check" | "quote" | "number" | "name";
+  number?: string;
+  list?: { text: string; t: number }[];
 }
 
 export interface ReelTexts {
@@ -229,6 +233,8 @@ export const api = {
   renderOptions: (id: string, o: Partial<RenderOptions>) =>
     call<CutView>(`/api/projects/${id}/cuts/render-options`, { ...json(o), method: "PUT" }),
   buzzword: (id: string, start: number, end: number, on: boolean) => call<CutView>(`/api/projects/${id}/cuts/buzzword`, json({ start, end, on })),
+  suggestAnimations: (id: string, engine: "claude" | "ollama") =>
+    call<CutView>(`/api/projects/${id}/animations/${engine}`, { method: "POST" }),
   suggestBuzz: (id: string) => call<CutView>(`/api/projects/${id}/cuts/buzzwords-suggest`, { method: "POST" }),
   blick: (id: string) => call<{ events: { start: number; end: number }[]; face_box: number[] | null; ready: boolean }>(`/api/projects/${id}/blick`),
   youtubeTexts: (id: string) => call<{ prompt: string; meta: YoutubeMeta | null; full_description: string }>(`/api/projects/${id}/youtube-texte`),
