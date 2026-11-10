@@ -19,9 +19,9 @@ PROXY_HEIGHT = 540
 CHUNK_SECONDS = 600
 
 MODES = {
-    "youtube": "YouTube (langes Video, Rohschnitt)",
-    "reel": "Reel/Short veredeln",
-    "idee": "Reel aus Idee",
+    "youtube": "YouTube (long video, rough cut)",
+    "reel": "Enhance reel/short",
+    "idee": "Reel from an idea",
 }
 
 for d in (PROJECTS_DIR, MODELS_DIR):

@@ -19,7 +19,7 @@ MAX_UNDO = 50
 def _transcript(pid: str) -> dict:
     f = projects.path(pid, "transkript.json")
     if not f.exists():
-        raise UserError("Das Transkript ist noch nicht fertig.")
+        raise UserError("The transcript is not ready yet.")
     return json.loads(f.read_text(encoding="utf-8"))
 
 
@@ -165,7 +165,7 @@ def toggle_detection(pid: str, det_id: str, active: bool) -> dict:
                 cl["manual"]["keep"] = [k for k in cl["manual"]["keep"] if k not in rng]
                 cl["manual"]["cut"] = [k for k in cl["manual"]["cut"] if k not in rng]
         if not found:
-            raise UserError("Diesen Schnitt gibt es nicht mehr. Bitte Seite neu laden.")
+            raise UserError("This cut does not exist any more. Please reload the page.")
         cl.setdefault("overrides", {})[det_id] = active
     return _change(pid, fn)
 
@@ -199,7 +199,7 @@ def update_settings(pid: str, settings: dict) -> dict:
     def fn(cl):
         new = {**cl["settings"], **settings}
         if new.get("tempo") not in cuts.TEMPO:
-            raise UserError("Tempo muss locker, normal oder straff sein.")
+            raise UserError("Pace must be relaxed, normal or tight.")
         new["max_gap"] = max(1.0, min(15.0, float(new.get("max_gap", 5.0))))
         new["signal_words"] = [w.strip() for w in new.get("signal_words", []) if w.strip()]
         rebuilt = cuts.build(t, new, cl["manual"], cl.get("pause_keep"), _gaze_events(pid, new))
@@ -224,7 +224,7 @@ def undo(pid: str) -> dict:
         cl = load(pid)
         hist = cl.get("history", [])
         if not hist:
-            raise UserError("Es gibt nichts zum Rückgängigmachen.")
+            raise UserError("There is nothing to undo.")
         prev = hist.pop()
         prev["history"] = hist
         _save(pid, prev)
@@ -262,7 +262,7 @@ def set_render_options(pid: str, options: dict) -> dict:
                 cur[k] = bool(v)
             elif k == "subtitles":
                 if v not in ("aus", "srt", "einbrennen"):
-                    raise UserError("Untertitel: aus, srt oder einbrennen.")
+                    raise UserError("Subtitles: off, srt or burn in.")
                 cur[k] = v
         cl["render_options"] = cur
     return _change(pid, fn)
@@ -290,7 +290,7 @@ def suggest_buzzwords(pid: str) -> dict:
     found = [b for b in llm.suggest_buzzwords(numbered, t.get("language", "de"), count)
              if b["end"] <= len(words) and not any(flags[k] for k in range(b["start"], b["end"]))]
     if not found:
-        raise UserError("Die lokale KI hat keine passenden Buzzwords gefunden.")
+        raise UserError("The local AI did not find suitable buzzwords.")
 
     def fn(c):
         c["buzzwords"] = sorted(found, key=lambda b: b["start"])

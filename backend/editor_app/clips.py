@@ -155,7 +155,7 @@ def validate(raw: dict, words: list[dict], flags: list, sent: list[dict], durati
             continue
         warnings: list[str] = []
         if not (MIN_SEC - 1 <= dur <= MAX_SEC + 1):
-            warnings.append(f"Länge {dur:.1f} s (Ziel 15–20 s).".replace(".", ",", 1))
+            warnings.append(f"Length {dur:.1f} s (target 15–20 s).")
         hashtags = meta.fix_hashtags(list(c.get("hashtags", [])), language, [])  # Auffüllen ist normal, keine Warnung
         out.append({
             "id": f"clip-{int(time.time() * 1000) % 10_000_000}-{n}",
@@ -174,8 +174,8 @@ def validate(raw: dict, words: list[dict], flags: list, sent: list[dict], durati
             "status": "vorschlag",
         })
     if not out:
-        raise UserError("Es wurden keine passenden Reels gefunden (Länge 15–20 s). Bitte mit einem Wunsch "
-                        "nochmal versuchen, z. B. „nimm auch kürzere Aussagen“.")
+        raise UserError("No suitable reels were found (length 15–20 s). Please try again with a wish, "
+                        "e.g. \"also take shorter statements\".")
     return out
 
 
@@ -185,7 +185,7 @@ def suggest(engine: str, transcript: dict, cutlist: dict, flags: list, feedback:
     sent = sentences(words, flags)
     exact_durations(words, flags, sent, transcript.get("duration", 0), cutlist["settings"].get("tempo", "normal"))
     if sum(s["dur"] for s in sent) < MIN_SEC:
-        raise UserError("Das Video ist zu kurz für Reels von 15–20 Sekunden.")
+        raise UserError("The video is too short for reels of 15–20 seconds.")
     lang = transcript.get("language", "en")
     prompt = build_prompt(sent, lang, feedback, previous)
     if engine == "claude":
@@ -239,14 +239,14 @@ def update_clip(pid: str, cid: str, **fields) -> dict:
                 c.update(fields)
                 save(pid, data)
                 return c
-    raise UserError("Diesen Reel-Vorschlag gibt es nicht mehr.")
+    raise UserError("This reel suggestion does not exist any more.")
 
 
 def get_clip(pid: str, cid: str) -> dict:
     for c in load(pid)["clips"]:
         if c["id"] == cid:
             return c
-    raise UserError("Diesen Reel-Vorschlag gibt es nicht mehr.")
+    raise UserError("This reel suggestion does not exist any more.")
 
 
 def overlay_plan(hook_text: str, texts: list[str], total: float) -> list[dict]:

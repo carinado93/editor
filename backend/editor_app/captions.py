@@ -107,8 +107,8 @@ def distribute_scenes(scenes: list[str], duration: float) -> tuple[list[dict], l
     slot = duration / len(scenes)
     if slot < READ_SECONDS:
         keep = max(1, int(duration // READ_SECONDS))
-        warnings.append(f"Der Clip ist zu kurz für {len(scenes)} Texte à {READ_SECONDS:.1f} s – "
-                        f"es werden nur die ersten {keep} gezeigt.".replace(".", ",", 1))
+        warnings.append(f"The clip is too short for {len(scenes)} texts of {READ_SECONDS:.1f} s each – "
+                        f"only the first {keep} are shown.")
         scenes = scenes[:keep]
         slot = duration / len(scenes)
     out = []
@@ -126,11 +126,11 @@ def parse(text_or_obj, language: str) -> dict:
     if isinstance(text_or_obj, str):
         m = re.search(r"\{.*\}", text_or_obj, re.S)
         if not m:
-            raise UserError("In der eingefügten Antwort wurde kein JSON gefunden. Bitte die komplette Antwort kopieren.")
+            raise UserError("No JSON was found in the pasted answer. Please copy the complete answer.")
         try:
             data = json.loads(m.group(0))
         except json.JSONDecodeError as exc:
-            raise UserError("Die eingefügte Antwort ist kein gültiges JSON. Bitte nochmal komplett kopieren.") from exc
+            raise UserError("The pasted answer is not valid JSON. Please copy it again completely.") from exc
     else:
         data = text_or_obj
     warnings: list[str] = []
@@ -142,22 +142,22 @@ def parse(text_or_obj, language: str) -> dict:
     cover = str(data.get("cover_text", "")).strip()
     title = str(data.get("shorts_title", "")).strip()
     if len(title) > 100:
-        warnings.append("Shorts-Titel ist länger als 100 Zeichen.")
+        warnings.append("The Shorts title is longer than 100 characters.")
     if not caption:
-        warnings.append("Die Caption fehlt.")
+        warnings.append("The caption is missing.")
     low = " ".join([caption, cover, title]).lower()
     for pat in meta.FORBIDDEN:
         m = re.search(pat, low)
         if m:
-            warnings.append(f"Achtung, möglicherweise Heilversprechen/heikle Aussage: „{m.group(0)}“ – bitte umformulieren.")
+            warnings.append(f"Careful, possibly a healing promise / risky claim: \"{m.group(0)}\" – please rephrase.")
     if "diagnos" not in low and "therap" not in low:
-        warnings.append("Hinweis „keine Diagnose oder Therapie“ fehlt in der Caption.")
+        warnings.append("The note \"not a diagnosis or therapy\" is missing in the caption.")
     scenes = [str(x).strip() for x in data.get("scenes", []) if str(x).strip()]
     for sc in scenes:
         for pat in meta.FORBIDDEN:
             m = re.search(pat, sc.lower())
             if m:
-                warnings.append(f"Achtung im Szenen-Text: „{m.group(0)}“ – bitte umformulieren.")
+                warnings.append(f"Careful in the scene text: \"{m.group(0)}\" – please rephrase.")
     return {"caption": caption, "hashtags": hashtags, "cover_text": cover, "shorts_title": title, "scenes": scenes,
             "warnings": warnings}
 
@@ -171,6 +171,6 @@ def from_ollama(prompt: str, language: str) -> dict:
 
     data = llm.ask_json(prompt, "Du antwortest ausschließlich mit gültigem JSON.", timeout=600)
     if not isinstance(data, dict):
-        raise UserError("Die lokale KI hat kein passendes Ergebnis geliefert. Bitte nochmal versuchen "
-                        "oder den Weg über claude.ai nehmen.")
+        raise UserError("The local AI did not give a suitable result. Please try again "
+                        "or use \"Create with Claude\".")
     return parse(data, language)

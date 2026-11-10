@@ -171,10 +171,10 @@ async function call<T>(url: string, init?: RequestInit): Promise<T> {
   try {
     res = await fetch(url, init);
   } catch {
-    throw new Error("Keine Verbindung zum Motor. Läuft das schwarze Fenster von start.bat noch?");
+    throw new Error("No connection to the engine. Is the black start.bat window still open?");
   }
   if (!res.ok) {
-    let msg = `Fehler ${res.status}`;
+    let msg = `Error ${res.status}`;
     try {
       const body = await res.json();
       msg = body.fehler || body.detail || msg;

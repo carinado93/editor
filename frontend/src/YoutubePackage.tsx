@@ -6,8 +6,8 @@ import { ClipsPanel } from "./ClipsPanel";
 
 function copy(text: string, done: (msg: string) => void) {
   navigator.clipboard.writeText(text).then(
-    () => done("Kopiert ✓"),
-    () => done("Kopieren ging nicht – bitte Text markieren und Strg+C drücken."),
+    () => done("Copied ✓"),
+    () => done("Copying did not work – please select the text and press Ctrl+C."),
   );
 }
 
@@ -48,20 +48,20 @@ export function YoutubePackage({ id }: { id: string }) {
       const r = await api.saveYoutubeTexts(id, m);
       setMeta(r.meta);
       setFullDesc(r.full_description);
-      setMsg("Gespeichert ✓");
+      setMsg("Saved ✓");
     });
 
   return (
     <section className="package">
-      <h2>YouTube-Paket</h2>
+      <h2>YouTube package</h2>
 
 
       <ClipsPanel id={id} />
       <div className="package-grid">
         <div className="card">
-          <h3>Titel, Beschreibung, Kapitel, Tags</h3>
+          <h3>Title, description, chapters, tags</h3>
           <p className="small muted">
-            Die Kapitel-Zeiten passen zum <strong>geschnittenen</strong> Video. Bitte erst die Schnitte fertig machen.
+            The chapter times match the <strong>edited</strong> video. Please finish the cuts first.
           </p>
           <div className="row-buttons">
             <button className="btn ghost" disabled={!!busy} onClick={() => act("ollama", async () => {
@@ -69,43 +69,43 @@ export function YoutubePackage({ id }: { id: string }) {
               setMeta(r.meta);
               setFullDesc(r.full_description);
             })}>
-              {busy === "ollama" ? "Lokale KI schreibt … (1–3 Min)" : "Kostenlos mit Ollama"}
+              {busy === "ollama" ? "Local AI is writing … (1–3 min)" : "Free with Ollama"}
             </button>
             <button className="btn" disabled={!!busy} onClick={() => act("claude", async () => {
               const r = await api.youtubeTextsClaude(id);
               setMeta(r.meta);
               setFullDesc(r.full_description);
-              setMsg("Fertig ✓ – Claudes Vorschläge stehen unten.");
+              setMsg("Done ✓ – Claude's suggestions are below.");
             })}>
-              {busy === "claude" ? "Claude schreibt … (ca. 20–60 s)" : "Mit Claude erstellen"}
+              {busy === "claude" ? "Claude is writing … (about 20–60 s)" : "Create with Claude"}
             </button>
           </div>
           <Status busy={busy} err={err} msg={msg} />
-          {err?.includes("Einstellungen") && <a className="small" href="#/einstellungen">→ zu den Einstellungen</a>}
+          {err?.includes("Settings") && <a className="small" href="#/einstellungen">→ go to Settings</a>}
           {meta && (
             <MetaEditor meta={meta} fullDesc={fullDesc} busy={!!busy} onSave={save} onCopy={(t) => copy(t, setMsg)} />
           )}
         </div>
 
         <div className="card">
-          <h3>Thumbnail-Vorschläge</h3>
-          <p className="small muted">Bilder, in denen deine Augen offen sind, du in die Kamera schaust und lächelst. Klick = in voller Größe öffnen.</p>
+          <h3>Thumbnail suggestions</h3>
+          <p className="small muted">Frames where your eyes are open, you look into the camera and smile. Click = open full size.</p>
           <button className="btn" disabled={!!busy} onClick={() => act("thumbs", async () => setThumbs((await api.thumbnails(id)).thumbnails))}>
-            {busy === "thumbs" ? "Suche die besten Bilder …" : thumbs.length ? "Neu suchen" : "Bilder vorschlagen"}
+            {busy === "thumbs" ? "Finding the best frames …" : thumbs.length ? "Search again" : "Suggest frames"}
           </button>
           <div className="thumb-grid">
             {thumbs.map((t) => (
               <a key={t.file} href={api.thumbnailUrl(id, t.file)} target="_blank" rel="noreferrer" download>
-                <img src={api.thumbnailUrl(id, t.file)} alt={`Bild bei ${t.t} s`} loading="lazy" />
+                <img src={api.thumbnailUrl(id, t.file)} alt={`Frame at ${t.t} s`} loading="lazy" />
               </a>
             ))}
           </div>
-          <h3 style={{ marginTop: 24 }}>Thumbnail gestalten</h3>
-          <p className="small muted">Im Stil deiner bisherigen Thumbnails, aus den besten Standbildern oben.</p>
+          <h3 style={{ marginTop: 24 }}>Design a thumbnail</h3>
+          <p className="small muted">In the style of your previous thumbnails, from the best frames above.</p>
           <CoverStudio id={id} kinds={["youtube", "meditation", "reel"]} />
 
           <p className="small muted" style={{ marginTop: 16 }}>
-            Für CapCut: das gerenderte MP4 und die Untertitel-Datei (.srt) aus dem Export-Ordner nehmen.
+            For CapCut: use the rendered MP4 and the subtitle file (.srt) from the export folder.
           </p>
         </div>
       </div>
@@ -139,7 +139,7 @@ function MetaEditor({
           ))}
         </div>
       )}
-      <h4>Titel (einen auswählen)</h4>
+      <h4>Titles (pick one)</h4>
       {m.titles.map((t, i) => (
         <div key={i} className="copy-row">
           <input
@@ -147,12 +147,12 @@ function MetaEditor({
             onChange={(e) => setM({ ...m, titles: m.titles.map((x, j) => (j === i ? e.target.value : x)) })}
           />
           <span className={`small ${t.length > 70 ? "error-text" : "muted"}`}>{t.length}</span>
-          <button className="link" onClick={() => onCopy(t)}>kopieren</button>
+          <button className="link" onClick={() => onCopy(t)}>copy</button>
         </div>
       ))}
-      <h4>Beschreibung</h4>
+      <h4>Description</h4>
       <textarea rows={6} value={m.description} onChange={(e) => setM({ ...m, description: e.target.value })} />
-      <h4>Kapitel</h4>
+      <h4>Chapters</h4>
       <textarea
         rows={Math.min(10, m.chapters.length + 1)}
         value={chaptersText}
@@ -173,13 +173,13 @@ function MetaEditor({
       <input value={m.hashtags.join(" ")} onChange={(e) => setM({ ...m, hashtags: e.target.value.split(/\s+/).filter(Boolean) })} />
       <div className="row-buttons">
         <button className="btn" disabled={busy} onClick={() => onSave(m)}>
-          Änderungen speichern
+          Save changes
         </button>
         <button className="btn ghost" onClick={() => onCopy(fullDesc)}>
-          Beschreibung + Kapitel kopieren
+          Copy description + chapters
         </button>
         <button className="btn ghost" onClick={() => onCopy(m.tags.join(", "))}>
-          Tags kopieren
+          Copy tags
         </button>
       </div>
     </div>

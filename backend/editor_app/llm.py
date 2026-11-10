@@ -25,12 +25,12 @@ def ask_json(prompt: str, system: str = "", timeout: float = 300, images: list[s
             data = json.loads(r.read().decode())
     except urllib.error.HTTPError as exc:
         if exc.code == 404:
-            raise UserError(f"Ollama kennt das Modell '{OLLAMA_MODEL}' nicht. Bitte in einem Terminal "
-                            f"'ollama pull {OLLAMA_MODEL}' ausführen.") from exc
-        raise UserError(f"Ollama hat einen Fehler gemeldet ({exc.code}).") from exc
+            raise UserError(f"Ollama does not know the model '{OLLAMA_MODEL}'. Please run "
+                            f"'ollama pull {OLLAMA_MODEL}' in a terminal.") from exc
+        raise UserError(f"Ollama reported an error ({exc.code}).") from exc
     except (urllib.error.URLError, TimeoutError, ConnectionError) as exc:
-        raise UserError("Ollama läuft nicht. Bitte starte die Ollama-App (Symbol unten rechts in der Taskleiste) "
-                        "und versuche es nochmal.") from exc
+        raise UserError("Ollama is not running. Please start the Ollama app (icon at the bottom right of the taskbar) "
+                        "and try again.") from exc
     text = data.get("response", "")
     try:
         return json.loads(text)
@@ -38,7 +38,7 @@ def ask_json(prompt: str, system: str = "", timeout: float = 300, images: list[s
         m = re.search(r"[\[{].*[\]}]", text, re.S)
         if m:
             return json.loads(m.group(0))
-        raise UserError("Die lokale KI hat keine brauchbare Antwort geliefert. Bitte nochmal versuchen.")
+        raise UserError("The local AI did not give a usable answer. Please try again.")
 
 
 BUZZ_SYSTEM = (

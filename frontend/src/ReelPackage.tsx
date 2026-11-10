@@ -4,8 +4,8 @@ import { CoverStudio } from "./CoverStudio";
 
 function copy(text: string, done: (msg: string) => void) {
   navigator.clipboard.writeText(text).then(
-    () => done("Kopiert ✓"),
-    () => done("Kopieren ging nicht – bitte Text markieren und Strg+C drücken."),
+    () => done("Copied ✓"),
+    () => done("Copying did not work – please select the text and press Ctrl+C."),
   );
 }
 
@@ -63,7 +63,7 @@ export function ReelPackage({
   const saveOverlays = (list: Overlay[]) =>
     act("overlays", async () => {
       onCuts(await api.setOverlays(id, list));
-      setMsg("Texte gespeichert ✓ – die Vorschau zeigt sie sofort.");
+      setMsg("Texts saved ✓ – the preview shows them right away.");
     });
 
   const upd = (i: number, patch: Partial<Overlay>) => setOverlays(overlays.map((o, j) => (j === i ? { ...o, ...patch } : o)));
@@ -75,36 +75,36 @@ export function ReelPackage({
 
   return (
     <section className="package">
-      <h2>Reel-Paket</h2>
+      <h2>Reel package</h2>
 
       <div className="package-grid">
         <div className="card">
-          <h3>Texte im Video</h3>
+          <h3>Texts in the video</h3>
           <p className="small muted">
-            Creme-Karte in Cormorant, *Wort in Sternchen* wird lila-kursiv. Steht in der Safe Zone und nie über deinem Gesicht.
-            Mindestens ca. 4,4 Sekunden sichtbar, damit man es lesen kann.
+            Cream card in Cormorant, a *word in asterisks* becomes purple italic. Sits in the safe zone and never over your face.
+            Visible for at least about 4.4 seconds so people can read it.
           </p>
           {overlays.map((o, i) => (
             <div key={o.id} className="overlay-row">
               <label className="small">
-                <input type="checkbox" checked={o.on} onChange={(e) => upd(i, { on: e.target.checked })} /> zeigen
+                <input type="checkbox" checked={o.on} onChange={(e) => upd(i, { on: e.target.checked })} /> show
               </label>
               <textarea rows={2} value={o.text} onChange={(e) => upd(i, { text: e.target.value })} />
               <div className="small overlay-times">
-                von
+                from
                 <input type="number" step={0.1} min={0} value={o.start} onChange={(e) => upd(i, { start: Number(e.target.value) })} />
-                bis
+                to
                 <input type="number" step={0.1} min={0} value={o.end} onChange={(e) => upd(i, { end: Number(e.target.value) })} />
-                Sek.
+                sec.
                 <select value={o.anim ?? "karte"} onChange={(e) => upd(i, { anim: e.target.value as Overlay["anim"] })}>
                   <option value="pop">Pop</option>
-                  <option value="karte">Karte (weich)</option>
-                  <option value="wort">Wort für Wort</option>
-                  <option value="slide">Gleiten</option>
+                  <option value="karte">Card (soft)</option>
+                  <option value="wort">Word by word</option>
+                  <option value="slide">Slide</option>
                 </select>
-                <span className={o.end - o.start < 4.4 ? "error-text" : "muted"}>({(o.end - o.start).toFixed(1).replace(".", ",")} s)</span>
+                <span className={o.end - o.start < 4.4 ? "error-text" : "muted"}>({(o.end - o.start).toFixed(1)} s)</span>
                 <button className="link danger" onClick={() => setOverlays(overlays.filter((_, j) => j !== i))}>
-                  entfernen
+                  remove
                 </button>
               </div>
             </div>
@@ -119,32 +119,32 @@ export function ReelPackage({
                 ])
               }
             >
-              + Text bei {formatTime(time)}
+              + Text at {formatTime(time)}
             </button>
             <button className="btn" disabled={!!busy} onClick={() => saveOverlays(overlays)}>
-              Texte speichern
+              Save texts
             </button>
           </div>
-          {busy === "overlays" || (msg ?? "").startsWith("Texte") ? <Status busy={busy} err={err} msg={msg} /> : null}
+          {busy === "overlays" || (msg ?? "").startsWith("Texts") ? <Status busy={busy} err={err} msg={msg} /> : null}
         </div>
 
         <div className="card">
-          <h3>Deine Idee & Texte</h3>
-          {silent && <div className="banner small">In diesem Clip sprichst du nicht. Claude schaut sich Standbilder aus dem Clip an. Mit einer Idee wird es noch genauer.</div>}
+          <h3>Your idea & texts</h3>
+          {silent && <div className="banner small">You don't speak in this clip. Claude looks at still frames from the clip. With an idea it gets even more precise.</div>}
           <label className="small idea-box">
-            Idee / Anweisung (optional – sonst leitet Claude das Thema aus dem Clip ab)
+            Idea / instructions (optional – otherwise Claude works out the topic from the clip)
             <textarea
               rows={3}
               value={idea}
               onChange={(e) => setIdea(e.target.value)}
-              placeholder="z. B. Sonntags-Scaries: polarisierender Hook, 3 kurze Aussagen, am Ende mein Notizbuch erwähnen"
+              placeholder="e.g. Sunday scaries: polarising hook, 3 short statements, mention my notebook at the end"
             />
           </label>
           <label className="small">
-            Sprache{" "}
+            Language{" "}
             <select value={lang} onChange={(e) => setLang(e.target.value)}>
-              <option value="en">Englisch (@carina.dorca)</option>
-              <option value="de">Deutsch (@carinadorca.coach)</option>
+              <option value="en">English (@carina.dorca)</option>
+              <option value="de">German (@carinadorca.coach)</option>
             </select>
           </label>
           <div className="row-buttons">
@@ -153,27 +153,27 @@ export function ReelPackage({
                 const r = await api.reelTextsOllama(id, idea, lang);
                 applyTexts(r);
                 if (r.cuts?.cutlist) onCuts(r.cuts);
-                setMsg(r.cuts?.warnings?.length ? r.cuts.warnings.join(" ") : "Fertig ✓ – Hook und Texte sind im Video (Vorschau links).");
+                setMsg(r.cuts?.warnings?.length ? r.cuts.warnings.join(" ") : "Done ✓ – hook and texts are in the video (preview on the left).");
               });
             }}>
-              {busy === "ollama" ? "Lokale KI schreibt … (1–2 Min)" : "Kostenlos mit Ollama"}
+              {busy === "ollama" ? "Local AI is writing … (1–2 min)" : "Free with Ollama"}
             </button>
             <button className="btn" disabled={!!busy} onClick={() => {
               act("claude", async () => {
                 const r = await api.reelTextsClaude(id, idea, lang);
                 applyTexts(r);
                 if (r.cuts?.cutlist) onCuts(r.cuts);
-                setMsg(r.cuts?.warnings?.length ? r.cuts.warnings.join(" ") : "Fertig ✓ – Hook und Texte sind im Video (Vorschau links).");
+                setMsg(r.cuts?.warnings?.length ? r.cuts.warnings.join(" ") : "Done ✓ – hook and texts are in the video (preview on the left).");
               });
             }}>
-              {busy === "claude" ? "Claude schreibt … (ca. 20–60 s)" : "Mit Claude erstellen"}
+              {busy === "claude" ? "Claude is writing … (about 20–60 s)" : "Create with Claude"}
             </button>
           </div>
           <Status busy={busy} err={err} msg={msg} />
-          {err?.includes("Einstellungen") && <a className="small" href="#/einstellungen">→ zu den Einstellungen</a>}
+          {err?.includes("Settings") && <a className="small" href="#/einstellungen">→ go to Settings</a>}
           {!!texts?.scenes?.length && (
             <div className="scenes">
-              <h4>Texte im Video (Hook zuerst)</h4>
+              <h4>Texts in the video (hook first)</h4>
               <ol className="small">
                 {texts.scenes.map((sc, i) => (
                   <li key={i}>{sc}</li>
@@ -182,17 +182,17 @@ export function ReelPackage({
               <button className="btn" disabled={!!busy} onClick={() => act("scenes", async () => {
                 const r = await api.applyScenes(id);
                 onCuts(r);
-                setMsg(r.warnings?.length ? r.warnings.join(" ") : "Texte ins Video übernommen ✓ – links kannst du sie noch ändern.");
+                setMsg(r.warnings?.length ? r.warnings.join(" ") : "Texts added to the video ✓ – you can still change them on the left.");
               })}>
-                Texte nochmal neu verteilen
+                Spread the texts again
               </button>
             </div>
           )}
           {texts && <ReelTextEditor texts={texts} full={full} busy={!!busy} onCopy={(t) => copy(t, setMsg)}
-            onSave={(t) => act("save", async () => { applyTexts(await api.saveReelTexts(id, t)); setMsg("Gespeichert ✓"); })} />}
+            onSave={(t) => act("save", async () => { applyTexts(await api.saveReelTexts(id, t)); setMsg("Saved ✓"); })} />}
 
-          <h3 style={{ marginTop: 24 }}>Reel-Cover</h3>
-          <p className="small muted">Farbschleier im Wechsel lila → hell → oliv, Text aus „Cover-Text“.</p>
+          <h3 style={{ marginTop: 24 }}>Reel cover</h3>
+          <p className="small muted">Colour wash rotating purple → light → olive, text from "Cover text".</p>
           <CoverStudio key={`${texts?.cover_text ?? ""}|${overlays[0]?.text ?? ""}`} id={id} kinds={["reel"]} />
         </div>
       </div>
@@ -218,16 +218,16 @@ function ReelTextEditor({ texts, full, busy, onSave, onCopy }: {
       <textarea rows={10} value={t.caption} onChange={(e) => setT({ ...t, caption: e.target.value })} />
       <h4>5 Hashtags</h4>
       <input value={t.hashtags.join(" ")} onChange={(e) => setT({ ...t, hashtags: e.target.value.split(/\s+/).filter(Boolean) })} />
-      <h4>Cover-Text</h4>
+      <h4>Cover text</h4>
       <input value={t.cover_text} onChange={(e) => setT({ ...t, cover_text: e.target.value })} />
-      <h4>YouTube-Shorts-Titel</h4>
+      <h4>YouTube Shorts title</h4>
       <div className="copy-row">
         <input value={t.shorts_title} onChange={(e) => setT({ ...t, shorts_title: e.target.value })} />
-        <button className="link" onClick={() => onCopy(t.shorts_title)}>kopieren</button>
+        <button className="link" onClick={() => onCopy(t.shorts_title)}>copy</button>
       </div>
       <div className="row-buttons">
-        <button className="btn" disabled={busy} onClick={() => onSave(t)}>Änderungen speichern</button>
-        <button className="btn ghost" onClick={() => onCopy(full)}>Caption + Hashtags kopieren</button>
+        <button className="btn" disabled={busy} onClick={() => onSave(t)}>Save changes</button>
+        <button className="btn ghost" onClick={() => onCopy(full)}>Copy caption + hashtags</button>
       </div>
     </div>
   );
@@ -237,7 +237,7 @@ export function Status({ busy, err, msg }: { busy: string | null; err: string | 
   if (!busy && !err && !msg) return null;
   return (
     <div className={`banner small ${err ? "error" : ""}`} role="status">
-      {busy ? "⏳ Läuft … bitte warten." : err ? `⚠ ${err}` : msg}
+      {busy ? "⏳ Working … please wait." : err ? `⚠ ${err}` : msg}
     </div>
   );
 }

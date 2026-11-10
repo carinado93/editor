@@ -3,17 +3,17 @@ import { api, formatSize, formatTime, type Mode, type Project, type SystemInfo }
 import { dismiss, queueFiles, subscribe, type UploadState } from "./uploads";
 
 const MODE_CARDS: { mode: Mode; title: string; text: string; ready: boolean }[] = [
-  { mode: "youtube", title: "YouTube", text: "Langes Rohvideo. Pausen, Versprecher, Retakes und Füllwörter werden markiert.", ready: true },
-  { mode: "reel", title: "Reel veredeln", text: "Fertiger Clip bleibt, wie er ist. Texte, Highlights und Animationen kommen dazu.", ready: true },
-  { mode: "idee", title: "Reel aus Idee", text: "Aus einem Prompt oder Fotos ein Reel bauen.", ready: false },
+  { mode: "youtube", title: "YouTube", text: "Long raw video. Pauses, slips, retakes and filler words get marked.", ready: true },
+  { mode: "reel", title: "Enhance a reel", text: "Your clip stays exactly as it is. Texts, highlights and animations get added.", ready: true },
+  { mode: "idee", title: "Reel from an idea", text: "Build a reel from a prompt or photos.", ready: false },
 ];
 
 const STATUS: Record<Project["status"], string> = {
-  hochladen: "Wird hochgeladen",
-  warteschlange: "Wartet",
-  arbeitet: "Wird verarbeitet",
-  fertig: "Fertig",
-  fehler: "Fehler",
+  hochladen: "Uploading",
+  warteschlange: "Waiting",
+  arbeitet: "Processing",
+  fertig: "Done",
+  fehler: "Error",
 };
 
 export function ProjectList({ system }: { system: SystemInfo | null }) {
@@ -44,14 +44,14 @@ export function ProjectList({ system }: { system: SystemInfo | null }) {
     if (!list || !list.length) return;
     const files = Array.from(list).filter((f) => f.type.startsWith("video/") || /\.(mp4|mov|m4v|mkv|avi|webm|mts)$/i.test(f.name));
     if (!files.length) {
-      setError("Das ist kein Video. Bitte eine Videodatei (z. B. MP4 oder MOV) wählen.");
+      setError("That is not a video. Please choose a video file (e.g. MP4 or MOV).");
       return;
     }
     queueFiles(files, mode, model, language);
   };
 
   const remove = async (p: Project) => {
-    if (!confirm(`Projekt „${p.name}“ löschen? Dein Original-Video auf dem PC bleibt erhalten.`)) return;
+    if (!confirm(`Delete project "${p.name}"? Your original video on your PC stays untouched.`)) return;
     try {
       await api.remove(p.id);
       setProjects((list) => list.filter((x) => x.id !== p.id));
@@ -65,8 +65,8 @@ export function ProjectList({ system }: { system: SystemInfo | null }) {
   return (
     <div className="page">
       <section className="card upload-card">
-        <h2>Neues Video</h2>
-        <div className="modes" role="radiogroup" aria-label="Modus">
+        <h2>New video</h2>
+        <div className="modes" role="radiogroup" aria-label="Mode">
           {MODE_CARDS.map((m) => (
             <button
               key={m.mode}
@@ -78,7 +78,7 @@ export function ProjectList({ system }: { system: SystemInfo | null }) {
             >
               <strong>{m.title}</strong>
               <span>{m.text}</span>
-              {!m.ready && <em>kommt in Meilenstein 6</em>}
+              {!m.ready && <em>coming in milestone 6</em>}
             </button>
           ))}
         </div>
@@ -100,25 +100,25 @@ export function ProjectList({ system }: { system: SystemInfo | null }) {
           <input ref={input} type="file" accept="video/*" multiple hidden onChange={(e) => addFiles(e.target.files)} />
           <div className="drop-icon">⬆</div>
           <p>
-            <strong>Video hierher ziehen</strong> oder klicken zum Auswählen
+            <strong>Drag a video here</strong> or click to choose
           </p>
-          <p className="muted">Auch mehrere Videos auf einmal. Dein Original wird nie verändert.</p>
+          <p className="muted">Several videos at once work too. Your original is never changed.</p>
         </div>
 
         <details className="settings">
-          <summary>Einstellungen für die Spracherkennung</summary>
+          <summary>Speech recognition settings</summary>
           <label>
-            Sprache
+            Language
             <select value={language} onChange={(e) => setLanguage(e.target.value)}>
-              <option value="auto">automatisch erkennen</option>
-              <option value="de">Deutsch</option>
-              <option value="en">Englisch</option>
+              <option value="auto">detect automatically</option>
+              <option value="de">German</option>
+              <option value="en">English</option>
             </select>
           </label>
           <label>
-            Modell
+            Model
             <select value={model} onChange={(e) => setModel(e.target.value)}>
-              {Object.entries(system?.models ?? { auto: "Automatisch" }).map(([k, v]) => (
+              {Object.entries(system?.models ?? { auto: "Automatic" }).map(([k, v]) => (
                 <option key={k} value={k}>
                   {k === "auto" && system ? `${v}: ${system.default_model}` : v}
                 </option>
@@ -134,7 +134,7 @@ export function ProjectList({ system }: { system: SystemInfo | null }) {
               <>
                 <span className="error-text">{u.error}</span>
                 <button className="link" onClick={() => dismiss(u.key)}>
-                  ausblenden
+                  dismiss
                 </button>
               </>
             ) : (
@@ -152,8 +152,8 @@ export function ProjectList({ system }: { system: SystemInfo | null }) {
       {error && <div className="banner error">{error}</div>}
 
       <section>
-        <h2>Projekte</h2>
-        {!projects.length && <p className="muted">Noch keine Projekte. Lade oben dein erstes Video hoch.</p>}
+        <h2>Projects</h2>
+        {!projects.length && <p className="muted">No projects yet. Upload your first video above.</p>}
         <ul className="project-list">
           {projects.map((p) => (
             <li key={p.id} className="card project">
@@ -170,11 +170,11 @@ export function ProjectList({ system }: { system: SystemInfo | null }) {
                   </div>
                   <div className="muted small">
                     {p.info ? `${formatTime(p.info.duration)} · ${p.info.width}×${p.info.height} · ` : ""}
-                    {formatSize(p.size)} · {new Date(p.created * 1000).toLocaleString("de-DE", { dateStyle: "short", timeStyle: "short" })}
+                    {formatSize(p.size)} · {new Date(p.created * 1000).toLocaleString("en-GB", { dateStyle: "short", timeStyle: "short" })}
                   </div>
                   {p.status === "fertig" ? (
                     <div className="status ok">
-                      ✓ Fertig{p.transcript ? ` · ${p.transcript.words} Wörter · ${p.transcript.language.toUpperCase()}` : ""}
+                      ✓ Done{p.transcript ? ` · ${p.transcript.words} words · ${p.transcript.language.toUpperCase()}` : ""}
                     </div>
                   ) : p.status === "fehler" ? (
                     <div className="status error-text">⚠ {p.error}</div>
@@ -191,11 +191,11 @@ export function ProjectList({ system }: { system: SystemInfo | null }) {
               <div className="project-actions">
                 {p.status === "fehler" && (
                   <button className="link" onClick={() => api.retry(p.id).catch((e) => setError(e.message))}>
-                    nochmal versuchen
+                    try again
                   </button>
                 )}
                 <button className="link danger" onClick={() => remove(p)} disabled={p.status === "arbeitet"}>
-                  löschen
+                  delete
                 </button>
               </div>
             </li>

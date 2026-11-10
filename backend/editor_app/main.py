@@ -78,9 +78,9 @@ def list_projects():
 @app.post("/api/projects")
 def create_project(body: NewProject):
     if body.model not in transcribe.MODEL_CHOICES:
-        raise UserError("Unbekanntes Modell.")
+        raise UserError("Unknown model.")
     if body.language not in ("auto", "de", "en"):
-        raise UserError("Sprache muss automatisch, Deutsch oder Englisch sein.")
+        raise UserError("Language must be automatic, German or English.")
     return projects.create(body.name, body.mode, body.filename, body.size,
                            {"model": body.model, "language": body.language})
 
@@ -103,7 +103,7 @@ def upload_done(pid: str):
     f = projects.path(pid, p["original_file"])
     have = f.stat().st_size if f.exists() else 0
     if have != p["size"]:
-        raise UserError(f"Das Video ist noch nicht vollständig angekommen ({have / max(1, p['size']):.0%}).")
+        raise UserError(f"The video has not fully arrived yet ({have / max(1, p['size']):.0%}).")
     jobs.enqueue(pid)
     return projects.load(pid)
 
@@ -112,7 +112,7 @@ def upload_done(pid: str):
 def retry(pid: str):
     p = projects.load(pid)
     if p["status"] not in ("fehler", "fertig"):
-        raise UserError("Das Projekt wird gerade noch verarbeitet.")
+        raise UserError("The project is still being processed.")
     jobs.enqueue(pid)
     return projects.load(pid)
 
@@ -121,7 +121,7 @@ def retry(pid: str):
 def delete_project(pid: str):
     p = projects.load(pid)
     if p["status"] == "arbeitet":
-        raise UserError("Das Projekt wird gerade verarbeitet. Bitte warte, bis es fertig ist.")
+        raise UserError("The project is being processed. Please wait until it is done.")
     projects.delete(pid)
     return {"ok": True}
 
@@ -130,7 +130,7 @@ def delete_project(pid: str):
 def get_transcript(pid: str):
     f = projects.path(pid, "transkript.json")
     if not f.exists():
-        raise HTTPException(404, "Noch kein Transkript.")
+        raise HTTPException(404, "No transcript yet.")
     return json.loads(f.read_text(encoding="utf-8"))
 
 
@@ -138,7 +138,7 @@ def get_transcript(pid: str):
 def get_proxy(pid: str):
     f = projects.path(pid, "vorschau.mp4")
     if not f.exists():
-        raise HTTPException(404, "Vorschau-Video noch nicht fertig.")
+        raise HTTPException(404, "Preview video not ready yet.")
     return FileResponse(f, media_type="video/mp4")
 
 
@@ -270,7 +270,7 @@ def start_render(pid: str, body: RenderBody):
 def get_export(pid: str, name: str):
     f = projects.path(pid, "export") / name
     if "/" in name or "\\" in name or not f.is_file():
-        raise HTTPException(404, "Datei nicht gefunden.")
+        raise HTTPException(404, "File not found.")
     return FileResponse(f, filename=name)
 
 
@@ -288,7 +288,7 @@ def open_folder(pid: str):
     elif sys.platform == "darwin":
         subprocess.Popen(["open", str(folder)])
     else:
-        raise UserError(f"Der Ordner liegt hier: {folder}")
+        raise UserError(f"The folder is here: {folder}")
     return {"ok": True}
 
 
@@ -532,7 +532,7 @@ def reel_scenes_apply(pid: str):
     f = _reel_file(pid)
     data = json.loads(f.read_text(encoding="utf-8")) if f.exists() else {}
     if not data.get("scenes"):
-        raise UserError("Es gibt noch keine Szenen-Texte. Bitte erst Texte aus deiner Idee erstellen lassen.")
+        raise UserError("There are no scene texts yet. Please create texts from your idea first.")
     _, v, _ = _cut_context(pid)
     overlays, warnings = captions.distribute_scenes(data["scenes"], v["evaluation"]["new_duration"])
     result = cutstore.set_overlays(pid, overlays)
@@ -602,9 +602,9 @@ def make_covers(pid: str, body: CoverBody):
     from . import covers
 
     if body.kind not in ("youtube", "meditation", "reel"):
-        raise UserError("Unbekannte Art.")
+        raise UserError("Unknown type.")
     if not body.text.strip():
-        raise UserError("Bitte einen Text eingeben.")
+        raise UserError("Please enter a text.")
     shots = _ensure_thumbs(pid)[:3]
     gf = projects.path(pid, "blick.json")
     samples = json.loads(gf.read_text(encoding="utf-8")).get("samples", []) if gf.exists() else []
@@ -743,7 +743,7 @@ def suggest_clips(pid: str, body: ClipSuggestBody):
     from . import clips
 
     if body.engine not in ("claude", "ollama"):
-        raise UserError("Unbekannte KI.")
+        raise UserError("Unknown AI.")
     t = cutstore._transcript(pid)
     v = cutstore.view(pid)
     data = clips.load(pid)
@@ -784,8 +784,8 @@ def render_clip(pid: str, cid: str):
 
     c = clips.get_clip(pid, cid)
     if c.get("status") in ("warteschlange", "arbeitet"):
-        raise UserError("Dieses Reel wird schon gerendert.")
-    clips.update_clip(pid, cid, status="warteschlange", progress=0.0, message="Wartet …", error=None)
+        raise UserError("This reel is already being rendered.")
+    clips.update_clip(pid, cid, status="warteschlange", progress=0.0, message="Waiting …", error=None)
     jobs.enqueue_clip(pid, cid)
     return clips.load(pid)
 
@@ -831,8 +831,8 @@ async def no_cache_for_page(request: Request, call_next):
 # Unbekannte Adresse unter /api: meist läuft noch ein alter Motor mit neuer Oberfläche (nach "Git: Pull")
 @app.api_route("/api/{rest:path}", methods=["GET", "POST", "PUT", "DELETE"])
 def unknown_api(rest: str):
-    return JSONResponse({"fehler": "Diese Funktion kennt der laufende Motor noch nicht. Bitte oben auf "
-                                   "„Jetzt aktualisieren“ klicken oder die App neu starten (start.bat)."},
+    return JSONResponse({"fehler": "The running engine does not know this function yet. Please click "
+                                   "\"Update now\" at the top or restart the app (start.bat)."},
                         status_code=404)
 
 
@@ -843,7 +843,7 @@ if config.FRONTEND_DIST.exists():
 else:
     @app.get("/")
     def no_frontend():
-        return JSONResponse({"fehler": "Die Oberfläche fehlt (frontend/dist). Bitte 'start.bat' benutzen."})
+        return JSONResponse({"fehler": "The interface is missing (frontend/dist). Please use 'start.bat'."})
 
 
 def run() -> None:
@@ -855,10 +855,10 @@ def run() -> None:
     with socket.socket() as sock:
         if sock.connect_ex((config.HOST, config.PORT)) == 0:
             # Läuft schon (z. B. doppelt gestartet): nur den Browser öffnen
-            print(f"\n  Die App läuft schon. Öffne {url}\n")
+            print(f"\n  The app is already running. Open {url}\n")
             webbrowser.open(url)
             return
-    print(f"\n  Carinas Video-Editor läuft:  {url}\n  Zum Beenden dieses Fenster schließen.\n")
+    print(f"\n  Carina's Video Editor is running:  {url}\n  Close this window to stop it.\n")
     if config.HOST in ("127.0.0.1", "localhost") and not os.environ.get("EDITOR_NO_BROWSER"):
         try:
             webbrowser.open(url)

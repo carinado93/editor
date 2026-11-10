@@ -41,7 +41,7 @@ def test_caption_parse_exactly_five_hashtags_and_checks():
     d = captions.parse(answer, "en")
     assert len(d["hashtags"]) == 5 and d["hashtags"][:3] == ["#burnout", "#stress", "#rest"]
     assert "#" not in d["caption"]
-    assert not any("Diagnose" in w for w in d["warnings"])
+    assert not any("diagnosis" in w for w in d["warnings"])
     full = captions.full_caption(d)
     assert full.endswith(" ".join(d["hashtags"]))
 

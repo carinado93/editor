@@ -39,38 +39,38 @@ def status(force: bool = False) -> dict:
         return _cache["data"]
     data = {"current": version(), "available": False, "behind": 0, "can_update": False, "reason": ""}
     if not shutil.which("git"):
-        data["reason"] = "Git ist nicht installiert."
+        data["reason"] = "Git is not installed."
     elif not (ROOT / ".git").exists():
-        data["reason"] = "Die App wurde als ZIP geladen. Für Updates bitte einmal über VS Code „Git: Clone“ holen."
+        data["reason"] = "The app was downloaded as a ZIP. For updates please get it once via VS Code \"Git: Clone\"."
     else:
         try:
             f = _git("fetch", "--quiet", "origin", timeout=40)
             if f.returncode != 0:
-                data["reason"] = "Keine Verbindung zu GitHub (Internet?)."
+                data["reason"] = "No connection to GitHub (internet?)."
             else:
                 r = _git("rev-list", "--count", "HEAD..@{u}")
                 behind = int(r.stdout.strip() or 0) if r.returncode == 0 else 0
                 data.update(behind=behind, available=behind > 0, can_update=True)
         except (OSError, subprocess.SubprocessError, ValueError):
-            data["reason"] = "Update-Prüfung hat nicht geklappt."
+            data["reason"] = "Checking for updates did not work."
     _cache.update(t=time.time(), data=data)
     return data
 
 
 def update_and_restart(busy: bool) -> dict:
     if busy:
-        raise UserError("Gerade wird ein Video verarbeitet oder gerendert. Bitte warte, bis es fertig ist, "
-                        "dann aktualisieren.")
+        raise UserError("A video is being processed or rendered right now. Please wait until it is done, "
+                        "then update.")
     st = status(force=True)
     if not st["can_update"]:
-        raise UserError(st["reason"] or "Aktualisieren ist gerade nicht möglich.")
+        raise UserError(st["reason"] or "Updating is not possible right now.")
     dirty = _git("status", "--porcelain", "--untracked-files=no")
     if dirty.stdout.strip():
         # Geänderte Dateien (z. B. aus Versehen bearbeitet) würden das Update blockieren → sichern statt verlieren
         _git("stash", "push", "-m", "vor automatischem Update")
     r = _git("pull", "--ff-only", timeout=120)
     if r.returncode != 0:
-        raise UserError("Das Update konnte nicht geladen werden: " + (r.stderr or r.stdout)[-300:])
+        raise UserError("The update could not be downloaded: " + (r.stderr or r.stdout)[-300:])
     new = version()
     _cache.update(t=0.0, data=None)
 

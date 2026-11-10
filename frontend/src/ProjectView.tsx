@@ -10,18 +10,20 @@ interface FlatWord extends Word {
 
 const TYPE_LABEL: Record<CutType, string> = {
   retake: "Retake",
-  signal: "Signalwort",
-  doppelt: "Doppelt",
-  fragment: "Abgebrochen",
-  fuellwort: "Füllwort",
-  blick: "Blick weg",
-  manuell: "Von dir gelöscht",
+  signal: "Signal word",
+  doppelt: "Doubled",
+  fragment: "Broken off",
+  fuellwort: "Filler word",
+  blick: "Looking away",
+  manuell: "Deleted by you",
 };
 
+const TEMPO_LABEL: Record<string, string> = { locker: "relaxed", normal: "normal", straff: "tight" };
+
 const QUALITIES: Record<string, string> = {
-  "1080": "1080p (empfohlen)",
-  "2160": "4K (wenn das Original so groß ist)",
-  original: "Original-Auflösung",
+  "1080": "1080p (recommended)",
+  "2160": "4K (if the original is that big)",
+  original: "Original resolution",
 };
 
 /** Index des letzten Elements mit start <= t (binäre Suche). */
@@ -277,7 +279,7 @@ export function ProjectView({ id }: { id: string }) {
   // ---------- Rendern ----------
   const startRender = async () => {
     if (reelMode && !(cuts?.cutlist.overlays ?? []).some((o) => o.on)) {
-      if (!confirm("Kein Hook und kein Text im Video. Tipp: unten im Reel-Paket „Mit Claude erstellen“. Trotzdem rendern?")) return;
+      if (!confirm("No hook and no text in the video. Tip: \"Create with Claude\" in the reel package below. Render anyway?")) return;
     }
     try {
       const p = await api.render(id, quality);
@@ -294,7 +296,7 @@ export function ProjectView({ id }: { id: string }) {
         <div className="banner error">{error}</div>
       </div>
     );
-  if (!project) return <div className="page muted">Lädt …</div>;
+  if (!project) return <div className="page muted">Loading …</div>;
 
   const ready = project.status === "fertig";
   const portrait = project.info ? project.info.height > project.info.width : false;
@@ -326,7 +328,7 @@ export function ProjectView({ id }: { id: string }) {
     <div className="page review">
       <div className="review-head">
         <a href="#/" className="link">
-          ← Alle Projekte
+          ← All projects
         </a>
         <h2>{project.name}</h2>
         {project.info && (
@@ -344,12 +346,12 @@ export function ProjectView({ id }: { id: string }) {
             <>
               ⚠ {project.error}{" "}
               <button className="link" onClick={() => api.retry(id).then(setProject)}>
-                nochmal versuchen
+                try again
               </button>
             </>
           ) : (
             <>
-              <progress value={project.progress} max={1} /> {project.message} · gesamt {Math.round(project.progress * 100)} %
+              <progress value={project.progress} max={1} /> {project.message} · total {Math.round(project.progress * 100)} %
             </>
           )}
         </div>
@@ -361,7 +363,7 @@ export function ProjectView({ id }: { id: string }) {
             <span className="big">
               {formatTime(oldDur)} → <strong>{formatTime(newDur)}</strong>
             </span>
-            <span className="muted small">{oldDur ? `${Math.round((1 - newDur / oldDur) * 100)} % kürzer` : ""}</span>
+            <span className="muted small">{oldDur ? `${Math.round((1 - newDur / oldDur) * 100)} % shorter` : ""}</span>
           </div>
           <div className="legend small">
             {(Object.keys(TYPE_LABEL) as CutType[]).map((t) =>
@@ -371,9 +373,9 @@ export function ProjectView({ id }: { id: string }) {
                 </span>
               ) : null,
             )}
-            {pausesCut > 0 && <span className="chip cut-pause">Pausen gekürzt: {pausesCut}</span>}
-            {noisesCut > 0 && <span className="chip cut-fuellwort">Laute ohne Wort: {noisesCut}</span>}
-            {suggestions > 0 && <span className="chip suggestion">Vorschläge: {suggestions}</span>}
+            {pausesCut > 0 && <span className="chip cut-pause">Pauses shortened: {pausesCut}</span>}
+            {noisesCut > 0 && <span className="chip cut-fuellwort">Sounds without words: {noisesCut}</span>}
+            {suggestions > 0 && <span className="chip suggestion">Suggestions: {suggestions}</span>}
           </div>
           <div className="tempo" role="radiogroup" aria-label="Tempo">
             <span className="small muted">Tempo</span>
@@ -386,13 +388,13 @@ export function ProjectView({ id }: { id: string }) {
                 disabled={busy}
                 onClick={() => run(() => api.cutSettings(id, { tempo: t }))}
               >
-                {t}
+                {TEMPO_LABEL[t]}
               </button>
             ))}
           </div>
           <div className="cut-actions">
-            <button className="btn ghost" disabled={!cuts.can_undo || busy} onClick={() => run(() => api.undo(id))} title="Strg+Z">
-              ↶ Rückgängig
+            <button className="btn ghost" disabled={!cuts.can_undo || busy} onClick={() => run(() => api.undo(id))} title="Ctrl+Z">
+              ↶ Undo
             </button>
           </div>
         </div>
@@ -406,19 +408,18 @@ export function ProjectView({ id }: { id: string }) {
               {editMode && (preview || reelMode) && cuts && <TextOverlay time={time} cuts={cuts} words={words} subLines={subLines} faceBox={faceBox} portrait={portrait} />}
             </div>
           ) : (
-            <div className="player-placeholder muted">Vorschau-Video wird erstellt …</div>
+            <div className="player-placeholder muted">Creating preview video …</div>
           )}
 
           {cutMode && keep && duration > 0 && (
             <>
               <label className="preview-toggle small">
-                <input type="checkbox" checked={preview} onChange={(e) => setPreview(e.target.checked)} /> Vorschau mit Schnitten
-                abspielen
+                <input type="checkbox" checked={preview} onChange={(e) => setPreview(e.target.checked)} /> Play preview with cuts
                 <span className="muted"> · {preview ? `${formatTime(newTime)} / ${formatTime(newDur)}` : `${formatTime(time)} / ${formatTime(duration)}`}</span>
               </label>
               <div
                 className="timeline"
-                title="Grau = wird geschnitten. Klick springt dorthin."
+                title="Grey = gets cut. Click jumps there."
                 onClick={(e) => {
                   const rect = e.currentTarget.getBoundingClientRect();
                   seek(((e.clientX - rect.left) / rect.width) * duration, false);
@@ -435,21 +436,21 @@ export function ProjectView({ id }: { id: string }) {
           {transcript && (
             <dl className="facts small">
               <div>
-                <dt>Sprache</dt>
-                <dd>{transcript.language === "de" ? "Deutsch" : transcript.language === "en" ? "Englisch" : transcript.language}</dd>
+                <dt>Language</dt>
+                <dd>{transcript.language === "de" ? "German" : transcript.language === "en" ? "English" : transcript.language}</dd>
               </div>
               <div>
-                <dt>Wörter</dt>
+                <dt>Words</dt>
                 <dd>{words.length}</dd>
               </div>
               <div>
-                <dt>Modell</dt>
+                <dt>Model</dt>
                 <dd>
                   {transcript.model} ({transcript.device})
                 </dd>
               </div>
               <div>
-                <dt>Unsicher erkannt</dt>
+                <dt>Unsure words</dt>
                 <dd>{words.filter((w) => w.p < 0.5).length}</dd>
               </div>
             </dl>
@@ -457,11 +458,11 @@ export function ProjectView({ id }: { id: string }) {
 
           {editMode && (
             <div className="render-box">
-              <h3>{reelMode ? "Reel rendern" : "Final rendern"}</h3>
+              <h3>{reelMode ? "Render reel" : "Final render"}</h3>
               <p className="small muted">
                 {reelMode
-                  ? "Länge, Tempo, Format und Ton bleiben genau wie im Original. Es kommen nur deine Texte dazu. Unter 30 MB."
-                  : "Erst wenn du hier klickst, entsteht das fertige Video. Dein Original bleibt unverändert."}
+                  ? "Length, pace, format and sound stay exactly as in the original. Only your texts are added. Under 30 MB."
+                  : "The finished video is only created when you click here. Your original stays unchanged."}
               </p>
               {cuts && (
                 <div className="render-options small">
@@ -469,36 +470,36 @@ export function ProjectView({ id }: { id: string }) {
                   <>
                   <label>
                     <input type="checkbox" checked={cuts.cutlist.render_options.zoom} disabled={busy} onChange={(e) => run(() => api.renderOptions(id, { zoom: e.target.checked }))} />{" "}
-                    Zoom-Wechsel bei Schnitten (100/108/115 %)
+                    Zoom change at cuts (100/108/115 %)
                   </label>
                   <label>
                     <input type="checkbox" checked={cuts.cutlist.render_options.loudness} disabled={busy} onChange={(e) => run(() => api.renderOptions(id, { loudness: e.target.checked }))} />{" "}
-                    Lautstärke angleichen (−14 LUFS für YouTube)
+                    Even out loudness (−14 LUFS for YouTube)
                   </label>
                   <label>
                     <input type="checkbox" checked={cuts.cutlist.render_options.denoise} disabled={busy} onChange={(e) => run(() => api.renderOptions(id, { denoise: e.target.checked }))} />{" "}
-                    Rauschen mindern
+                    Reduce noise
                   </label>
                   </>
                   )}
                   <label>
-                    Untertitel{" "}
+                    Subtitles{" "}
                     <select value={cuts.cutlist.render_options.subtitles} disabled={busy} onChange={(e) => run(() => api.renderOptions(id, { subtitles: e.target.value as "aus" }))}>
-                      <option value="aus">keine</option>
-                      <option value="srt">nur als SRT-Datei</option>
-                      <option value="einbrennen">ins Video einbrennen (+ SRT)</option>
+                      <option value="aus">none</option>
+                      <option value="srt">only as SRT file</option>
+                      <option value="einbrennen">burn into the video (+ SRT)</option>
                     </select>
                   </label>
                   {cuts.cutlist.render_options.subtitles === "einbrennen" && (
                     <label>
                       <input type="checkbox" checked={cuts.cutlist.render_options.karaoke} disabled={busy} onChange={(e) => run(() => api.renderOptions(id, { karaoke: e.target.checked }))} />{" "}
-                      Karaoke (gesprochenes Wort wird lila)
+                      Karaoke (spoken word turns purple)
                     </label>
                   )}
                   <div className="buzz-row">
                     <span>
                       ★ Buzzwords: {cuts.cutlist.buzzwords.length}
-                      {cuts.cutlist.buzzwords.length === 0 && <span className="muted"> (Wort im Transkript anklicken → „★ Als Buzzword“)</span>}
+                      {cuts.cutlist.buzzwords.length === 0 && <span className="muted"> (click a word in the transcript → "★ Make buzzword")</span>}
                     </span>
                     <button
                       className="link"
@@ -509,7 +510,7 @@ export function ProjectView({ id }: { id: string }) {
                         setSuggesting(false);
                       }}
                     >
-                      {suggesting ? "lokale KI denkt nach …" : "vorschlagen lassen (Ollama)"}
+                      {suggesting ? "local AI is thinking …" : "suggest (Ollama)"}
                     </button>
                   </div>
                 </div>
@@ -525,7 +526,7 @@ export function ProjectView({ id }: { id: string }) {
                 </select>
                 )}
                 <button className="btn" onClick={startRender} disabled={!!rendering || busy || !newDur}>
-                  {reelMode ? "Reel rendern" : "Final rendern"}
+                  {reelMode ? "Render reel" : "Final render"}
                 </button>
               </div>
               {rendering && r && (
@@ -549,7 +550,7 @@ export function ProjectView({ id }: { id: string }) {
                   ))}
                   <li>
                     <button className="link" onClick={() => api.openFolder(id).catch((e) => setError(e.message))}>
-                      Export-Ordner öffnen
+                      Open export folder
                     </button>
                   </li>
                 </ul>
@@ -560,45 +561,45 @@ export function ProjectView({ id }: { id: string }) {
 
         <div className="card transcript-card">
           <div className="transcript-toolbar">
-            <h3>Transkript</h3>
+            <h3>Transcript</h3>
             <label className="small">
-              <input type="checkbox" checked={follow} onChange={(e) => setFollow(e.target.checked)} /> mitscrollen
+              <input type="checkbox" checked={follow} onChange={(e) => setFollow(e.target.checked)} /> follow along
             </label>
           </div>
           {cutMode ? (
             <p className="muted small hint">
-              <span className="demo cut-retake">Durchgestrichen</span> = wird geschnitten, <span className="demo suggestion">gestrichelt</span> = Vorschlag.
-              Klick auf ein Wort wählt es aus (Umschalt+Klick für mehrere). <kbd>Entf</kbd> löscht, <kbd>Strg+Z</kbd> macht rückgängig.
+              <span className="demo cut-retake">Struck through</span> = gets cut, <span className="demo suggestion">dashed</span> = suggestion.
+              Click a word to select it (Shift+click for several). <kbd>Del</kbd> deletes, <kbd>Ctrl+Z</kbd> undoes.
             </p>
           ) : reelMode ? (
             <p className="muted small hint">
-              Hier wird nichts geschnitten. Klick auf ein Wort → <strong>„★ Als Buzzword“</strong>: Es poppt im Reel auf.
-              Die Hook-Karte stellst du unten im „Reel-Paket“ ein.
+              Nothing gets cut here. Click a word → <strong>"★ Make buzzword"</strong>: it pops up in the reel.
+              You set the hook card in the "Reel package" below.
             </p>
           ) : (
             <p className="muted small hint">
-              Klick auf ein Wort springt im Video dorthin. <span className="unsure">Gepunktet</span> = Spracherkennung war unsicher.
+              Click a word to jump there in the video. <span className="unsure">Dotted</span> = speech recognition was unsure.
             </p>
           )}
 
           {editMode && sel && (
             <div className="action-bar">
               <div className="small">
-                <strong>„{selWords.slice(0, 12).map((k) => words[k]?.w).join(" ")}{selWords.length > 12 ? " …" : ""}“</strong>
-                {selDetExact && <div className="muted">{selDetExact.active ? selDetExact.reason : `Vorschlag: ${selDetExact.reason}`}</div>}
+                <strong>"{selWords.slice(0, 12).map((k) => words[k]?.w).join(" ")}{selWords.length > 12 ? " …" : ""}"</strong>
+                {selDetExact && <div className="muted">{selDetExact.active ? selDetExact.reason : `Suggestion: ${selDetExact.reason}`}</div>}
               </div>
               <div className="action-buttons">
                 {!cutMode ? null : selDetExact && !selDetExact.active ? (
                   <button className="btn" disabled={busy} onClick={() => run(() => api.toggleCut(id, selDetExact.id, true))}>
-                    Vorschlag übernehmen (schneiden)
+                    Accept suggestion (cut)
                   </button>
                 ) : selHasCut ? (
                   <button className="btn" disabled={busy} onClick={restoreSel}>
-                    Schnitt zurücknehmen
+                    Undo this cut
                   </button>
                 ) : (
                   <button className="btn danger" disabled={busy} onClick={deleteSel}>
-                    Löschen
+                    Delete
                   </button>
                 )}
                 {!selHasCut && (
@@ -606,29 +607,29 @@ export function ProjectView({ id }: { id: string }) {
                     className="btn ghost"
                     disabled={busy}
                     onClick={() => run(() => api.buzzword(id, sel[0], sel[1] + 1, !buzzOf.has(sel[0])))}
-                    title="Wird im Video als animierte Text-Einblendung gezeigt"
+                    title="Shown in the video as an animated text pop-up"
                   >
-                    {buzzOf.has(sel[0]) ? "★ Buzzword entfernen" : "★ Als Buzzword"}
+                    {buzzOf.has(sel[0]) ? "★ Remove buzzword" : "★ Make buzzword"}
                   </button>
                 )}
                 <button className="btn ghost" onClick={() => seek(words[sel[0]].s)}>
-                  ▶ Anhören
+                  ▶ Listen
                 </button>
                 <button className="link" onClick={() => setSel(null)}>
-                  schließen
+                  close
                 </button>
               </div>
             </div>
           )}
 
           <div className={`transcript ${cutMode ? "editing" : ""}`} ref={textBox}>
-            {!transcript && <p className="muted">Das Transkript erscheint hier, sobald es fertig ist.</p>}
+            {!transcript && <p className="muted">The transcript appears here as soon as it is ready.</p>}
             {transcript && !transcript.segments.length && (
-              <p className="muted">In diesem Clip wird nicht gesprochen. Schreib unten im Reel-Paket deine Idee – daraus entstehen die Texte.</p>
+              <p className="muted">Nobody speaks in this clip. Write your idea in the reel package below – the texts are made from it.</p>
             )}
             {transcript?.segments.map((s, si) => (
               <p key={si} className="segment">
-                <button className="time" onClick={() => seek(s.s)} title="Hierher springen">
+                <button className="time" onClick={() => seek(s.s)} title="Jump here">
                   {formatTime(s.s)}
                 </button>
                 {words
@@ -649,11 +650,11 @@ export function ProjectView({ id }: { id: string }) {
                     ].join(" ");
                     const title = f
                       ? f === "manuell"
-                        ? "Von dir gelöscht"
+                        ? "Deleted by you"
                         : d?.reason ?? TYPE_LABEL[f]
                       : isSugg
-                        ? `Vorschlag: ${d!.reason}`
-                        : `${formatTime(w.s)} · sicher erkannt: ${Math.round(w.p * 100)} %`;
+                        ? `Suggestion: ${d!.reason}`
+                        : `${formatTime(w.s)} · confidence: ${Math.round(w.p * 100)} %`;
                     return (
                       <Fragment key={w.i}>
                         <span data-i={w.i} className={cls} onClick={(e) => onWordClick(w, e)} title={title}>
@@ -666,15 +667,15 @@ export function ProjectView({ id }: { id: string }) {
                             title={
                               pause.noise
                                 ? pause.kept
-                                  ? "Laut (z. B. „mh“) bleibt. Klick: herausschneiden"
-                                  : "Laut ohne Wort (z. B. „mh“, „meah“) wird herausgeschnitten. Klick: behalten"
+                                  ? "Sound (e.g. \"mh\") stays. Click: cut it out"
+                                  : "Sound without a word (e.g. \"mh\", \"meah\") gets cut out. Click: keep"
                                 : pause.kept
-                                  ? "Pause bleibt. Klick: kürzen"
-                                  : "Pause wird gekürzt. Klick: behalten"
+                                  ? "Pause stays. Click: shorten"
+                                  : "Pause gets shortened. Click: keep"
                             }
                             onClick={() => run(() => api.setPause(id, pause.after, !pause.kept))}
                           >
-                            {pause.noise ? "🔊 Laut" : "⏸"} {pause.length.toFixed(1).replace(".", ",")} s
+                            {pause.noise ? "🔊 Sound" : "⏸"} {pause.length.toFixed(1)} s
                           </button>
                         )}
                       </Fragment>
@@ -689,7 +690,7 @@ export function ProjectView({ id }: { id: string }) {
               settings={cuts.cutlist.settings}
               busy={busy}
               onSave={(s) => run(() => api.cutSettings(id, s))}
-              onReset={() => confirm("Alle deine Änderungen verwerfen und neu erkennen?") && run(() => api.resetCuts(id))}
+              onReset={() => confirm("Discard all your changes and detect again?") && run(() => api.resetCuts(id))}
             />
           )}
         </div>
@@ -772,11 +773,11 @@ function CutSettingsPanel({
 
   return (
     <details className="settings cut-settings">
-      <summary>Einstellungen für die Schnitt-Erkennung</summary>
+      <summary>Settings for cut detection</summary>
       <div className="settings-grid">
         <div>
-          <h4>Füllwörter</h4>
-          <p className="small muted">Angehakt = wird geschnitten.</p>
+          <h4>Filler words</h4>
+          <p className="small muted">Ticked = gets cut.</p>
           <div className="filler-list">
             {Object.entries(settings.fillers).map(([f, on]) => (
               <label key={f} className="small">
@@ -787,18 +788,18 @@ function CutSettingsPanel({
           </div>
         </div>
         <div>
-          <h4>Signalwörter für Retakes</h4>
-          <p className="small muted">Wenn du eins davon allein sagst, fliegt der Satz davor raus. Mit Komma trennen.</p>
+          <h4>Signal words for retakes</h4>
+          <p className="small muted">If you say one of these on its own, the sentence before it gets removed. Separate with commas.</p>
           <textarea value={signal} onChange={(e) => setSignal(e.target.value)} rows={3} />
-          <h4>Retake-Abstand</h4>
-          <p className="small muted">So viele Sekunden Sprechen dürfen höchstens zwischen erstem Versuch und Neuanfang liegen (Denkpausen zählen nicht).</p>
-          <input type="number" min={1} max={15} step={0.5} value={gap} onChange={(e) => setGap(Number(e.target.value))} /> Sekunden
+          <h4>Retake distance</h4>
+          <p className="small muted">At most this many seconds of speaking may lie between the first attempt and the restart (thinking pauses do not count).</p>
+          <input type="number" min={1} max={15} step={0.5} value={gap} onChange={(e) => setGap(Number(e.target.value))} /> seconds
           <div className="settings-buttons">
             <button className="btn" disabled={busy} onClick={() => onSave({ signal_words: signal.split(","), max_gap: gap })}>
-              Übernehmen
+              Apply
             </button>
             <button className="link danger" disabled={busy} onClick={onReset}>
-              Alles zurücksetzen
+              Reset everything
             </button>
           </div>
         </div>

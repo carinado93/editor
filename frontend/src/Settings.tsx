@@ -19,7 +19,7 @@ export function Settings() {
     try {
       setSt(await api.claudeSaveKey(key));
       setKey("");
-      setMsg("Schlüssel geprüft und gespeichert ✓ – Claude ist bereit.");
+      setMsg("Key checked and saved ✓ – Claude is ready.");
     } catch (e) {
       setErr((e as Error).message);
     } finally {
@@ -29,27 +29,27 @@ export function Settings() {
 
   return (
     <div className="page">
-      <h2>Einstellungen</h2>
+      <h2>Settings</h2>
       <section className="card settings-card">
-        <h3>Claude (beste Texte)</h3>
+        <h3>Claude (best texts)</h3>
         {st?.configured ? (
-          <p className="status ok">✓ Claude ist eingerichtet ({st.masked}).</p>
+          <p className="status ok">✓ Claude is set up ({st.masked}).</p>
         ) : (
-          <p className="muted">Noch nicht eingerichtet. Einmalig ca. 5 Minuten:</p>
+          <p className="muted">Not set up yet. One time, about 5 minutes:</p>
         )}
         <ol className="small steps">
           <li>
-            Auf <a href="https://console.anthropic.com/" target="_blank" rel="noreferrer">console.anthropic.com</a> anmelden (gleiche E-Mail wie
-            bei claude.ai geht).
+            Sign in at <a href="https://console.anthropic.com/" target="_blank" rel="noreferrer">console.anthropic.com</a> (the same e-mail
+            as on claude.ai works).
           </li>
           <li>
-            Links <strong>„Billing“</strong> → Guthaben aufladen, z. B. <strong>10 $</strong> (reicht für ca. 100–200 Reels). Kein Abo.
+            On the left <strong>"Billing"</strong> → add credit, e.g. <strong>$10</strong> (enough for about 100–200 reels). No subscription.
           </li>
           <li>
-            Links <strong>„API Keys“</strong> → <strong>„Create Key“</strong> → Name z. B. „Video-Editor“ → Schlüssel kopieren (beginnt mit
-            „sk-ant-“).
+            On the left <strong>"API Keys"</strong> → <strong>"Create Key"</strong> → name e.g. "Video editor" → copy the key (starts with
+            "sk-ant-").
           </li>
-          <li>Hier einfügen und speichern. Die App prüft ihn sofort.</li>
+          <li>Paste it here and save. The app checks it right away.</li>
         </ol>
         <div className="key-row">
           <input
@@ -60,7 +60,7 @@ export function Settings() {
             autoComplete="off"
           />
           <button className="btn" disabled={busy || !key.trim()} onClick={save}>
-            {busy ? "Prüfe …" : "Speichern"}
+            {busy ? "Checking …" : "Save"}
           </button>
         </div>
         {msg && <div className="banner small">{msg}</div>}
@@ -69,15 +69,15 @@ export function Settings() {
           <button
             className="link danger"
             onClick={async () => {
-              if (confirm("Claude-Schlüssel von diesem PC löschen?")) setSt(await api.claudeDeleteKey());
+              if (confirm("Delete the Claude key from this PC?")) setSt(await api.claudeDeleteKey());
             }}
           >
-            Schlüssel löschen
+            Delete key
           </button>
         )}
         <p className="small muted">
-          Der Schlüssel bleibt nur auf deinem PC (Datei <code>.env</code> im App-Ordner), er wird nirgendwo hochgeladen außer an Claude
-          selbst. Kosten: etwa 0,05–0,10 $ pro Reel-Text, ca. 3–8 $ im Monat. Den Verbrauch siehst du auf console.anthropic.com.
+          The key stays only on your PC (file <code>.env</code> in the app folder); it is sent nowhere except to Claude itself.
+          Cost: about $0.05–0.10 per reel text, roughly $3–8 per month. You can see your usage on console.anthropic.com.
         </p>
       </section>
     </div>

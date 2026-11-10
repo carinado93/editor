@@ -105,7 +105,7 @@ def fix_hashtags(tags: list[str], language: str, warnings: list[str]) -> list[st
                 break
             if h.lower() not in out:
                 out.append(h.lower())
-        warnings.append("Hashtags auf genau 5 ergänzt (aus deiner Sammlung).")
+        warnings.append("Hashtags filled up to exactly 5 (from your collection).")
     return out
 
 
@@ -148,18 +148,18 @@ def parse(text_or_obj, duration: float, language: str = "en") -> dict:
     if isinstance(text_or_obj, str):
         m = re.search(r"\{.*\}", text_or_obj, re.S)
         if not m:
-            raise UserError("In der eingefügten Antwort wurde kein JSON gefunden. Bitte die komplette Antwort von "
-                            "claude.ai kopieren (sie beginnt mit '{').")
+            raise UserError("No JSON was found in the pasted answer. Please copy the complete answer "
+                            "(it starts with '{').")
         try:
             data = json.loads(m.group(0))
         except json.JSONDecodeError as exc:
-            raise UserError("Die eingefügte Antwort ist kein gültiges JSON. Bitte nochmal komplett kopieren.") from exc
+            raise UserError("The pasted answer is not valid JSON. Please copy it again completely.") from exc
     else:
         data = text_or_obj
     warnings = []
     titles = [str(t).strip() for t in data.get("titles", []) if str(t).strip()][:3]
     if len(titles) < 3:
-        warnings.append(f"Nur {len(titles)} Titel statt 3.")
+        warnings.append(f"Only {len(titles)} titles instead of 3.")
     chapters = []
     for c in data.get("chapters", []):
         t = _seconds(c.get("time", "")) if isinstance(c, dict) else None
@@ -174,7 +174,7 @@ def parse(text_or_obj, duration: float, language: str = "en") -> dict:
         else:
             chapters.insert(0, {"t": 0, "time": "0:00", "title": "Intro"})
     if len(chapters) < 3:
-        warnings.append("YouTube zeigt Kapitel erst ab 3 Stück an.")
+        warnings.append("YouTube only shows chapters when there are at least 3.")
     tags = [str(t).strip().lstrip("#") for t in data.get("tags", []) if str(t).strip()][:20]
     hashtags = fix_hashtags(data.get("hashtags", []), language, warnings)
     description = str(data.get("description", "")).strip()
@@ -182,7 +182,7 @@ def parse(text_or_obj, duration: float, language: str = "en") -> dict:
     for pat in FORBIDDEN:
         m = re.search(pat, all_text)
         if m:
-            warnings.append(f"Achtung, möglicherweise Heilversprechen/heikle Aussage: „{m.group(0)}“ – bitte umformulieren.")
+            warnings.append(f"Careful, possibly a healing promise / risky claim: \"{m.group(0)}\" – please rephrase.")
     return {"titles": titles, "chapters": chapters, "description": description, "tags": tags,
             "hashtags": hashtags, "warnings": warnings}
 
@@ -202,6 +202,6 @@ def from_ollama(prompt: str, duration: float, language: str = "en") -> dict:
 
     data = llm.ask_json(prompt, "Du antwortest ausschließlich mit gültigem JSON.", timeout=600)
     if not isinstance(data, dict):
-        raise UserError("Die lokale KI hat kein passendes Ergebnis geliefert. Bitte nochmal versuchen "
-                        "oder den Weg über claude.ai nehmen.")
+        raise UserError("The local AI did not give a suitable result. Please try again "
+                        "or use \"Create with Claude\".")
     return parse(data, duration, language)

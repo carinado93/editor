@@ -34,7 +34,7 @@ def _find(name: str) -> str:
     found = shutil.which(name)
     if found:
         return found
-    raise UserError(f"Das Programm {name} fehlt. Bitte starte die App mit 'start.bat', das installiert es automatisch.")
+    raise UserError(f"The program {name} is missing. Please start the app with 'start.bat', it installs it automatically.")
 
 
 @functools.cache
@@ -56,13 +56,13 @@ def probe(path: Path) -> dict:
     """Liest Länge, Auflösung, Bildrate usw. aus der Videodatei."""
     r = run([ffprobe(), "-v", "error", "-print_format", "json", "-show_format", "-show_streams", str(path)])
     if r.returncode != 0:
-        raise UserError("Die Datei konnte nicht gelesen werden. Ist es wirklich ein Video? " + r.stderr[-300:])
+        raise UserError("The file could not be read. Is it really a video? " + r.stderr[-300:])
     data = json.loads(r.stdout)
     video = next((s for s in data.get("streams", []) if s.get("codec_type") == "video"
                   and s.get("disposition", {}).get("attached_pic") != 1 and s.get("codec_name") != "mjpeg"), None)
     audio = next((s for s in data.get("streams", []) if s.get("codec_type") == "audio"), None)
     if video is None:
-        raise UserError("In der Datei wurde kein Video gefunden.")
+        raise UserError("No video was found in the file.")
     num, _, den = (video.get("avg_frame_rate") or video.get("r_frame_rate") or "30/1").partition("/")
     fps = float(num) / float(den or 1) if float(den or 1) else 30.0
     width, height = int(video.get("width", 0)), int(video.get("height", 0))
@@ -103,7 +103,7 @@ def _run_with_progress(args: list[str], duration: float, progress: Progress | No
             progress(min(1.0, int(m.group(1)) / 1e6 / duration))
     err = proc.stderr.read() if proc.stderr else ""
     if proc.wait() != 0:
-        raise UserError("ffmpeg ist bei der Verarbeitung gestolpert: " + err[-500:])
+        raise UserError("ffmpeg ran into a problem: " + err[-500:])
     if progress:
         progress(1.0)
 
@@ -166,7 +166,7 @@ def make_proxy(src: Path, dst: Path, info: dict, progress: Progress | None = Non
 def extract_audio(src: Path, dst: Path, info: dict, progress: Progress | None = None) -> None:
     """Tonspur als 16-kHz-Mono-WAV (das Format, das die Spracherkennung braucht)."""
     if not info["has_audio"]:
-        raise UserError("Das Video hat keine Tonspur. Ohne Ton kann kein Transkript erstellt werden.")
+        raise UserError("The video has no audio track. Without sound no transcript can be made.")
     tmp = dst.with_suffix(".tmp.wav")
     _run_with_progress(["-i", str(src), "-map", f"0:{info['audio_index']}", "-vn", "-ac", "1", "-ar", "16000",
                         "-c:a", "pcm_s16le", str(tmp)], info["duration"], progress)
@@ -177,7 +177,7 @@ def thumbnail(src: Path, dst: Path, at: float) -> None:
     r = run([ffmpeg(), "-hide_banner", "-y", "-ss", f"{at:.2f}", "-i", str(src), "-frames:v", "1",
              "-vf", "scale=360:-2", "-q:v", "4", str(dst)])
     if r.returncode != 0:
-        raise UserError("Vorschaubild konnte nicht erstellt werden.")
+        raise UserError("The preview image could not be created.")
 
 
 def stills_base64(video: Path, duration: float, n: int = 5, width: int = 512) -> list[str]:

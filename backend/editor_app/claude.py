@@ -50,8 +50,8 @@ def masked() -> str:
 def save_key(key: str) -> None:
     key = key.strip()
     if not re.fullmatch(r"sk-ant-[A-Za-z0-9_\-]{20,}", key):
-        raise UserError("Das sieht nicht wie ein Claude-Schlüssel aus. Er beginnt mit „sk-ant-“. "
-                        "Bitte den ganzen Schlüssel aus console.anthropic.com kopieren.")
+        raise UserError("That does not look like a Claude key. It starts with \"sk-ant-\". "
+                        "Please copy the whole key from console.anthropic.com.")
     _check(key)
     lines = [ln for ln in (ENV_FILE.read_text(encoding="utf-8").splitlines() if ENV_FILE.exists() else [])
              if not ln.startswith(KEY_NAME + "=")]
@@ -78,7 +78,7 @@ def _client(key: str | None = None):
 
     k = key or load_key()
     if not k:
-        raise UserError("Für Claude fehlt noch der Schlüssel. Bitte oben unter „Einstellungen“ eintragen.")
+        raise UserError("Claude still needs your key. Please enter it under \"Settings\" at the top.")
     return anthropic.Anthropic(api_key=k, timeout=180, max_retries=2)
 
 
@@ -86,22 +86,22 @@ def _explain(exc: Exception) -> UserError:
     import anthropic
 
     if isinstance(exc, anthropic.AuthenticationError):
-        return UserError("Der Claude-Schlüssel stimmt nicht (mehr). Bitte unter „Einstellungen“ neu eintragen.")
+        return UserError("The Claude key is not valid (any more). Please enter it again under \"Settings\".")
     if isinstance(exc, anthropic.PermissionDeniedError):
-        return UserError("Der Schlüssel darf das nicht. Bitte auf console.anthropic.com prüfen.")
+        return UserError("The key is not allowed to do this. Please check on console.anthropic.com.")
     if isinstance(exc, anthropic.RateLimitError):
-        return UserError("Claude ist gerade ausgelastet. Bitte in einer Minute nochmal versuchen.")
+        return UserError("Claude is busy right now. Please try again in a minute.")
     if isinstance(exc, anthropic.BadRequestError):
         msg = str(getattr(exc, "message", exc))
         if "credit" in msg.lower() or "balance" in msg.lower():
-            return UserError("Das Guthaben für Claude ist aufgebraucht. Bitte auf console.anthropic.com → Billing "
-                             "aufladen (z. B. 10 $).")
-        return UserError("Claude konnte die Anfrage nicht bearbeiten: " + msg[:200])
+            return UserError("Your Claude credit is used up. Please top up on console.anthropic.com → Billing "
+                             "(e.g. $10).")
+        return UserError("Claude could not handle the request: " + msg[:200])
     if isinstance(exc, anthropic.APIConnectionError):
-        return UserError("Keine Verbindung zu Claude. Bitte Internet prüfen.")
+        return UserError("No connection to Claude. Please check your internet.")
     if isinstance(exc, anthropic.APIStatusError):
-        return UserError(f"Claude hat einen Fehler gemeldet ({exc.status_code}). Bitte nochmal versuchen.")
-    return UserError("Claude hat nicht geantwortet: " + str(exc)[:200])
+        return UserError(f"Claude reported an error ({exc.status_code}). Please try again.")
+    return UserError("Claude did not answer: " + str(exc)[:200])
 
 
 def _check(key: str) -> None:
@@ -133,7 +133,7 @@ def _create(**kwargs):
 
 def _text(resp) -> str:
     if getattr(resp, "stop_reason", "") == "refusal":
-        raise UserError("Claude wollte diese Anfrage nicht bearbeiten. Bitte die Idee etwas anders formulieren.")
+        raise UserError("Claude declined this request. Please phrase the idea a bit differently.")
     return "".join(b.text for b in resp.content if getattr(b, "type", "") == "text").strip()
 
 
@@ -154,14 +154,14 @@ def ask_json(prompt: str, schema: dict, system: str = "", effort: str = "medium"
         m = re.search(r"\{.*\}", text, re.S)
         if m:
             return json.loads(m.group(0))
-        raise UserError("Claude hat keine passende Antwort geliefert. Bitte nochmal versuchen.")
+        raise UserError("Claude did not give a suitable answer. Please try again.")
 
 
 def chat(messages: list[dict], system: str) -> str:
     clean = [{"role": m["role"], "content": str(m["content"])} for m in messages
              if m.get("role") in ("user", "assistant") and str(m.get("content", "")).strip()]
     if not clean or clean[-1]["role"] != "user":
-        raise UserError("Bitte zuerst eine Nachricht schreiben.")
+        raise UserError("Please write a message first.")
     resp = _create(model=MODEL, max_tokens=8000, system=system, messages=clean, output_config={"effort": "medium"})
     return _text(resp)
 

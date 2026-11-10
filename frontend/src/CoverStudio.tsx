@@ -4,12 +4,12 @@ import { api } from "./api";
 type Kind = "youtube" | "meditation" | "reel";
 
 const KIND_LABEL: Record<Kind, string> = {
-  youtube: "YouTube: Aussage",
+  youtube: "YouTube: statement",
   meditation: "YouTube: Meditation",
-  reel: "Reel-Cover",
+  reel: "Reel cover",
 };
 
-const COLOR_LABEL: Record<string, string> = { lila: "Lila", hell: "Hell", oliv: "Oliv" };
+const COLOR_LABEL: Record<string, string> = { lila: "Purple", hell: "Light", oliv: "Olive" };
 
 /** Thumbnails & Reel-Cover im Stil von Carinas bisherigen Designs (3 Varianten aus verschiedenen Standbildern). */
 export function CoverStudio({ id, kinds }: { id: string; kinds: Kind[] }) {
@@ -59,7 +59,7 @@ export function CoverStudio({ id, kinds }: { id: string; kinds: Kind[] }) {
     if (!usedColor) return;
     const r = await api.coverColorUsed(usedColor);
     setNextColor(r.next);
-    setInfo(`Gemerkt. Nächstes Reel-Cover: ${COLOR_LABEL[r.next] ?? r.next}.`);
+    setInfo(`Noted. Next reel cover: ${COLOR_LABEL[r.next] ?? r.next}.`);
   };
 
   return (
@@ -77,26 +77,26 @@ export function CoverStudio({ id, kinds }: { id: string; kinds: Kind[] }) {
       {info && <div className="banner small">{info}</div>}
       <div className="cover-form small">
         <label>
-          {kind === "meditation" ? "Titel" : "Text"}
+          {kind === "meditation" ? "Title" : "Text"}
           <input value={form.text} onChange={(e) => setForm({ ...form, text: e.target.value })} />
         </label>
         {kind === "youtube" && (
           <>
-            <span className="muted">Wort in *Sternchen* wird rosa und größer, z. B. „Rest didn't fix my *burnout*“.</span>
+            <span className="muted">A word in *asterisks* becomes pink and bigger, e.g. "Rest didn't fix my *burnout*".</span>
             <label>
-              Pille darunter (optional)
-              <input value={form.pill} placeholder="z. B. YOUR BODY REMEMBERS" onChange={(e) => setForm({ ...form, pill: e.target.value })} />
+              Pill below (optional)
+              <input value={form.pill} placeholder="e.g. YOUR BODY REMEMBERS" onChange={(e) => setForm({ ...form, pill: e.target.value })} />
             </label>
           </>
         )}
         {kind === "meditation" && (
           <>
             <label>
-              Untertitel (kursiv)
-              <input value={form.subtitle} placeholder="z. B. Gentle Words, Calm Mind" onChange={(e) => setForm({ ...form, subtitle: e.target.value })} />
+              Subtitle (italic)
+              <input value={form.subtitle} placeholder="e.g. Gentle Words, Calm Mind" onChange={(e) => setForm({ ...form, subtitle: e.target.value })} />
             </label>
             <label>
-              Kleine Zeile oben
+              Small line at the top
               <span className="two">
                 <input value={form.top_pill} placeholder="5 MINUTES" onChange={(e) => setForm({ ...form, top_pill: e.target.value })} />
                 <input value={form.top_label} placeholder="GUIDED MEDITATION" onChange={(e) => setForm({ ...form, top_label: e.target.value })} />
@@ -106,32 +106,32 @@ export function CoverStudio({ id, kinds }: { id: string; kinds: Kind[] }) {
         )}
         {kind === "reel" && (
           <label>
-            Farbe
+            Colour
             <select value={form.color} onChange={(e) => setForm({ ...form, color: e.target.value })}>
-              <option value="auto">automatisch (nächste: {COLOR_LABEL[nextColor] ?? nextColor})</option>
-              <option value="lila">Lila</option>
-              <option value="hell">Hell</option>
-              <option value="oliv">Oliv</option>
+              <option value="auto">automatic (next: {COLOR_LABEL[nextColor] ?? nextColor})</option>
+              <option value="lila">Purple</option>
+              <option value="hell">Light</option>
+              <option value="oliv">Olive</option>
             </select>
           </label>
         )}
       </div>
       <button className="btn" disabled={busy || !form.text.trim()} onClick={generate}>
-        {busy ? "Wird gestaltet …" : "3 Varianten erstellen"}
+        {busy ? "Designing …" : "Create 3 variants"}
       </button>
       {!!files.length && (
         <>
           <div className={`cover-grid ${kind === "reel" ? "tall" : ""}`}>
             {files.map((f) => (
-              <a key={f} href={api.coverUrl(id, f)} download={f} title="Klick = herunterladen">
-                <img src={api.coverUrl(id, f)} alt="Cover-Variante" />
+              <a key={f} href={api.coverUrl(id, f)} download={f} title="Click = download">
+                <img src={api.coverUrl(id, f)} alt="Cover variant" />
               </a>
             ))}
           </div>
-          <p className="small muted">Klick auf ein Bild lädt es herunter.</p>
+          <p className="small muted">Click an image to download it.</p>
           {kind === "reel" && usedColor && (
             <button className="link" onClick={markUsed}>
-              ✓ Eins davon verwendet → nächstes Cover in der nächsten Farbe
+              ✓ Used one of them → next cover in the next colour
             </button>
           )}
         </>

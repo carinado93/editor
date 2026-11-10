@@ -64,14 +64,14 @@ function UpdateBanner() {
     <div className="update-banner">
       {phase === "idle" && (
         <>
-          ✨ Es gibt eine neue Version der App.
+          ✨ A new version of the app is available.
           <button className="btn" onClick={go}>
-            Jetzt aktualisieren
+            Update now
           </button>
         </>
       )}
-      {phase === "laeuft" && <>⏳ Neue Version wird geladen …</>}
-      {phase === "neustart" && <>⏳ Die App startet neu, die Seite lädt gleich von selbst neu …</>}
+      {phase === "laeuft" && <>⏳ Loading the new version …</>}
+      {phase === "neustart" && <>⏳ The app is restarting, the page will reload by itself in a moment …</>}
       {phase === "fehler" && (
         <>
           ⚠ {err}{" "}
@@ -102,30 +102,30 @@ function App() {
           <span className="brand-mark">C</span>
           <span>
             <span className="brand-name">Video-Editor</span>
-            <span className="brand-sub">für Carina Dorca</span>
+            <span className="brand-sub">for Carina Dorca</span>
           </span>
         </a>
         <nav className="topnav">
           <a href="#/" className={!hash.startsWith("#/content") && !hash.startsWith("#/einstellungen") ? "on" : ""}>
-            Projekte
+            Projects
           </a>
           <a href="#/content" className={hash.startsWith("#/content") ? "on" : ""}>
             Social Media Content
           </a>
           <a href="#/einstellungen" className={hash.startsWith("#/einstellungen") ? "on" : ""}>
-            Einstellungen
+            Settings
           </a>
         </nav>
         {system && (
-          <div className="sysinfo small" title="Womit dein PC rechnet">
+          <div className="sysinfo small" title="What your PC uses">
             <span className={`dot ${system.gpu ? "on" : ""}`} />
-            Spracherkennung: {system.gpu ? "Grafikkarte" : "Prozessor"} · Video: {system.video_encoder} · frei: {system.disk_free_gb} GB
+            Speech recognition: {system.gpu ? "graphics card" : "processor"} · Video: {system.video_encoder} · free: {system.disk_free_gb} GB
           </div>
         )}
       </header>
       <UpdateBanner />
-      {offline && <div className="banner error page">Keine Verbindung zum Motor. Bitte starte die App mit start.bat.</div>}
-      {system && !system.ffmpeg && <div className="banner error page">ffmpeg fehlt. Bitte die App mit start.bat starten, das installiert es.</div>}
+      {offline && <div className="banner error page">No connection to the engine. Please start the app with start.bat.</div>}
+      {system && !system.ffmpeg && <div className="banner error page">ffmpeg is missing. Please start the app with start.bat, it installs it.</div>}
       {hash.startsWith("#/content") ? (
         <ContentChat />
       ) : hash.startsWith("#/einstellungen") ? (

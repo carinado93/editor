@@ -54,10 +54,10 @@ def sharpness(img_path: Path) -> float:
 
 def make(src: Path, gaze_data: dict, keep: list[list[float]], out_dir: Path, n: int = 6) -> list[dict]:
     if not gaze_data:
-        raise UserError("Die Blick-Erkennung ist noch nicht fertig. Bitte kurz warten und nochmal versuchen.")
+        raise UserError("Gaze detection is not finished yet. Please wait a moment and try again.")
     candidates = pick(score_samples(gaze_data, keep), n)
     if not candidates:
-        raise UserError("Keine passenden Bilder gefunden (kein Gesicht erkannt).")
+        raise UserError("No suitable frames found (no face detected).")
     out_dir.mkdir(parents=True, exist_ok=True)
     for old in out_dir.glob("thumb_*.jpg"):
         old.unlink()
@@ -71,7 +71,7 @@ def make(src: Path, gaze_data: dict, keep: list[list[float]], out_dir: Path, n: 
             continue
         shots.append({"file": f.name, "t": round(t, 2), "score": scored.get(t, 0), "sharp": sharpness(f)})
     if not shots:
-        raise UserError("Die Bilder konnten nicht aus dem Video geholt werden.")
+        raise UserError("The frames could not be taken from the video.")
     sharp_med = float(np.median([s["sharp"] for s in shots])) or 1.0
     for s in shots:  # unscharfe Bilder (Bewegung) nach hinten
         s["total"] = round(s["score"] + min(1.0, s["sharp"] / sharp_med) * 1.5, 3)

@@ -39,14 +39,14 @@ TEMPO = {
 INTENSIFIERS = {"very", "really", "so", "sehr", "ganz", "viel", "much", "many", "ja", "nein", "no", "yes", "bye", "tschüss"}
 
 REASON_TEXT = {
-    "retake": "Retake: du hast neu angesetzt, die letzte Version bleibt",
-    "signal": "Signalwort: Satz wurde abgebrochen",
-    "doppelt": "Doppeltes Wort",
-    "fragment": "Abgebrochenes Wort",
-    "fuellwort": "Füllwort",
-    "blick": "Blick weg von der Kamera",
-    "anfang": "Stille am Anfang",
-    "ende": "Stille am Ende",
+    "retake": "Retake: you started again, the last version stays",
+    "signal": "Signal word: sentence was broken off",
+    "doppelt": "Doubled word",
+    "fragment": "Broken-off word",
+    "fuellwort": "Filler word",
+    "blick": "Looking away from the camera",
+    "anfang": "Silence at the start",
+    "ende": "Silence at the end",
 }
 
 
@@ -198,7 +198,7 @@ def detect(transcript: dict, settings: dict, gaze_events: list[dict] | None = No
 
     # 2. Retakes (Neuanfang mit denselben Wörtern)
     for i, j, k, sure in detect_retakes(words, tokens, max_gap):
-        add("retake", i, j, sure, f"gleicher Anfang: „{' '.join(w['w'] for w in words[j:j + min(k, 6)])}…“")
+        add("retake", i, j, sure, f"same start: \"{' '.join(w['w'] for w in words[j:j + min(k, 6)])}…\"")
 
     # 3. Direkt doppelte Wörter und abgebrochene Wörter
     for i in range(len(tokens) - 1):
@@ -228,7 +228,7 @@ def detect(transcript: dict, settings: dict, gaze_events: list[dict] | None = No
     for ev in gaze_events or []:
         inside = [k for k, w in enumerate(words) if ev["start"] <= (w["s"] + w["e"]) / 2 <= ev["end"]]
         if inside:
-            add("blick", inside[0], inside[-1] + 1, False, f"{ev['length']:.1f} s, {ev['reason']}".replace(".", ",", 1))
+            add("blick", inside[0], inside[-1] + 1, False, f"{ev['length']:.1f} s, {ev['reason']}")
 
     # Doppelte Treffer zusammenfassen: gleiche Wörter nur einmal (der erste Grund gewinnt)
     seen: set[str] = set()

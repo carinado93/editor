@@ -42,8 +42,8 @@ def model_path() -> Path:
             urllib.request.urlretrieve(MODEL_URL, tmp)
             tmp.replace(p)
         except Exception as exc:
-            raise UserError("Das Gesichts-Modell für die Blick-Erkennung konnte nicht geladen werden. "
-                            "Bitte Internet prüfen (nur beim ersten Mal nötig).") from exc
+            raise UserError("The face model for gaze detection could not be loaded. "
+                            "Please check your internet (only needed the first time).") from exc
     return p
 
 
@@ -63,7 +63,7 @@ def analyze(video: Path, progress: Callable[[float], None] | None = None) -> dic
 
     cap = cv2.VideoCapture(str(video))
     if not cap.isOpened():
-        raise UserError("Das Vorschau-Video konnte für die Blick-Erkennung nicht geöffnet werden.")
+        raise UserError("The preview video could not be opened for gaze detection.")
     fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
     total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
     step = max(1, round(fps / SAMPLE_FPS))
@@ -138,15 +138,15 @@ def away_events(data: dict, settings: dict | None = None) -> list[dict]:
 
     def why(s: dict) -> str | None:
         if not s["face"]:
-            return "Gesicht nicht zu sehen"
+            return "face not visible"
         if abs(s["pitch"] - base["pitch"]) > cfg["pitch_deg"]:
-            return "Kopf geneigt"
+            return "head tilted"
         if abs(s["yaw"] - base["yaw"]) > cfg["yaw_deg"]:
-            return "Kopf zur Seite"
+            return "head turned to the side"
         if s["down"] - base["down"] > cfg["eyes_down"] and s["blink"] < 0.5:
-            return "Augen nach unten"
+            return "eyes looking down"
         if s["side"] - base["side"] > cfg["eyes_side"]:
-            return "Augen zur Seite"
+            return "eyes looking to the side"
         return None
 
     events, cur = [], None

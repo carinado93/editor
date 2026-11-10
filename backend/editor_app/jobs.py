@@ -16,27 +16,27 @@ _started = False
 
 # Anteil der Schritte am Gesamtfortschritt
 STEPS = [
-    ("pruefen", "Video wird geprüft", 0.01),
-    ("ton", "Tonspur wird vorbereitet", 0.04),
-    ("vorschau", "Vorschau-Video wird erstellt", 0.25),
-    ("transkript", "Transkript wird erstellt", 0.70),
+    ("pruefen", "Checking video", 0.01),
+    ("ton", "Preparing audio track", 0.04),
+    ("vorschau", "Creating preview video", 0.25),
+    ("transkript", "Creating transcript", 0.70),
 ]
 
 
 def enqueue(pid: str) -> None:
-    projects.update(pid, status="warteschlange", message="Wartet auf Verarbeitung …", error=None)
+    projects.update(pid, status="warteschlange", message="Waiting to be processed …", error=None)
     _queue.put((pid, "vorbereiten", {}))
 
 
 def enqueue_render(pid: str, quality: str) -> None:
     p = projects.load(pid)
     if p["status"] != "fertig":
-        raise UserError("Das Video wird noch vorbereitet. Bitte warte, bis es fertig ist.")
+        raise UserError("The video is still being prepared. Please wait until it is done.")
     if (p.get("render") or {}).get("status") in ("warteschlange", "arbeitet"):
-        raise UserError("Das Video wird schon gerendert.")
+        raise UserError("The video is already being rendered.")
     if quality not in render.QUALITIES:
-        raise UserError("Unbekannte Qualität.")
-    projects.update(pid, render={"status": "warteschlange", "progress": 0.0, "message": "Wartet …",
+        raise UserError("Unknown quality.")
+    projects.update(pid, render={"status": "warteschlange", "progress": 0.0, "message": "Waiting …",
                                  "error": None, "quality": quality})
     _queue.put((pid, "rendern", {"quality": quality}))
 
@@ -54,7 +54,7 @@ def _render_clip(pid: str, cid: str) -> None:
     def rep(f: float, msg: str):
         clips.update_clip(pid, cid, status="arbeitet", progress=round(f, 3), message=msg)
 
-    rep(0.0, "Startet …")
+    rep(0.0, "Starting …")
     t = json.loads(projects.path(pid, "transkript.json").read_text(encoding="utf-8"))
     v = cutstore.view(pid)
     gf = projects.path(pid, "blick.json")
@@ -65,7 +65,7 @@ def _render_clip(pid: str, cid: str) -> None:
                              projects.path(pid, "cache"), cuts.flat_words(t), v["evaluation"]["flags"],
                              c.get("hook_text", ""), face, str(config.ROOT / "assets" / "fonts"), rep,
                              c.get("texts", []))
-    clips.update_clip(pid, cid, status="fertig", progress=1.0, message="Fertig", file=res["file"],
+    clips.update_clip(pid, cid, status="fertig", progress=1.0, message="Done", file=res["file"],
                       size=res["size"], srt=res["srt"])
 
 
@@ -76,7 +76,7 @@ def _render(pid: str, quality: str) -> None:
         projects.update(pid, render={**(projects.load(pid).get("render") or {}), "status": "arbeitet",
                                      "progress": round(f, 4), "message": msg})
 
-    rep(0.0, "Rendern startet …")
+    rep(0.0, "Rendering starts …")
     v = cutstore.view(pid)
     segments = v["evaluation"]["keep"]
     name = render.safe_name(p["name"])
@@ -102,7 +102,7 @@ def _render(pid: str, quality: str) -> None:
         encoding="utf-8")
     exports = (projects.load(pid).get("exports") or []) + [{**result, "created": time.time()}]
     projects.update(pid, exports=exports,
-                    render={"status": "fertig", "progress": 1.0, "message": "Fertig", "error": None,
+                    render={"status": "fertig", "progress": 1.0, "message": "Done", "error": None,
                             "quality": quality, "file": result["file"]})
 
 
@@ -135,8 +135,8 @@ def _process(pid: str) -> None:
     rep = stage("ton")
     silent = not info["has_audio"]
     if silent and p["mode"] == "youtube":
-        raise UserError("Das Video hat keine Tonspur. Für den YouTube-Rohschnitt braucht die App deine Stimme. "
-                        "Für stumme Clips bitte den Modus „Reel veredeln“ wählen.")
+        raise UserError("The video has no audio track. For the YouTube rough cut the app needs your voice. "
+                        "For silent clips please choose the mode \"Enhance a reel\".")
     if not silent and not wav.exists():
         media.extract_audio(src, wav, info, lambda f: rep(f))
 
@@ -144,13 +144,13 @@ def _process(pid: str) -> None:
     base = done
     w_proxy = next(w for k, _, w in STEPS if k == "vorschau")
     w_trans = next(w for k, _, w in STEPS if k == "transkript")
-    state = {"proxy": 0.0, "trans": 0.0, "msg": "Transkript wird vorbereitet …"}
+    state = {"proxy": 0.0, "trans": 0.0, "msg": "Preparing transcript …"}
     lock = threading.Lock()
 
     def push():
         with lock:
             f_p, f_t, msg = state["proxy"], state["trans"], state["msg"]
-        extra = f" · Vorschau-Video {f_p:.0%}" if f_p < 1 else ""
+        extra = f" · preview video {f_p:.0%}" if f_p < 1 else ""
         projects.update(pid, status="arbeitet", step="transkript" if f_p >= 1 else "vorschau",
                         progress=round(base + w_proxy * f_p + w_trans * f_t, 4), message=msg + extra)
 
@@ -189,7 +189,7 @@ def _process(pid: str) -> None:
         result = transcribe.transcribe(wav, projects.path(pid, "cache"), settings.get("model", "auto"),
                                        settings.get("language", "auto"), on_trans)
     if t.is_alive():
-        on_trans(1.0, "Transkript fertig, Vorschau-Video wird noch erstellt")
+        on_trans(1.0, "Transcript done, preview video is still being created")
     t.join()
     if proxy_error:
         raise proxy_error[0]
@@ -197,11 +197,11 @@ def _process(pid: str) -> None:
     words = sum(len(s["words"]) for s in result["segments"])
     if p["mode"] in ("youtube", "reel"):
         cutstore.create(pid, result)  # Schnittvorschläge (Reel: Texte, ohne Schnitte) gleich mit berechnen
-        projects.update(pid, status="arbeitet", step="blick", progress=0.97, message="Blick-Erkennung …")
+        projects.update(pid, status="arbeitet", step="blick", progress=0.97, message="Gaze detection …")
         _gaze(pid)
-        projects.update(pid, message="Buzzwords werden ausgesucht …", progress=0.99)
+        projects.update(pid, message="Picking buzzwords …", progress=0.99)
         _buzz(pid)
-    projects.update(pid, status="fertig", step="", progress=1.0, message="Fertig",
+    projects.update(pid, status="fertig", step="", progress=1.0, message="Done",
                     transcript={"language": result["language"], "model": result["model"],
                                 "device": result["device"], "words": words})
 
@@ -219,7 +219,7 @@ def _gaze(pid: str) -> None:
         def rep(f: float):
             p = projects.load(pid)
             if p["status"] == "arbeitet":
-                projects.update(pid, message=f"Blick-Erkennung ({f:.0%})")
+                projects.update(pid, message=f"Gaze detection ({f:.0%})")
         data = gaze.analyze(projects.path(pid, "vorschau.mp4"), rep)
         out.write_text(json.dumps(data), encoding="utf-8")
         cutstore.refresh(pid)
@@ -262,12 +262,12 @@ def _worker() -> None:
             try:
                 if kind == "clip":
                     from . import clips
-                    clips.update_clip(pid, opts["cid"], status="fehler", error=explain(exc), message="Fehler")
+                    clips.update_clip(pid, opts["cid"], status="fehler", error=explain(exc), message="Error")
                 elif kind == "rendern":
                     r = projects.load(pid).get("render") or {}
-                    projects.update(pid, render={**r, "status": "fehler", "error": explain(exc), "message": "Fehler"})
+                    projects.update(pid, render={**r, "status": "fehler", "error": explain(exc), "message": "Error"})
                 else:
-                    projects.update(pid, status="fehler", error=explain(exc), message="Fehler")
+                    projects.update(pid, status="fehler", error=explain(exc), message="Error")
             except Exception:
                 pass
         finally:
@@ -290,4 +290,4 @@ def start() -> None:
             _queue.put((p["id"], "buzz", {}))  # einmalig automatische Buzzwords (macht nichts, wenn schon erledigt)
         elif (p.get("render") or {}).get("status") in ("warteschlange", "arbeitet"):
             projects.update(p["id"], render={**p["render"], "status": "fehler",
-                                             "error": "Das Rendern wurde unterbrochen (App beendet). Bitte nochmal starten."})
+                                             "error": "Rendering was interrupted (app closed). Please start it again."})

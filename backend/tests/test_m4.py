@@ -12,7 +12,7 @@ def test_meta_parse_rules():
     assert [c["time"] for c in m["chapters"]] == ["0:00", "0:30", "0:55"]  # 0:05 → 0:00, "0:09" fällt weg (< 10 s)
     assert m["tags"] == ["burnout", "stress"]
     assert m["hashtags"][:4] == ["#burnout", "#stress", "#selbstfürsorge", "#zu"] and len(m["hashtags"]) == 5
-    assert any("heilt" in w or "Heilversprechen" in w for w in m["warnings"])
+    assert any("healing promise" in w for w in m["warnings"])
     full = meta.full_description(m)
     assert "0:00 Gewinnspiel" in full and "#burnout" in full
 

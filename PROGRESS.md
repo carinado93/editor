@@ -2,6 +2,8 @@
 
 ## Stand: 8. November 2026
 
+> **10 Nov 2026:** The whole app interface is now in English (all pages, buttons, hints, plus the progress, error and warning messages from the engine). The prompts sent to Claude/Ollama are unchanged, so texts are still written in German or English as chosen. From now on, notes are in English.
+
 **Phase:** Meilenstein 3 fertig (Blick, Zoom, Ton, Untertitel, Buzzwords). Wartet auf Carinas Test und OK für Meilenstein 4.
 
 ### Erledigt

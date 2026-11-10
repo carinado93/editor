@@ -22,9 +22,9 @@ CH = 2
 FADE = 0.010  # Sekunden
 
 QUALITIES = {
-    "1080": "1080p (empfohlen)",
-    "2160": "4K (wenn das Original so groß ist)",
-    "original": "Original-Auflösung",
+    "1080": "1080p (recommended)",
+    "2160": "4K (if the original is that big)",
+    "original": "Original resolution",
 }
 
 
@@ -71,12 +71,12 @@ def build_audio(src: Path, info: dict, frames: list[tuple[int, int]], fps: Fract
     raw = work / "ton_48k.pcm"
     if not raw.exists():
         if not info["has_audio"]:
-            raise UserError("Das Video hat keine Tonspur.")
+            raise UserError("The video has no audio track.")
         tmp = raw.with_suffix(".tmp")
         r = media.run([media.ffmpeg(), "-hide_banner", "-y", "-i", str(src), "-map", f"0:{info['audio_index']}",
                        "-vn", "-ac", str(CH), "-ar", str(SR), "-f", "s16le", "-c:a", "pcm_s16le", str(tmp)])
         if r.returncode != 0:
-            raise UserError("Der Ton konnte nicht gelesen werden: " + r.stderr[-300:])
+            raise UserError("The audio could not be read: " + r.stderr[-300:])
         tmp.replace(raw)
     data = np.memmap(raw, dtype=np.int16, mode="r")
     total = len(data) // CH
@@ -174,7 +174,7 @@ def process_audio(raw: Path, out: Path, loudness: bool, denoise: bool) -> Path:
     r = media.run([media.ffmpeg(), "-hide_banner", "-nostdin", "-y", *pcm_in, "-af", ",".join(chain),
                    "-ar", str(SR), "-ac", str(CH), "-f", "s16le", str(out)])
     if r.returncode != 0:
-        raise UserError("Der Ton konnte nicht bearbeitet werden: " + r.stderr[-300:])
+        raise UserError("The audio could not be processed: " + r.stderr[-300:])
     return out
 
 
@@ -188,9 +188,9 @@ def render(src: Path, info: dict, segments: list[list[float]], out: Path, work: 
             "audio_copy": False, "reel": False, **(options or {})}
     report = progress or (lambda f, m: None)
     if quality not in QUALITIES:
-        raise UserError("Unbekannte Qualität.")
+        raise UserError("Unknown quality.")
     if not segments:
-        raise UserError("Es ist nichts mehr übrig: Alle Wörter sind geschnitten.")
+        raise UserError("Nothing is left: all words are cut.")
     work.mkdir(parents=True, exist_ok=True)
     out.parent.mkdir(parents=True, exist_ok=True)
     fps = frame_rate(info)
@@ -210,10 +210,10 @@ def render(src: Path, info: dict, segments: list[list[float]], out: Path, work: 
         pass  # Reel: Ton bleibt exakt wie im Original (wird nur übernommen)
     else:
         opts["audio_copy"] = False
-        report(0.02, "Ton wird geschnitten …")
+        report(0.02, "Cutting audio …")
         audio = build_audio(src, info, frames, fps, work)
     if audio is not None and (opts["loudness"] or opts["denoise"]):
-        report(0.04, "Ton wird veredelt (Lautstärke −14 LUFS) …")
+        report(0.04, "Polishing audio (loudness −14 LUFS) …")
         audio = process_audio(audio, work / "ton_fertig.pcm", opts["loudness"], opts["denoise"])
 
     # Untertitel / Buzzwords
@@ -282,7 +282,7 @@ def render(src: Path, info: dict, segments: list[list[float]], out: Path, work: 
     def on_video(f: float):
         el = time.time() - started
         rest = el / f * (1 - f) if f > 0.02 else None
-        msg = f"Video wird berechnet ({f:.0%})" + (f", noch ca. {int(rest // 60)} Min {int(rest % 60)} s" if rest else "")
+        msg = f"Rendering video ({f:.0%})" + (f", about {int(rest // 60)} min {int(rest % 60)} s left" if rest else "")
         report(0.06 + 0.94 * f, msg)
 
     media._run_with_progress(args, new_duration, on_video)
@@ -292,7 +292,7 @@ def render(src: Path, info: dict, segments: list[list[float]], out: Path, work: 
             (work / f).unlink()
         except OSError:
             pass
-    report(1.0, "Fertig gerendert")
+    report(1.0, "Rendering done")
     return {"file": out.name, "duration": round(new_duration, 2), "segments": len(frames),
             "size": out.stat().st_size, "quality": quality, "extra": extra_files,
             "options": {k: opts[k] for k in ("zoom", "loudness", "denoise", "subtitles", "karaoke", "audio_copy", "reel")},
@@ -308,7 +308,7 @@ def render_clip(src: Path, info: dict, segments: list[list[float]], out: Path, w
 
     report = progress or (lambda f, m: None)
     if not segments:
-        raise UserError("Der Clip ist leer.")
+        raise UserError("The clip is empty.")
     work.mkdir(parents=True, exist_ok=True)
     out.parent.mkdir(parents=True, exist_ok=True)
     fps = frame_rate(info)
@@ -320,7 +320,7 @@ def render_clip(src: Path, info: dict, segments: list[list[float]], out: Path, w
     fps_str = f"{fps.numerator}/{fps.denominator}"
     W, H = 1080, 1920
 
-    report(0.02, "Ton wird zusammengesetzt …")
+    report(0.02, "Putting the audio together …")
     audio = build_audio(src, info, frames, fps, work)
     audio = process_audio(audio, work / "clip_ton.pcm", True, False)
 
@@ -372,11 +372,11 @@ def render_clip(src: Path, info: dict, segments: list[list[float]], out: Path, w
             *media.filter_script_args(script), "-map", "[v]", "-map", "1:a", *enc, "-profile:v", "high",
             "-r", fps_str, "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", "-map_metadata", "-1",
             "-shortest", str(tmp)]
-    media._run_with_progress(args, total, lambda f: report(0.05 + 0.95 * f, f"Reel wird berechnet ({f:.0%})"))
+    media._run_with_progress(args, total, lambda f: report(0.05 + 0.95 * f, f"Rendering reel ({f:.0%})"))
     tmp.replace(out)
     srt = out.with_suffix(".srt")
     srt.write_text(subtitles.srt(groups), encoding="utf-8")
-    report(1.0, "Fertig")
+    report(1.0, "Done")
     return {"file": out.name, "duration": round(total, 2), "size": out.stat().st_size, "srt": srt.name}
 
 

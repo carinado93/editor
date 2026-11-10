@@ -59,28 +59,28 @@ export function ContentChat() {
       <div className="chat-head">
         <h2>Social Media Content</h2>
         <label className="small">
-          Sprache{" "}
+          Language{" "}
           <select value={lang} onChange={(e) => setLang(e.target.value)}>
-            <option value="en">Englisch</option>
-            <option value="de">Deutsch</option>
+            <option value="en">English</option>
+            <option value="de">German</option>
           </select>
         </label>
         {!!msgs.length && (
-          <button className="link" onClick={() => confirm("Neuen Chat beginnen? Der bisherige wird gelöscht.") && setMsgs([])}>
-            Neuer Chat
+          <button className="link" onClick={() => confirm("Start a new chat? The current one will be deleted.") && setMsgs([])}>
+            New chat
           </button>
         )}
       </div>
       {configured === false && (
         <div className="banner">
-          Für den Chat braucht die App einmalig deinen Claude-Schlüssel. <a href="#/einstellungen">→ Einstellungen</a>
+          The chat needs your Claude key once. <a href="#/einstellungen">→ Settings</a>
         </div>
       )}
       <div className="card chat">
         {!msgs.length && (
           <div className="muted chat-empty">
-            <p>Frag Claude nach Ideen, Hooks, Reel-Skripten, Captions oder Karussell-Texten. Deine Regeln und dein Stil sind immer dabei.</p>
-            <p className="small">Beispiele: „5 polarisierende Hooks über Sonntags-Scaries“ · „Karussell: Coping-Tools vs. Ursachen, 7 Folien“ · „Mach diese Caption kürzer: …“</p>
+            <p>Ask Claude for ideas, hooks, reel scripts, captions or carousel texts. Your rules and your style are always included.</p>
+            <p className="small">Examples: "5 polarizing hooks about Sunday scaries" · "Carousel: coping tools vs. causes, 7 slides" · "Make this caption shorter: …"</p>
           </div>
         )}
         {msgs.map((m, i) => (
@@ -88,12 +88,12 @@ export function ContentChat() {
             <div className="bubble-text">{m.content}</div>
             {m.role === "assistant" && (
               <button className="link small" onClick={() => navigator.clipboard.writeText(m.content)}>
-                kopieren
+                copy
               </button>
             )}
           </div>
         ))}
-        {busy && <div className="bubble assistant muted">Claude schreibt …</div>}
+        {busy && <div className="bubble assistant muted">Claude is writing …</div>}
         <div ref={end} />
       </div>
       {err && <div className="banner error small">⚠ {err}</div>}
@@ -101,7 +101,7 @@ export function ContentChat() {
         <textarea
           rows={3}
           value={input}
-          placeholder="Deine Idee oder Frage … (Enter = senden, Umschalt+Enter = neue Zeile)"
+          placeholder="Your idea or question … (Enter = send, Shift+Enter = new line)"
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
@@ -111,7 +111,7 @@ export function ContentChat() {
           }}
         />
         <button className="btn" disabled={busy || !input.trim()} onClick={send}>
-          Senden
+          Send
         </button>
       </div>
     </div>

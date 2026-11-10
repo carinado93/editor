@@ -24,17 +24,17 @@ from .errors import UserError
 _lock = threading.RLock()
 
 STATUS_TEXT = {
-    "hochladen": "Wird hochgeladen",
-    "warteschlange": "Wartet",
-    "arbeitet": "Wird verarbeitet",
-    "fertig": "Fertig",
-    "fehler": "Fehler",
+    "hochladen": "Uploading",
+    "warteschlange": "Waiting",
+    "arbeitet": "Processing",
+    "fertig": "Done",
+    "fehler": "Error",
 }
 
 
 def _dir(pid: str) -> Path:
     if not re.fullmatch(r"[a-z0-9-]{6,64}", pid):
-        raise UserError("Unbekanntes Projekt.")
+        raise UserError("Unknown project.")
     return PROJECTS_DIR / pid
 
 
@@ -45,7 +45,7 @@ def path(pid: str, name: str = "") -> Path:
 def load(pid: str) -> dict:
     f = _dir(pid) / "project.json"
     if not f.exists():
-        raise UserError("Dieses Projekt gibt es nicht (mehr).")
+        raise UserError("This project does not exist (any more).")
     with _lock:
         return json.loads(f.read_text(encoding="utf-8"))
 
@@ -69,14 +69,14 @@ def update(pid: str, **fields) -> dict:
 
 def create(name: str, mode: str, filename: str, size: int, settings: dict | None = None) -> dict:
     if mode not in MODES:
-        raise UserError("Unbekannter Modus.")
+        raise UserError("Unknown mode.")
     ext = Path(filename).suffix.lower() or ".mp4"
     if ext not in {".mp4", ".mov", ".m4v", ".mkv", ".avi", ".webm", ".mts"}:
-        raise UserError(f"Dateityp '{ext}' wird nicht unterstützt. Bitte lade ein Video (z. B. MP4 oder MOV) hoch.")
+        raise UserError(f"File type '{ext}' is not supported. Please upload a video (e.g. MP4 or MOV).")
     free = shutil.disk_usage(PROJECTS_DIR).free
     if size * 1.3 > free:
-        raise UserError(f"Nicht genug Platz auf der Festplatte: Das Video braucht etwa {size * 1.3 / 1e9:.1f} GB, "
-                        f"frei sind {free / 1e9:.1f} GB.")
+        raise UserError(f"Not enough space on the hard drive: the video needs about {size * 1.3 / 1e9:.1f} GB, "
+                        f"{free / 1e9:.1f} GB are free.")
     pid = time.strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:6]
     project = {
         "id": pid,
@@ -112,7 +112,7 @@ def list_all() -> list[dict]:
 def write_chunk(pid: str, offset: int, data: bytes) -> int:
     p = load(pid)
     if p["status"] != "hochladen":
-        raise UserError("Dieses Video ist schon fertig hochgeladen.")
+        raise UserError("This video has already been uploaded.")
     f = _dir(pid) / p["original_file"]
     current = f.stat().st_size if f.exists() else 0
     if offset != current:
@@ -120,7 +120,7 @@ def write_chunk(pid: str, offset: int, data: bytes) -> int:
     with open(f, "ab") as fh:
         fh.write(data)
     new = current + len(data)
-    update(pid, uploaded=new, progress=new / max(1, p["size"]), message="Wird hochgeladen …")
+    update(pid, uploaded=new, progress=new / max(1, p["size"]), message="Uploading …")
     return new
 
 

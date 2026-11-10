@@ -64,10 +64,10 @@ def default_model(use_gpu: bool) -> str:
 
 
 MODEL_CHOICES = {
-    "auto": "Automatisch (empfohlen)",
-    "small": "small – schnell, gut (Prozessor)",
-    "medium": "medium – genauer, langsamer",
-    "large-v3-turbo": "large-v3-turbo – sehr genau (Grafikkarte)",
+    "auto": "Automatic (recommended)",
+    "small": "small – fast, good (processor)",
+    "medium": "medium – more accurate, slower",
+    "large-v3-turbo": "large-v3-turbo – very accurate (graphics card)",
 }
 
 _loaded: dict[tuple, object] = {}
@@ -164,7 +164,7 @@ def transcribe(wav: Path, cache_dir: Path, model_name: str = "auto", language: s
     report = progress or (lambda f, m: None)
     use_gpu = gpu_available()
     name = default_model(use_gpu) if model_name == "auto" else model_name
-    report(0.0, "Spracherkennungs-Modell wird geladen (beim ersten Mal wird es heruntergeladen) …")
+    report(0.0, "Loading speech recognition model (downloaded the first time) …")
     try:
         model = load_model(name, use_gpu)
     except Exception:
@@ -178,7 +178,7 @@ def transcribe(wav: Path, cache_dir: Path, model_name: str = "auto", language: s
     total = len(audio) / SR
     lang = language
     if lang == "auto":
-        report(0.0, "Sprache wird erkannt …")
+        report(0.0, "Detecting language …")
         lang = detect_language(model, audio)
 
     bounds = chunk_bounds(audio)
@@ -189,7 +189,7 @@ def transcribe(wav: Path, cache_dir: Path, model_name: str = "auto", language: s
         if cache.exists():
             part = json.loads(cache.read_text(encoding="utf-8"))
         else:
-            label = f"Transkript: Stück {i + 1} von {len(bounds)}" if len(bounds) > 1 else "Transkript wird erstellt"
+            label = f"Transcript: part {i + 1} of {len(bounds)}" if len(bounds) > 1 else "Creating transcript"
             base = done_seconds
 
             def on_seconds(sec: float, base=base, label=label):
@@ -205,7 +205,7 @@ def transcribe(wav: Path, cache_dir: Path, model_name: str = "auto", language: s
                         and "cublas" not in str(exc).lower():
                     raise
                 # Grafikkarten-Bibliothek fehlt → automatisch mit dem Prozessor weiter
-                report(base / total, "Grafikkarte nicht nutzbar, rechne mit dem Prozessor weiter …")
+                report(base / total, "Graphics card not usable, continuing with the processor …")
                 use_gpu = False
                 name = default_model(False) if model_name in ("auto", "large-v3-turbo") else model_name
                 model = load_model(name, False)
@@ -213,8 +213,8 @@ def transcribe(wav: Path, cache_dir: Path, model_name: str = "auto", language: s
             cache.write_text(json.dumps(part, ensure_ascii=False), encoding="utf-8")
         segments.extend(part["segments"])
         done_seconds = b / SR
-        report(min(0.999, done_seconds / total), f"Stück {i + 1} von {len(bounds)} fertig")
+        report(min(0.999, done_seconds / total), f"Part {i + 1} of {len(bounds)} done")
 
-    report(1.0, "Transkript fertig")
-    return {"language": lang, "model": name, "device": "Grafikkarte" if use_gpu else "Prozessor",
+    report(1.0, "Transcript done")
+    return {"language": lang, "model": name, "device": "GPU" if use_gpu else "CPU",
             "duration": total, "segments": segments}

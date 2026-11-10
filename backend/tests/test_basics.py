@@ -96,7 +96,7 @@ def test_chunk_bounds_cut_in_quiet_place():
 def test_wrong_file_type_is_explained(client):
     r = client.post("/api/projects", json={"mode": "youtube", "filename": "notizen.pdf", "size": 10})
     assert r.status_code == 400
-    assert "nicht unterstützt" in r.json()["fehler"]
+    assert "not supported" in r.json()["fehler"]
 
 
 def test_upload_in_chunks_and_process(client, tmp_path):
@@ -180,4 +180,4 @@ def test_silent_reel_with_idea(client, tmp_path):
 
 def test_unknown_api_says_restart(client):
     r = client.post("/api/projects/xyz/gibt-es-nicht", json={})
-    assert r.status_code == 404 and "neu starten" in r.json()["fehler"]
+    assert r.status_code == 404 and "restart" in r.json()["fehler"]

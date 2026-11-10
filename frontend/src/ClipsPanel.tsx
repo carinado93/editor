@@ -4,8 +4,8 @@ import { Status } from "./ReelPackage";
 
 function copy(text: string, done: (m: string) => void) {
   navigator.clipboard.writeText(text).then(
-    () => done("Kopiert ✓"),
-    () => done("Kopieren ging nicht – bitte Text markieren und Strg+C."),
+    () => done("Copied ✓"),
+    () => done("Copying did not work – please select the text and press Ctrl+C."),
   );
 }
 
@@ -38,7 +38,7 @@ export function ClipsPanel({ id }: { id: string }) {
       const d = await api.suggestClips(id, eng, withFeedback ? feedback : "");
       setClips(d.clips);
       if (withFeedback) setFeedback("");
-      setMsg(`${d.clips.filter((c) => c.status === "vorschlag").length} Reel-Vorschläge ✓ – unten ansehen.`);
+      setMsg(`${d.clips.filter((c) => c.status === "vorschlag").length} reel suggestions ✓ – see below.`);
     } catch (e) {
       setErr((e as Error).message);
     } finally {
@@ -50,32 +50,32 @@ export function ClipsPanel({ id }: { id: string }) {
 
   return (
     <div className="card clips-card">
-      <h3>Reels aus diesem Video</h3>
+      <h3>Reels from this video</h3>
       <p className="small muted">
-        Claude sucht die stärksten 15–20-Sekunden-Momente, mit Hook in Sekunde 0. Stücke dürfen aus verschiedenen Stellen kommen.
-        Querformat-Videos werden ohne Zoom mittig ins Hochformat gesetzt (schwarze Balken, Hook-Text oben).
+        Claude finds the strongest 15–20-second moments, with a hook at second 0. Pieces may come from different parts of the video.
+        Landscape videos are placed in the middle of the portrait frame without zoom (black bars, hook text at the top).
       </p>
       <div className="row-buttons">
         <button className="btn" disabled={!!busy} onClick={() => suggest("claude", false)}>
-          {busy === "suggest" && engine === "claude" ? "Claude sucht … (ca. 30–90 s)" : "Mit Claude vorschlagen"}
+          {busy === "suggest" && engine === "claude" ? "Claude is searching … (about 30–90 s)" : "Suggest with Claude"}
         </button>
         <button className="btn ghost" disabled={!!busy} onClick={() => suggest("ollama", false)}>
-          {busy === "suggest" && engine === "ollama" ? "Lokale KI sucht … (2–5 Min)" : "Kostenlos mit Ollama"}
+          {busy === "suggest" && engine === "ollama" ? "Local AI is searching … (2–5 min)" : "Free with Ollama"}
         </button>
       </div>
       {vorschlaege > 0 && (
         <div className="feedback-box">
           <label className="small">
-            Wünsche zur Verfeinerung (z. B. „provokantere Hooks“, „mehr über Grenzen“, „kürzer, 15 s“)
+            Wishes to refine (e.g. "more provocative hooks", "more about boundaries", "shorter, 15 s")
             <textarea rows={2} value={feedback} onChange={(e) => setFeedback(e.target.value)} />
           </label>
           <button className="btn ghost" disabled={!!busy || !feedback.trim()} onClick={() => suggest(engine, true)}>
-            Neu vorschlagen mit diesen Wünschen
+            Suggest again with these wishes
           </button>
         </div>
       )}
       <Status busy={busy} err={err} msg={msg} />
-      {err?.includes("Einstellungen") && <a className="small" href="#/einstellungen">→ zu den Einstellungen</a>}
+      {err?.includes("Settings") && <a className="small" href="#/einstellungen">→ go to Settings</a>}
       <div className="clip-list">
         {clips.map((c) => (
           <ClipCard key={c.id} id={id} clip={c} onChange={setClips} onMsg={setMsg} onErr={setErr} />
@@ -132,21 +132,21 @@ function ClipCard({ id, clip, onChange, onMsg, onErr }: {
       <div className="clip-video">
         <video ref={video} src={api.proxyUrl(id)} preload="metadata" playsInline onPause={() => setPlaying(false)} />
         <button className="btn ghost small-btn" onClick={() => (playing ? video.current?.pause() : preview())}>
-          {playing ? "❚❚ Stopp" : "▶ Vorschau"}
+          {playing ? "❚❚ Stop" : "▶ Preview"}
         </button>
       </div>
       <div className="clip-body">
         <div className="clip-title">
           <strong>{clip.title}</strong>
           <span className="pill">{formatTime(clip.duration)}</span>
-          {clip.status === "fertig" && <span className="pill ok-pill">fertig</span>}
+          {clip.status === "fertig" && <span className="pill ok-pill">done</span>}
         </div>
         {clip.why && <div className="small muted">{clip.why}</div>}
         {clip.warnings?.map((w) => (
           <div key={w} className="small error-text">⚠ {w}</div>
         ))}
         <label className="small">
-          Hook-Text oben (*Wort* = lila)
+          Hook text at the top (*word* = purple)
           <input
             value={hook}
             onChange={(e) => setHook(e.target.value)}
@@ -154,29 +154,29 @@ function ClipCard({ id, clip, onChange, onMsg, onErr }: {
           />
         </label>
         <details className="small">
-          <summary>Was gesagt wird</summary>
+          <summary>What is said</summary>
           <p>{clip.text}</p>
         </details>
         <details className="small">
-          <summary>Caption, 5 Hashtags, Shorts-Titel</summary>
+          <summary>Caption, 5 hashtags, Shorts title</summary>
           <p className="pre">{clip.caption}</p>
           <p>{clip.hashtags.join(" ")}</p>
           <p>
             <em>{clip.shorts_title}</em>
           </p>
           <button className="link" onClick={() => copy(clip.caption + "\n\n" + clip.hashtags.join(" "), onMsg)}>
-            Caption + Hashtags kopieren
+            Copy caption + hashtags
           </button>{" "}
           <button className="link" onClick={() => copy(clip.shorts_title, onMsg)}>
-            Shorts-Titel kopieren
+            Copy Shorts title
           </button>
         </details>
         <div className="row-buttons">
           <button className="btn" disabled={rendering} onClick={() => run(() => api.renderClip(id, clip.id))}>
-            {clip.status === "fertig" ? "Nochmal rendern" : "Passt – Reel rendern"}
+            {clip.status === "fertig" ? "Render again" : "Looks good – render reel"}
           </button>
-          <button className="link danger" disabled={rendering} onClick={() => confirm("Diesen Vorschlag verwerfen?") && run(() => api.deleteClip(id, clip.id))}>
-            verwerfen
+          <button className="link danger" disabled={rendering} onClick={() => confirm("Discard this suggestion?") && run(() => api.deleteClip(id, clip.id))}>
+            discard
           </button>
         </div>
         {rendering && (
@@ -188,14 +188,14 @@ function ClipCard({ id, clip, onChange, onMsg, onErr }: {
         {clip.file && (
           <div className="small">
             <a href={api.exportUrl(id, clip.file)} download>
-              ⬇ Reel herunterladen
+              ⬇ Download reel
             </a>
             {clip.size ? <span className="muted"> · {formatSize(clip.size)}</span> : null}
             {clip.srt && (
               <>
                 {" · "}
                 <a href={api.exportUrl(id, clip.srt)} download>
-                  Untertitel (.srt)
+                  Subtitles (.srt)
                 </a>
               </>
             )}

@@ -13,18 +13,18 @@ def explain(exc: BaseException) -> str:
     text = f"{type(exc).__name__}: {exc}"
     low = text.lower()
     if "no space left" in low or "errno 28" in low:
-        return "Die Festplatte ist voll. Bitte lösche alte Projekte oder Dateien und versuche es nochmal."
+        return "The hard drive is full. Please delete old projects or files and try again."
     if "cuda" in low or "cudnn" in low or "cublas" in low:
-        return ("Die Grafikkarte konnte nicht benutzt werden. Die App rechnet stattdessen mit dem Prozessor "
-                "(langsamer, aber es funktioniert). Technisch: " + text)
+        return ("The graphics card could not be used. The app uses the processor instead "
+                "(slower, but it works). Technical details: " + text)
     if "out of memory" in low or "memoryerror" in low:
-        return ("Zu wenig Arbeitsspeicher. Wähle in den Einstellungen ein kleineres Spracherkennungs-Modell "
-                "(z. B. 'small') und schließe andere Programme.")
+        return ("Not enough memory. Choose a smaller speech recognition model in the settings "
+                "(e.g. 'small') and close other programs.")
     if "huggingface" in low or "connection" in low or "max retries" in low or "timed out" in low:
-        return ("Das Spracherkennungs-Modell konnte nicht heruntergeladen werden. Bitte prüfe die "
-                "Internetverbindung. (Nur beim allerersten Mal nötig.)")
+        return ("The speech recognition model could not be downloaded. Please check your "
+                "internet connection. (Only needed the very first time.)")
     if "invalid data found" in low or "moov atom not found" in low:
-        return "Die Videodatei ist beschädigt oder unvollständig. Bitte lade sie nochmal hoch."
+        return "The video file is damaged or incomplete. Please upload it again."
     if "ffmpeg" in low and ("not found" in low or "no such file" in low):
-        return "Das Programm ffmpeg fehlt. Bitte starte die App mit 'start.bat', das installiert es automatisch."
-    return "Unerwarteter Fehler. Bitte schick Claude diese Meldung: " + text
+        return "The program ffmpeg is missing. Please start the app with 'start.bat', it installs it automatically."
+    return "Unexpected error. Please send this message to Claude: " + text
