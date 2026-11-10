@@ -50,7 +50,7 @@ def system():
     disk = shutil.disk_usage(config.PROJECTS_DIR)
     return {
         "ffmpeg": ff is not None,
-        "video_encoder": "Grafikkarte (NVENC)" if encoder == "h264_nvenc" else "Prozessor",
+        "video_encoder": "graphics card (NVENC)" if encoder == "h264_nvenc" else "processor",
         "gpu": gpu,
         "default_model": transcribe.default_model(gpu),
         "models": transcribe.MODEL_CHOICES,

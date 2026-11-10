@@ -8,7 +8,7 @@ import traceback
 
 import time
 
-from . import cutstore, gaze, media, projects, render, transcribe
+from . import clips, cutstore, gaze, media, projects, render, transcribe
 from .errors import UserError, explain
 
 _queue: "queue.Queue[tuple[str, str, dict]]" = queue.Queue()
@@ -327,6 +327,16 @@ def start() -> None:
     _started = True
     threading.Thread(target=_worker, daemon=True, name="verarbeitung").start()
     for p in reversed(projects.list_all()):
+        # Reels, deren Rendern beim letzten Mal unterbrochen wurde, wieder freigeben (sonst bleibt der Knopf gesperrt)
+        try:
+            data = clips.load(p["id"])
+            stuck = [c for c in data.get("clips", []) if c.get("status") in ("warteschlange", "arbeitet")]
+            for c in stuck:
+                c.update(status="vorschlag", progress=0.0, message="", error=None)
+            if stuck:
+                clips.save(p["id"], data)
+        except Exception:  # noqa: BLE001
+            traceback.print_exc()
         if p["status"] in ("warteschlange", "arbeitet"):
             enqueue(p["id"])
         elif p["status"] == "fertig" and p["mode"] in ("youtube", "reel") and not _gaze_current(p["id"]):
