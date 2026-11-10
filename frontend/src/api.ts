@@ -89,6 +89,7 @@ export interface Clip {
   id: string;
   title: string;
   hook_text: string;
+  texts?: string[];
   parts: number[][];
   segments: [number, number][];
   duration: number;

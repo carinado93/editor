@@ -90,7 +90,22 @@ function ClipCard({ id, clip, onChange, onMsg, onErr }: {
 }) {
   const [hook, setHook] = useState(clip.hook_text);
   const [playing, setPlaying] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
   const video = useRef<HTMLVideoElement>(null);
+  // Wie im fertigen Reel: Hook ab Sekunde 0, danach die weiteren Texte gleichmäßig verteilt
+  const plan = (() => {
+    const out: { s: number; e: number; text: string; hook: boolean }[] = [];
+    const total = clip.duration;
+    const hookEnd = Math.min(total, 4.6);
+    if (hook.trim()) out.push({ s: 0, e: hookEnd, text: hook, hook: true });
+    const rest = (clip.texts ?? []).filter((t) => t.trim());
+    if (rest.length && total - hookEnd > 2.5) {
+      const slot = (total - hookEnd) / rest.length;
+      rest.forEach((t, i) => out.push({ s: hookEnd + i * slot + 0.15, e: hookEnd + (i + 1) * slot - 0.1, text: t, hook: false }));
+    }
+    return out;
+  })();
+  const shown = plan.find((p) => elapsed >= p.s && elapsed <= p.e) ?? (playing ? undefined : plan[0]);
   useEffect(() => setHook(clip.hook_text), [clip.hook_text]);
 
   // Vorschau: die Stücke nacheinander aus dem Vorschau-Video abspielen
@@ -98,21 +113,26 @@ function ClipCard({ id, clip, onChange, onMsg, onErr }: {
     const v = video.current;
     if (!v) return;
     let k = 0;
+    let done = 0; // Länge der schon gespielten Stücke
     const segs = clip.segments;
     setPlaying(true);
+    setElapsed(0);
     v.currentTime = segs[0][0];
     void v.play();
     const tick = () => {
       if (!v || v.paused) return;
       if (v.currentTime >= segs[k][1]) {
+        done += segs[k][1] - segs[k][0];
         k += 1;
         if (k >= segs.length) {
           v.pause();
           setPlaying(false);
+          setElapsed(0);
           return;
         }
         v.currentTime = segs[k][0];
       }
+      setElapsed(done + Math.max(0, v.currentTime - segs[k][0]));
       requestAnimationFrame(tick);
     };
     requestAnimationFrame(tick);
@@ -130,7 +150,17 @@ function ClipCard({ id, clip, onChange, onMsg, onErr }: {
   return (
     <div className={`clip ${clip.status}`}>
       <div className="clip-video">
-        <video ref={video} src={api.proxyUrl(id)} preload="metadata" playsInline onPause={() => setPlaying(false)} />
+        <div className="clip-frame">
+          <video ref={video} src={api.proxyUrl(id)} preload="metadata" playsInline disablePictureInPicture
+            onPause={() => setPlaying(false)} />
+          {shown && (
+            <span key={shown.text} className={`clip-ov ${shown.hook ? "hook" : ""}`}>
+              {shown.text.split(/(\*[^*]+\*)/).map((part, k) =>
+                part.startsWith("*") && part.endsWith("*") ? <em key={k}>{part.slice(1, -1)}</em> : <span key={k}>{part}</span>,
+              )}
+            </span>
+          )}
+        </div>
         <button className="btn ghost small-btn" onClick={() => (playing ? video.current?.pause() : preview())}>
           {playing ? "❚❚ Stop" : "▶ Preview"}
         </button>

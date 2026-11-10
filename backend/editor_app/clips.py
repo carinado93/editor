@@ -91,9 +91,16 @@ Regeln für jedes Reel:
 - Danach Stücke, die zusammen eine runde, verständliche Aussage ergeben. Stücke dürfen aus verschiedenen Stellen
   kommen und neu angeordnet werden (z. B. Hook aus Minute 3, dann Erklärung aus Minute 1).
 - Jedes Stück besteht aus aufeinanderfolgenden ganzen Sätzen (Liste von Satz-Nummern, z. B. [12, 13]).
-- Keine Bezüge, die ohne Kontext keinen Sinn ergeben ("wie gesagt", "das zweite", "dieser Punkt").
+- DAS WAS ZUERST: Wer das lange Video nie gesehen hat, muss in den ersten 3 Sekunden verstehen, WORUM es geht
+  (Thema + Spannung). Das erste Stück und der Hook-Text nennen das Thema ausdrücklich (z. B. Burnout, Stress,
+  Angst, Coaching, Grenzen) – kein Satz, der erst mit Vorwissen Sinn ergibt ("Kein Coach bei Burnout?" ist zu
+  knapp; besser: "Darf ein *Coach* bei Burnout helfen?").
+- Das Reel muss ganz für sich allein stehen: Thema → Problem/Frage → Antwort/Erkenntnis. Fehlt der Zusammenhang,
+  nimm ein Stück von einer anderen Stelle dazu, das ihn liefert, oder lass das Reel weg.
+- Keine Bezüge, die ohne Kontext keinen Sinn ergeben ("wie gesagt", "das zweite", "dieser Punkt", "er", "das da").
 - Schluss mit klarer Aussage oder Mini-Aufgabe.
-- Pro Reel: kurzer Hook-Text für die Einblendung ab Sekunde 0, der sofort sagt, worum es geht (max. 8 Wörter,
+- Pro Reel: kurzer Hook-Text für die Einblendung ab Sekunde 0, der sofort sagt, worum es geht – mit dem Thema
+  im Text (max. 9 Wörter,
   *ein Wort in Sternchen* wird lila), dazu 2–3 weitere kurze Einblendungen ("texts", je max. 8 Wörter), die die
   Kernaussage verstärken und nacheinander gezeigt werden,
   Caption in Carinas Stimme (Hook + 🤍, 2 kurze Absätze, "📌 Save this…", "Follow …", letzte Zeile
