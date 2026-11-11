@@ -317,10 +317,27 @@ def _buzz(pid: str) -> None:
         traceback.print_exc()
 
 
+RUNNING: dict[str, dict] = {}  # was die App gerade macht (für "Wartet …" in der Oberfläche)
+
+
+def running() -> list[dict]:
+    out = []
+    for lane, job in list(RUNNING.items()):
+        try:
+            name = projects.load(job["pid"])["name"]
+        except Exception:  # noqa: BLE001
+            name = job["pid"]
+        out.append({"lane": lane, "project": job["pid"], "name": name, "kind": job["kind"],
+                    "seconds": int(time.time() - job["started"])})
+    return out
+
+
 def _worker(q: "_JobQueue | None" = None) -> None:
     q = q or _queue
+    lane = "main" if q is _queue else "background"
     while True:
         pid, kind, opts = q.get()
+        RUNNING[lane] = {"pid": pid, "kind": kind, "started": time.time()}
         try:
             if kind == "rendern":
                 _render(pid, opts["quality"])
@@ -350,6 +367,7 @@ def _worker(q: "_JobQueue | None" = None) -> None:
             except Exception:
                 pass
         finally:
+            RUNNING.pop(lane, None)
             q.task_done()
 
 

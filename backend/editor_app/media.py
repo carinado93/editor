@@ -93,15 +93,30 @@ _TIME = re.compile(r"out_time_us=(\d+)")
 
 def _run_with_progress(args: list[str], duration: float, progress: Progress | None) -> None:
     """Startet ffmpeg und meldet den Fortschritt."""
-    cmd = [ffmpeg(), "-hide_banner", "-nostdin", "-y", "-progress", "pipe:1", "-nostats", *args]
+    import collections
+    import threading
+
+    cmd = [ffmpeg(), "-hide_banner", "-nostdin", "-y", "-loglevel", "error", "-progress", "pipe:1", "-nostats",
+           *args]
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
                             encoding="utf-8", errors="replace", creationflags=_NO_WINDOW)
     assert proc.stdout is not None
+    # Fehlermeldungen laufend mitlesen: sonst läuft unter Windows der kleine Puffer voll und ffmpeg bleibt
+    # für immer stehen (Video hängt bei "Vorschau-Video wird erstellt" / "Rendern")
+    tail: collections.deque = collections.deque(maxlen=60)
+
+    def drain():
+        for ln in proc.stderr:  # type: ignore[union-attr]
+            tail.append(ln)
+
+    t = threading.Thread(target=drain, daemon=True)
+    t.start()
     for line in proc.stdout:
         m = _TIME.match(line.strip())
         if m and progress and duration > 0:
             progress(min(1.0, int(m.group(1)) / 1e6 / duration))
-    err = proc.stderr.read() if proc.stderr else ""
+    t.join(timeout=10)
+    err = "".join(tail)
     if proc.wait() != 0:
         raise UserError("ffmpeg ran into a problem: " + err[-500:])
     if progress:

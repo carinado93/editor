@@ -58,6 +58,24 @@ export function ProjectView({ id }: { id: string }) {
   const [faceBox, setFaceBox] = useState<number[] | null>(null);
   const [suggesting, setSuggesting] = useState(false);
   const [watch, setWatch] = useState<string | null>(null);
+  const [busyWith, setBusyWith] = useState<string | null>(null);
+  // Beim Warten zeigen, womit die App gerade beschäftigt ist
+  useEffect(() => {
+    const waiting = project?.status === "warteschlange" || project?.render?.status === "warteschlange";
+    if (!waiting) {
+      setBusyWith(null);
+      return;
+    }
+    const KIND: Record<string, string> = { rendern: "rendering", clip: "rendering a reel of", vorbereiten: "preparing" };
+    const load = () =>
+      api.queue().then((q) => {
+        const main = q.running.find((r) => r.lane === "main" && r.project !== id);
+        setBusyWith(main ? `${KIND[main.kind] ?? main.kind} "${main.name}" (since ${Math.floor(main.seconds / 60)} min)` : null);
+      }).catch(() => {});
+    load();
+    const t = setInterval(load, 5000);
+    return () => clearInterval(t);
+  }, [project?.status, project?.render?.status, id]);
   const video = useRef<HTMLVideoElement>(null);
   const textBox = useRef<HTMLDivElement>(null);
   const previewRef = useRef(preview);
@@ -355,6 +373,7 @@ export function ProjectView({ id }: { id: string }) {
           ) : (
             <>
               <progress value={project.progress} max={1} /> {project.message} · total {Math.round(project.progress * 100)} %
+              {busyWith && <div className="small">The app is first finishing: {busyWith}. Your video starts right after.</div>}
             </>
           )}
         </div>

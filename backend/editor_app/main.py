@@ -249,6 +249,12 @@ class EffectsBody(BaseModel):
     wish: str = ""
 
 
+@app.get("/api/queue")
+def queue_status():
+    """Was die App gerade verarbeitet (damit "Wartet …" erklärt werden kann)."""
+    return {"running": jobs.running()}
+
+
 @app.get("/api/effects/types")
 def effect_types():
     from . import fx

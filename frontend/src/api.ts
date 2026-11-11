@@ -262,6 +262,7 @@ export const api = {
   renderOptions: (id: string, o: Partial<RenderOptions>) =>
     call<CutView>(`/api/projects/${id}/cuts/render-options`, { ...json(o), method: "PUT" }),
   buzzword: (id: string, start: number, end: number, on: boolean) => call<CutView>(`/api/projects/${id}/cuts/buzzword`, json({ start, end, on })),
+  queue: () => call<{ running: { lane: string; project: string; name: string; kind: string; seconds: number }[] }>(`/api/queue`),
   effectTypes: () => call<{ types: EffectType[] }>(`/api/effects/types`),
   suggestEffects: (id: string, engine: "claude" | "ollama", allowed: string[], wish: string) =>
     call<CutView>(`/api/projects/${id}/effects/${engine}`, json({ allowed, wish })),
