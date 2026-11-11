@@ -668,7 +668,8 @@ def draw_clothesline(layer, ctx, it, t, d, place):
     items = (it.get("items") or [])[:5]
     n = max(1, len(items))
     times = item_times(n, it.get("times"), d, first=0.3)
-    y_line = int(h * (0.16 if ctx.portrait else 0.14))
+    # über Carinas Kopf, aber nie in den oberen Rand (dort steht im Reel der Hook-Text)
+    y_line = int(h * max(0.14 if ctx.portrait else 0.1, ctx.face[1] - 0.08))
     sag = int(h * 0.05)
     dr = ImageDraw.Draw(layer)
     grow = ease_out(t / 0.4)
