@@ -30,6 +30,24 @@ export function ClipsPanel({ id }: { id: string }) {
     return () => clearInterval(t);
   }, [clips, id]);
 
+  // Fertig gerenderte Reels gleich herunterladen (landen im Download-Ordner)
+  const lastStatus = useRef<Record<string, string>>({});
+  useEffect(() => {
+    for (const c of clips) {
+      const before = lastStatus.current[c.id];
+      if ((before === "warteschlange" || before === "arbeitet") && c.status === "fertig" && c.file) {
+        const a = document.createElement("a");
+        a.href = api.exportUrl(id, c.file);
+        a.download = c.file;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setMsg(`"${c.title}" is ready ✓ – downloaded to your Downloads folder.`);
+      }
+      lastStatus.current[c.id] = c.status;
+    }
+  }, [clips, id]);
+
   const suggest = async (eng: "claude" | "ollama", withFeedback: boolean) => {
     setEngine(eng);
     setBusy("suggest");
@@ -206,6 +224,7 @@ function ClipCard({ id, clip, onChange, onMsg, onErr }: {
           <summary>Effects in this reel ({(clip.fx ?? []).filter((o) => o.on).length})</summary>
           <EffectsEditor
             compact
+            exclude={["vanish", "flash", "speed"]}
             items={clip.fx ?? []}
             time={elapsed}
             onSeek={() => preview()}

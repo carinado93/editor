@@ -65,8 +65,17 @@ TYPES = {
     "poof": ("C", "Poof (disappear / appear)", ("side",)),
     "clothesline": ("A", "Clothesline", ("side", "scene")),
     "lighttrail": ("C", "Light trail", ("side",)),
+    "vanish": ("D", "Disappear / appear in smoke", ("side",)),
+    "flash": ("D", "Flash poses (pop around the room)", ("scene",)),
+    "sticker": ("C", "Sticker heads (bubble head)", ("scene",)),
+    "counter": ("C", "Number counting up behind you", ("side",)),
+    "typewriter": ("B", "Typewriter text", ("side",)),
+    "ghost": ("C", "Ghost trail", ("side",)),
+    "whip": ("B", "Zoom-blur transition", ("side",)),
 }
-NEEDS_MASK = {"behind", "glow", "background", "lighttrail", "clothesline"}
+NEEDS_MASK = {"behind", "glow", "background", "lighttrail", "clothesline", "vanish", "sticker", "counter", "ghost"}
+# brauchen Standbilder aus dem Originalvideo (leerer Raum, Posen) – geht nur mit Stativ
+NEEDS_STILLS = {"vanish", "flash"}
 
 
 @functools.cache
@@ -220,6 +229,7 @@ class Ctx:
         self.face = face_box or [0.35, 0.12, 0.65, 0.5]
         self.words = words or []  # [{w, s, e}] in Zeit relativ zum Effekt-Beginn
         self.cache: dict = {}
+        self.stills: dict = {}  # "plate": leerer Raum, "poses": [(Bild, Maske), …]
 
     def region(self, place: str) -> tuple[int, int, int, int]:
         """Fläche, in der Kästen gezeichnet werden."""
@@ -773,11 +783,247 @@ def draw_lighttrail(base: Image.Image, ctx, it, t, d, mask: Image.Image) -> Imag
     return res
 
 
+def draw_typewriter(layer, ctx, it, t, d, place):
+    """Schreibmaschine: Text erscheint Buchstabe für Buchstabe oben (weiß, lila Schatten), Cursor blinkt."""
+    txt = (it.get("title") or "").replace("|", " ").replace("*", "")
+    if not txt:
+        return
+    f = font("head", int((90 if ctx.portrait else 76) * ctx.u))
+    lines = wrap(txt, f, int(ctx.w * 0.84))
+    total = sum(len(ln) for ln in lines)
+    shown = int(min(total, t / max(0.03, min(0.09, d * 0.5 / max(1, total)))))
+    out = min(1.0, max(0.0, (d - t) / 0.25))
+    dr = ImageDraw.Draw(layer)
+    y = ctx.h * (0.14 if ctx.portrait else 0.1)
+    left = shown
+    for ln in lines:
+        part = ln[:max(0, left)]
+        left -= len(ln)
+        x = ctx.w * 0.08
+        if part:
+            dr.text((x + 5 * ctx.u, y + 6 * ctx.u), part, font=f, fill=LILA + (int(230 * out),), anchor="lt")
+            dr.text((x, y), part, font=f, fill=WEISS + (int(255 * out),), anchor="lt")
+        if len(part) < len(ln) or ln is lines[-1]:  # hier steht der Cursor
+            if int(t * 3) % 2 == 0:
+                cx = x + f.getlength(part) + 6 * ctx.u
+                dr.rectangle((cx, y, cx + 6 * ctx.u, y + f.size), fill=WEISS + (int(255 * out),))
+            break
+        y += f.size * 1.1
+
+
+def _smoke(layer, ctx, cx, cy, size, t, seed, life=1.4, peak=0.45):
+    """Große, weiche Rauchwolke (weiß/lavendel), steigt leicht auf und löst sich auf."""
+    rnd = random.Random(seed)
+    smoke = Image.new("RGBA", layer.size, (0, 0, 0, 0))
+    dr = ImageDraw.Draw(smoke)
+    for k in range(70):
+        ang = rnd.uniform(0, 2 * math.pi)
+        dist = rnd.uniform(0.0, 0.9) * size
+        r0 = rnd.uniform(0.2, 0.42) * size
+        delay = rnd.uniform(0.0, peak * 0.6)
+        p = (t - delay) / life
+        if p <= 0 or p >= 1:
+            continue
+        grow = ease_out(min(1.0, p * 2.2))
+        x = cx + math.cos(ang) * dist * (0.4 + 0.8 * grow)
+        y = cy + math.sin(ang) * dist * 0.9 * (0.4 + 0.8 * grow) - size * 0.35 * p
+        r = r0 * (0.4 + 0.8 * grow)
+        a = int(255 * min(1.0, p * 5) * (1 - p) ** 1.1)
+        col = (WEISS, (246, 244, 250), LAVENDEL_HELL, WEISS)[k % 4]
+        dr.ellipse((x - r, y - r, x + r, y + r), fill=col + (a,))
+    sm = smoke.resize((smoke.width // 4, smoke.height // 4), Image.BILINEAR).filter(ImageFilter.GaussianBlur(7 * ctx.u))
+    layer.alpha_composite(sm.resize(layer.size, Image.BILINEAR))
+
+
+def _bbox_center(mask: Image.Image | None, ctx) -> tuple[float, float, float]:
+    """Mitte und Größe der Person (aus der Maske), sonst aus dem Gesicht geschätzt."""
+    if mask is not None:
+        box = mask.point(lambda v: 255 if v > 128 else 0).getbbox()
+        if box:
+            x0, y0, x1, y1 = box
+            return (x0 + x1) / 2, (y0 + y1) / 2, max(x1 - x0, (y1 - y0) * 0.6)
+    fx0, fy0, fx1, fy1 = ctx.face
+    return (fx0 + fx1) / 2 * ctx.w, min(ctx.h * 0.8, fy1 * ctx.h + (fy1 - fy0) * ctx.h), (fx1 - fx0) * ctx.w * 2.4
+
+
+def draw_vanish(base, ctx, it, t, d, mask):
+    """Verschwinden (oder Auftauchen) in einer Rauchwolke: am dichtesten Punkt wird zwischen Carina und dem
+    leeren Raum (Standbild vom Stativ) gewechselt."""
+    plate = ctx.stills.get("plate")
+    peak = min(0.6, d * 0.35)
+    mode = it.get("mode") or "vanish"
+    if "center" not in ctx.cache:
+        ctx.cache["center"] = _bbox_center(mask, ctx)
+    cx, cy, size = ctx.cache["center"]
+    show_plate = (t >= peak) if mode == "vanish" else (t < peak)
+    img = base.copy()
+    if show_plate and plate is not None:
+        img = plate.convert("RGBA").copy()
+    layer = Image.new("RGBA", base.size, (0, 0, 0, 0))
+    _smoke(layer, ctx, cx, cy, size, t, it.get("id", "v"), life=min(1.6, d), peak=peak)
+    img.alpha_composite(layer)
+    return img
+
+
+def draw_flash(base, ctx, it, t, d, mask):
+    """Flash-Posen: Carina taucht nacheinander an verschiedenen Stellen im Raum auf (Standbilder aus dem Video,
+    freigestellt auf dem leeren Raum). Jede neue Pose beginnt mit einer weiß leuchtenden Silhouette."""
+    plate = ctx.stills.get("plate")
+    poses = ctx.stills.get("poses") or []
+    if plate is None or not poses:
+        return base
+    hold = d / len(poses)
+    k = min(len(poses) - 1, int(t / hold))
+    local = t - k * hold
+    img = plate.convert("RGBA").copy()
+    still, m = poses[k]
+    flash = 0.14
+    if local < flash:
+        # weiße Silhouette mit Schein, die in die Person übergeht
+        a = 1 - local / flash
+        person = Image.composite(still.convert("RGBA"), img, m)
+        white = Image.new("RGBA", img.size, WEISS + (0,))
+        white.putalpha(m.point(lambda v: int(v * a)))
+        halo = Image.new("RGBA", img.size, WEISS + (0,))
+        halo.putalpha(m.filter(ImageFilter.MaxFilter(int(15 * ctx.u) | 1)).filter(ImageFilter.GaussianBlur(14 * ctx.u))
+                      .point(lambda v: int(v * a * 0.9)))
+        person.alpha_composite(halo)
+        person.alpha_composite(white)
+        return person
+    return Image.composite(still.convert("RGBA"), img, m)
+
+
+@functools.cache
+def sticker_bg(w: int, h: int) -> Image.Image:
+    """Hintergrund für die Sticker-Köpfe: Lavendel mit goldenen Sternen."""
+    im = lavender_bg(w, h)
+    d = ImageDraw.Draw(im)
+    rnd = random.Random(7)
+    u = min(w, h) / 1080
+    for _ in range(14):
+        x, y, r = rnd.uniform(0, w), rnd.uniform(0, h), rnd.uniform(18, 34) * u
+        pts = []
+        for j in range(10):
+            ang = -math.pi / 2 + j * math.pi / 5
+            rr = r if j % 2 == 0 else r * 0.45
+            pts.append((x + math.cos(ang) * rr, y + math.sin(ang) * rr))
+        d.polygon(pts, fill=GOLD + (230,))
+    return im
+
+
+def draw_sticker(base, ctx, it, t, d, mask):
+    """Sticker-Köpfe: Carinas Kopf freigestellt mit dickem weißem Rand, zweimal auf Lavendel mit Sternen,
+    wippt leicht; in der Mitte groß das gerade gesprochene Wort."""
+    w, h = base.size
+    bg = sticker_bg(w, h).copy()
+    fx0, fy0, fx1, fy1 = ctx.face
+    fw, fh = (fx1 - fx0) * w, (fy1 - fy0) * h
+    box = (int(max(0, fx0 * w - fw * 0.35)), int(max(0, fy0 * h - fh * 0.45)),
+           int(min(w, fx1 * w + fw * 0.35)), int(min(h, fy1 * h + fh * 0.25)))
+    if mask is not None and box[2] > box[0] and box[3] > box[1]:
+        head = base.crop(box)
+        hm = mask.crop(box)
+        # Kopf-Form: Maske, unten weich abgeschnitten
+        cut = Image.new("L", head.size, 0)
+        ImageDraw.Draw(cut).ellipse((-head.width * 0.1, -head.height * 0.2, head.width * 1.1, head.height * 1.02), fill=255)
+        hm = Image.composite(hm, Image.new("L", head.size, 0), cut)
+        border = hm.filter(ImageFilter.MaxFilter(int(17 * ctx.u) | 1))
+        stk = Image.new("RGBA", head.size, WEISS + (0,))
+        stk.putalpha(border)
+        head_rgba = head.convert("RGBA")
+        head_rgba.putalpha(hm)
+        stk.alpha_composite(head_rgba)
+        stk = _shadow(stk, int(10 * ctx.u), int(8 * ctx.u), alpha=50)
+        target = h * (0.3 if ctx.portrait else 0.42)
+        sc = target / stk.height
+        pos = [(w * 0.5, h * 0.25), (w * 0.5, h * 0.75)] if ctx.portrait else [(w * 0.25, h * 0.5), (w * 0.75, h * 0.5)]
+        for j, (px, py) in enumerate(pos):
+            bob = math.sin(t * 4 + j * 1.7) * 10 * ctx.u
+            s_, a = appear(t, 0.05 + j * 0.12, 0, d)
+            paste_scaled(bg, stk, (px, py + bob), sc * s_, a, rot=math.sin(t * 2.5 + j) * 3)
+    layer = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    cur = [x for x in ctx.words if x["s"] - 0.02 <= t <= x["e"] + 0.2]
+    if cur:
+        word = cur[-1]["w"].strip(".,!?…;:")
+        f = font("black", int(110 * ctx.u))
+        while f.getlength(word) > w * 0.9 and f.size > 30:
+            f = font("black", int(f.size * 0.9))
+        ImageDraw.Draw(layer).text((w / 2, h / 2), word, font=f, fill=WEISS, anchor="mm",
+                                   stroke_width=max(3, int(8 * ctx.u)), stroke_fill=LILA)
+    bg.alpha_composite(layer)
+    fade = min(1.0, t / 0.2, max(0.0, (d - t) / 0.2))
+    return Image.blend(base, bg, fade)
+
+
+def draw_counter(base, ctx, it, t, d, mask):
+    """Große Zahl zählt hinter Carina hoch (z. B. 0 → 120), kleine Zeile darunter ("Tage")."""
+    w, h = base.size
+    raw = (it.get("title") or "100").split("|")
+    num_txt = raw[0].strip()
+    label = raw[1].strip() if len(raw) > 1 else ""
+    digits = "".join(ch for ch in num_txt if ch.isdigit())
+    target = int(digits) if digits else 0
+    pre = num_txt[:len(num_txt) - len(num_txt.lstrip("+-€$ "))]
+    suf = num_txt[len(pre) + len(digits):] if digits and num_txt.find(digits) >= 0 else ""
+    p = ease_out(t / max(0.5, d * 0.55))
+    val = f"{pre}{int(round(target * p)):,}{suf}".replace(",", ".")
+    f = font("black", int((380 if not ctx.portrait else 300) * ctx.u))
+    layer = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    dr = ImageDraw.Draw(layer)
+    out = min(1.0, max(0.0, (d - t) / 0.25)) * min(1.0, t / 0.15)
+    cy = h * (0.3 if not ctx.portrait else 0.32)
+    dr.text((w / 2, cy), val, font=f, fill=WEISS + (int(255 * out),), anchor="mm")
+    if label:
+        fl = font("serif_i", int(90 * ctx.u))
+        dr.text((w / 2, cy + f.size * 0.55), label, font=fl, fill=GOLD + (int(255 * out),), anchor="mm")
+    withtext = base.copy()
+    withtext.alpha_composite(layer)
+    return Image.composite(base, withtext, mask) if mask is not None else withtext
+
+
+def draw_ghost(base, ctx, it, t, d, mask):
+    """Geister-Spur: zwei durchsichtige Kopien von Carina aus den letzten Momenten bleiben hinter ihr zurück."""
+    hist = ctx.cache.setdefault("ghost", [])
+    out = base.copy()
+    fade = min(1.0, t / 0.2, max(0.0, (d - t) / 0.25))
+    for j, (img, m, _) in enumerate(hist[-3::-2][:2]):  # ältere Bilder
+        a = (0.42 if j == 0 else 0.22) * fade
+        ghost = img.convert("RGBA")
+        ghost.putalpha(m.point(lambda v: int(v * a)))
+        out.alpha_composite(ghost)
+    if mask is not None:
+        out = Image.composite(base, out, mask)  # die echte Carina immer vorn
+        if not hist or t - hist[-1][2] >= 0.12:
+            hist.append((base.copy(), mask.copy(), t))
+            del hist[:-8]
+    return out
+
+
+def draw_whip(base, ctx, it, t, d):
+    """Zoom-Blur-Übergang: zur Mitte hin zoomt das Bild schnell und verwischt (gut über einem Schnitt)."""
+    mid = d / 2
+    k = max(0.0, 1 - abs(t - mid) / mid)  # 0 → 1 → 0
+    k = k * k
+    if k < 0.02:
+        return base
+    w, h = base.size
+    acc = None
+    steps = 6
+    for j in range(steps):
+        z = 1 + k * 0.35 * (j / (steps - 1))
+        cw, ch = int(w / z), int(h / z)
+        crop = base.crop(((w - cw) // 2, (h - ch) // 2, (w + cw) // 2, (h + ch) // 2)).resize((w, h), Image.BILINEAR)
+        arr = np.asarray(crop, dtype=np.float32)
+        acc = arr if acc is None else acc + arr
+    blur = Image.fromarray((acc / steps).astype(np.uint8), base.mode)
+    return Image.blend(base, blur, min(1.0, k * 1.4))
+
+
 # Zeichner, die nur eine Ebene über dem Bild brauchen
 LAYER_DRAWERS = {"steps": draw_steps, "cards": draw_cards, "tags": draw_tags, "scores": draw_scores,
                  "headline": draw_headline, "checklist": draw_checklist, "endcard": draw_endcard,
                  "bigwords": draw_bigwords, "pill": draw_pill, "poof": draw_poof,
-                 "clothesline": draw_clothesline}
+                 "clothesline": draw_clothesline, "typewriter": draw_typewriter}
 
 
 def render_frame(frame: Image.Image, it: dict, t: float, d: float, ctx: Ctx, mask: Image.Image | None) -> Image.Image:
@@ -848,6 +1094,18 @@ def render_frame(frame: Image.Image, it: dict, t: float, d: float, ctx: Ctx, mas
         withtext = base.copy()
         withtext.alpha_composite(layer)
         return Image.composite(base, withtext, mask).convert("RGB")
+    if typ == "whip":
+        return draw_whip(base, ctx, it, t, d).convert("RGB")
+    if typ == "flash":
+        return draw_flash(base, ctx, it, t, d, mask).convert("RGB")
+    if typ == "vanish":
+        return draw_vanish(base, ctx, it, t, d, mask).convert("RGB")
+    if typ == "sticker":
+        return draw_sticker(base, ctx, it, t, d, mask).convert("RGB")
+    if typ == "counter":
+        return draw_counter(base, ctx, it, t, d, mask).convert("RGB")
+    if typ == "ghost":
+        return draw_ghost(base, ctx, it, t, d, mask).convert("RGB")
     if typ == "lighttrail":
         return draw_lighttrail(base, ctx, it, t, d, mask).convert("RGB")
     if typ == "glow":
@@ -914,11 +1172,32 @@ class Segmenter:
             pass
 
 
+def with_placeholders(it: dict) -> dict:
+    """Für die Vorschau: leere Texte mit Beispieltext füllen, damit man den Stil sieht."""
+    it = dict(it)
+    if not (it.get("title") or "").strip() and it.get("type") not in ("poof", "glow", "lighttrail", "ghost", "whip",
+                                                                       "vanish", "flash", "sticker", "bigwords"):
+        it["title"] = {"counter": "120|Tage", "behind": "TEXT"}.get(it.get("type"), "Dein *Text*|hier")
+    if not it.get("items") and it.get("type") in ("steps", "cards", "tags", "scores", "checklist", "clothesline",
+                                                  "endcard"):
+        it["items"] = ["Punkt 1|7", "Punkt 2|5", "Punkt 3|8"] if it.get("type") != "endcard" else ["Kommentiere RUHE"]
+    return it
+
+
 def preview_png(it: dict, w: int, h: int, face_box, frame: Image.Image | None, out: Path,
-                segmenter: Segmenter | None = None) -> None:
-    """Standbild des Effekts (für die Vorschau in der App), ca. bei 75 % der Dauer."""
+                segmenter: Segmenter | None = None, stills: dict | None = None) -> None:
+    """Standbild des Effekts (für die Vorschau in der App), ca. bei 75 % der Dauer.
+    Leere Texte werden für die Vorschau mit Beispieltext gefüllt, damit man den Stil sieht."""
+    it = dict(it)
+    if not (it.get("title") or "").strip() and it.get("type") not in ("poof", "glow", "lighttrail", "ghost", "whip",
+                                                                       "vanish", "flash", "sticker", "bigwords"):
+        it["title"] = {"counter": "120|Tage", "behind": "TEXT"}.get(it.get("type"), "Dein *Text*|hier")
+    if not it.get("items") and it.get("type") in ("steps", "cards", "tags", "scores", "checklist", "clothesline",
+                                                  "endcard"):
+        it["items"] = ["Punkt 1|7", "Punkt 2|5", "Punkt 3|8"] if it.get("type") != "endcard" else ["Kommentiere RUHE"]
     d = max(1.0, it["end"] - it["start"])
-    ctx = Ctx(w, h, face_box, it.get("_words"))
+    ctx = Ctx(w, h, face_box, it.get("_words") or [{"w": "Beispiel", "s": 0, "e": 99}])
+    ctx.stills = stills or {}
     frame = frame or Image.new("RGB", (w, h), (90, 90, 90))
     mask = segmenter.mask(frame) if (segmenter and it.get("type") in NEEDS_MASK) else None
     t = 0.3 if it.get("type") == "poof" else d * 0.75  # Puff: im dichtesten Moment zeigen

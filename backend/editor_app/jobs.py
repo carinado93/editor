@@ -11,7 +11,39 @@ import time
 from . import clips, cutstore, gaze, media, projects, render, transcribe
 from .errors import UserError, explain
 
-_queue: "queue.Queue[tuple[str, str, dict]]" = queue.Queue()
+class _JobQueue:
+    """Warteschlange mit Vorrang: Rendern (Carina wartet darauf) vor Vorbereiten vor Hintergrund-Arbeiten."""
+    PRIO = {"rendern": 0, "clip": 0, "vorbereiten": 1, "blick": 2, "buzz": 3, "nachhoeren": 3}
+
+    def __init__(self):
+        self._q: queue.PriorityQueue = queue.PriorityQueue()
+        self._n = 0
+        self._lock = threading.Lock()
+
+    def put(self, job: tuple) -> None:
+        if self is _queue and job[1] in BACKGROUND:
+            _bg_queue.put(job)  # Hintergrund-Arbeiten blockieren nie das Rendern
+            return
+        with self._lock:
+            self._n += 1
+            self._q.put((self.PRIO.get(job[1], 1), self._n, job))
+
+    def get(self) -> tuple:
+        return self._q.get()[2]
+
+    def task_done(self) -> None:
+        self._q.task_done()
+
+    def join(self) -> None:
+        self._q.join()
+
+    def empty(self) -> bool:
+        return self._q.empty()
+
+
+_queue = _JobQueue()
+_bg_queue = _JobQueue()
+BACKGROUND = {"blick", "buzz", "nachhoeren"}
 _started = False
 
 # Anteil der Schritte am Gesamtfortschritt
@@ -200,8 +232,7 @@ def _process(pid: str) -> None:
         cutstore.create(pid, result)  # Schnittvorschläge (Reel: Texte, ohne Schnitte) gleich mit berechnen
         projects.update(pid, status="arbeitet", step="blick", progress=0.97, message="Gaze detection …")
         _gaze(pid)
-        projects.update(pid, message="Planning animations and buzzwords …", progress=0.99)
-        _buzz(pid)
+        _bg_queue.put((pid, "buzz", {}))  # Animationen/Buzzwords im Hintergrund planen (blockiert nichts)
     projects.update(pid, status="fertig", step="", progress=1.0, message="Done",
                     transcript={"language": result["language"], "model": result["model"],
                                 "device": result["device"], "words": words})
@@ -286,9 +317,10 @@ def _buzz(pid: str) -> None:
         traceback.print_exc()
 
 
-def _worker() -> None:
+def _worker(q: "_JobQueue | None" = None) -> None:
+    q = q or _queue
     while True:
-        pid, kind, opts = _queue.get()
+        pid, kind, opts = q.get()
         try:
             if kind == "rendern":
                 _render(pid, opts["quality"])
@@ -312,12 +344,13 @@ def _worker() -> None:
                 elif kind == "rendern":
                     r = projects.load(pid).get("render") or {}
                     projects.update(pid, render={**r, "status": "fehler", "error": explain(exc), "message": "Error"})
-                else:
+                elif kind == "vorbereiten":
                     projects.update(pid, status="fehler", error=explain(exc), message="Error")
+                # Hintergrund-Arbeiten (Blick, Animationen, Nachhören): nur protokollieren, Projekt bleibt fertig
             except Exception:
                 pass
         finally:
-            _queue.task_done()
+            q.task_done()
 
 
 def start() -> None:
@@ -327,6 +360,7 @@ def start() -> None:
         return
     _started = True
     threading.Thread(target=_worker, daemon=True, name="verarbeitung").start()
+    threading.Thread(target=_worker, args=(_bg_queue,), daemon=True, name="hintergrund").start()
     for p in reversed(projects.list_all()):
         # Reels, deren Rendern beim letzten Mal unterbrochen wurde, wieder freigeben (sonst bleibt der Knopf gesperrt)
         try:
@@ -338,6 +372,10 @@ def start() -> None:
                 clips.save(p["id"], data)
         except Exception:  # noqa: BLE001
             traceback.print_exc()
+        if (p.get("render") or {}).get("status") in ("warteschlange", "arbeitet"):
+            # Rendern wurde unterbrochen (App geschlossen): freigeben, sonst bleibt "Final render" gesperrt
+            projects.update(p["id"], render={**p["render"], "status": "fehler",
+                                             "error": "Rendering was interrupted (app closed). Please start it again."})
         if p["status"] in ("warteschlange", "arbeitet"):
             enqueue(p["id"])
         elif p["status"] == "fertig" and p["mode"] in ("youtube", "reel") and not _gaze_current(p["id"]):
@@ -346,6 +384,4 @@ def start() -> None:
             if _relisten_needed(p):
                 _queue.put((p["id"], "nachhoeren", {}))  # ältere Projekte: versteckte Retakes nachträglich finden
             _queue.put((p["id"], "buzz", {}))  # einmalig automatische Buzzwords (macht nichts, wenn schon erledigt)
-        elif (p.get("render") or {}).get("status") in ("warteschlange", "arbeitet"):
-            projects.update(p["id"], render={**p["render"], "status": "fehler",
-                                             "error": "Rendering was interrupted (app closed). Please start it again."})
+

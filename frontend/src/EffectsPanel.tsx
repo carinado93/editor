@@ -6,6 +6,7 @@ const GROUP_LABEL: Record<string, string> = {
   A: "Boxes & cards",
   B: "Text over the video",
   C: "You cut out (needs more render time)",
+  D: "Tripod tricks (film on a tripod + a few seconds of the empty room)",
 };
 
 const PLACE_LABEL = { scene: "Full screen", side: "Next to you" };
@@ -45,7 +46,7 @@ function FxPreview({ preview, item }: { preview: PreviewFn; item: Overlay }) {
       } finally {
         setLoading(false);
       }
-    }, 600);
+    }, 900);
     return () => {
       clearTimeout(timer);
       ctrl.abort();
@@ -54,8 +55,8 @@ function FxPreview({ preview, item }: { preview: PreviewFn; item: Overlay }) {
   }, [key]);
   return (
     <div className="fx-preview-box">
-      {src && <img className={`fx-preview ${loading ? "loading" : ""}`} src={src} alt="Effect preview" />}
-      {!src && <div className="fx-preview placeholder small muted">{failed ? "No preview" : "Drawing preview …"}</div>}
+      {src && <video className={`fx-preview ${loading ? "loading" : ""}`} src={src} autoPlay loop muted playsInline />}
+      {!src && <div className="fx-preview placeholder small muted">{failed ? "No preview" : "Building preview video …"}</div>}
       {src && loading && <span className="fx-preview-busy small">updating …</span>}
     </div>
   );
@@ -117,7 +118,7 @@ export function EffectsPanel({ id, cuts, onCuts, time, onSeek }: {
 }
 
 /** Die Effekt-Liste selbst (für das ganze Video und für jedes Reel). Du wählst, Claude schlägt vor. */
-export function EffectsEditor({ items: source, allowedInit, time, onSeek, preview, onSave, onSuggest, children, compact }: {
+export function EffectsEditor({ items: source, allowedInit, time, onSeek, preview, onSave, onSuggest, children, compact, exclude }: {
   items: Overlay[];
   allowedInit?: string[];
   time: number;
@@ -127,12 +128,14 @@ export function EffectsEditor({ items: source, allowedInit, time, onSeek, previe
   onSuggest: (engine: "claude" | "ollama", allowed: string[], wish: string) => Promise<number>;
   children?: ReactNode;
   compact?: boolean;
+  exclude?: string[];
 }) {
   const [types, setTypes] = useState<EffectType[]>([]);
   const [allowed, setAllowed] = useState<string[]>(allowedInit ?? []);
   const [items, setItems] = useState<Overlay[]>(source);
   const [dirty, setDirty] = useState(false);
   const [addType, setAddType] = useState("headline");
+  const [addText, setAddText] = useState("");
   const [wish, setWish] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -140,6 +143,7 @@ export function EffectsEditor({ items: source, allowedInit, time, onSeek, previe
 
   useEffect(() => {
     api.effectTypes().then((r) => {
+      r.types = r.types.filter((t) => !(exclude ?? []).includes(t.key));
       setTypes(r.types);
       setAllowed((a) => (a.length ? a : r.types.filter((t) => t.group !== "C").map((t) => t.key)));
     }).catch(() => {});
@@ -181,19 +185,26 @@ export function EffectsEditor({ items: source, allowedInit, time, onSeek, previe
     setItems(items.map((o, j) => (j === i ? { ...o, ...patch } : o)));
   };
 
+  const LIST_TYPES = ["steps", "cards", "tags", "scores", "checklist", "endcard", "bigwords", "clothesline"];
   const add = () => {
     const t = types.find((x) => x.key === addType);
-    const dur = addType === "poof" ? 1 : 4;
-    const start = Math.max(0, addType === "poof" ? time - 0.25 : time);
+    const dur = addType === "poof" ? 1 : addType === "whip" ? 0.6 : 4;
+    const start = Math.max(0, addType === "poof" ? time - 0.25 : addType === "whip" ? time - 0.3 : time);
+    // Dein Text macht den Effekt: bei Listen eine Zeile pro Punkt, sonst wird er zur Überschrift
+    const lines = addText.split("\n").map((x) => x.trim()).filter(Boolean);
+    const isList = LIST_TYPES.includes(addType);
+    const title = isList ? "" : lines.join("|");
     setDirty(true);
     setItems([...items, {
       id: `fx-${Date.now()}`, kind: "fx", type: addType, place: t?.places[0] ?? "scene", on: true,
-      title: "", text: addType, items: [], item_t: [], start, end: start + dur,
+      title, text: title || addType, items: isList ? lines : [], item_t: [], start, end: start + dur,
+      bg_t: null, pose_t: [], mode: "vanish" as const,
     }].sort((a, b) => a.start - b.start));
+    setAddText("");
   };
 
 
-  const groups = ["A", "B", "C"];
+  const groups = ["A", "B", "C", "D"];
   const typeOf = (k?: string) => types.find((t) => t.key === k);
 
   return (
@@ -235,6 +246,8 @@ export function EffectsEditor({ items: source, allowedInit, time, onSeek, previe
           {busy === "ollama" ? "Local AI is planning … (several minutes)" : "Free with Ollama"}
         </button>
         <span className="fx-add">
+          <textarea className="fx-add-text" rows={1} value={addText} placeholder="Your text (optional) – a list: one point per line"
+            onChange={(e) => setAddText(e.target.value)} />
           <select value={addType} onChange={(e) => setAddType(e.target.value)}>
             {types.map((t) => (
               <option key={t.key} value={t.key}>{t.label}</option>
@@ -285,7 +298,7 @@ export function EffectsEditor({ items: source, allowedInit, time, onSeek, previe
                   remove
                 </button>
               </div>
-              {o.type !== "poof" && o.type !== "glow" && o.type !== "bigwords" && (
+              {!["poof", "glow", "bigwords", "lighttrail", "ghost", "whip", "vanish", "flash", "sticker"].includes(o.type ?? "") && (
                 <input
                   className="fx-title"
                   placeholder={o.type === "headline" || o.type === "card" ? "Headline – lines with | , *word* = gold italic" : "Title (optional)"}
@@ -300,6 +313,42 @@ export function EffectsEditor({ items: source, allowedInit, time, onSeek, previe
                   value={(o.items ?? []).join("\n")}
                   onChange={(e) => upd(i, { items: e.target.value.split("\n") })}
                 />
+              )}
+              {(o.type === "vanish" || o.type === "flash") && (
+                <div className="small fx-tripod">
+                  {o.type === "vanish" && (
+                    <select value={o.mode ?? "vanish"} onChange={(e) => upd(i, { mode: e.target.value as "vanish" | "appear" })}>
+                      <option value="vanish">Disappear (you → smoke → empty room)</option>
+                      <option value="appear">Appear (empty room → smoke → you)</option>
+                    </select>
+                  )}
+                  <span>
+                    Empty room: <strong>{o.bg_t != null ? formatTime(o.bg_t) : "not set"}</strong>{" "}
+                    <button className="link" onClick={() => upd(i, { bg_t: time })}>use current position ({formatTime(time)})</button>
+                    {o.bg_t != null && <> · <button className="link" onClick={() => onSeek(o.bg_t!)}>show</button></>}
+                  </span>
+                  {o.type === "flash" && (
+                    <span>
+                      Poses:{" "}
+                      {(o.pose_t ?? []).map((pt, k) => (
+                        <span key={k} className="pill">
+                          <button className="link" onClick={() => onSeek(pt)}>{formatTime(pt)}</button>
+                          <button className="link danger" onClick={() => {
+                            const pose_t = (o.pose_t ?? []).filter((_, j) => j !== k);
+                            upd(i, { pose_t, end: o.start + Math.max(0.9, pose_t.length * 0.45) });
+                          }}>×</button>
+                        </span>
+                      ))}
+                      <button className="link" onClick={() => {
+                        const pose_t = [...(o.pose_t ?? []), time];
+                        upd(i, { pose_t, end: o.start + Math.max(0.9, pose_t.length * 0.45) });
+                      }}>+ pose at current position ({formatTime(time)})</button>
+                    </span>
+                  )}
+                  <span className="muted">
+                    Move the video to a moment where the room is empty (or where you hold a pose) and click the button.
+                  </span>
+                </div>
               )}
               {o.why && <div className="small muted">{o.why}</div>}
               </div>

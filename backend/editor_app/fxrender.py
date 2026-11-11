@@ -48,8 +48,35 @@ def _fps_float(fps_str: str) -> float:
     return float(a) / float(b or 1)
 
 
+def grab_frame(source: Path, t: float, w: int, h: int) -> Image.Image | None:
+    """Ein Bild aus dem Originalvideo (Original-Zeit), auf die Ausgabegröße gebracht."""
+    r = subprocess.run([media.ffmpeg(), "-hide_banner", "-loglevel", "error", "-ss", f"{max(0.0, t):.3f}", "-i",
+                        str(source), "-frames:v", "1", "-vf", f"scale={w}:{h}", "-f", "rawvideo", "-pix_fmt", "rgb24",
+                        "-"], capture_output=True, creationflags=media._NO_WINDOW)
+    if r.returncode != 0 or len(r.stdout) < w * h * 3:
+        return None
+    return Image.frombuffer("RGB", (w, h), r.stdout[: w * h * 3], "raw", "RGB", 0, 1).copy()
+
+
+def load_stills(it: dict, source: Path | None, w: int, h: int, segmenter: fx.Segmenter | None) -> dict:
+    """Leerer Raum und Posen für die Stativ-Tricks aus dem Originalvideo holen."""
+    out: dict = {}
+    if source is None or it.get("type") not in fx.NEEDS_STILLS:
+        return out
+    if it.get("bg_t") is not None:
+        out["plate"] = grab_frame(source, float(it["bg_t"]), w, h)
+    if it.get("type") == "flash" and segmenter is not None:
+        poses = []
+        for t in it.get("pose_t") or []:
+            fr = grab_frame(source, float(t), w, h)
+            if fr is not None:
+                poses.append((fr, segmenter.mask(fr)))
+        out["poses"] = poses
+    return out
+
+
 def render_window(video: Path, it: dict, w: int, h: int, fps_str: str, face_box, out: Path,
-                  segmenter: fx.Segmenter | None, on_frame: Callable[[], None]) -> None:
+                  segmenter: fx.Segmenter | None, on_frame: Callable[[], None], source: Path | None = None) -> None:
     fps = _fps_float(fps_str)
     d = it["e"] - it["s"]
     n = max(1, int(round(d * fps)))
@@ -62,6 +89,7 @@ def render_window(video: Path, it: dict, w: int, h: int, fps_str: str, face_box,
                             "-crf", "16", "-pix_fmt", "yuv420p", str(out)], stdin=subprocess.PIPE,
                            creationflags=media._NO_WINDOW)
     ctx = fx.Ctx(w, h, face_box, it.get("_words"))
+    ctx.stills = load_stills(it, source, w, h, segmenter)
     need_mask = it.get("type") in fx.NEEDS_MASK and segmenter is not None
     mask = None
     size = w * h * 3
@@ -86,7 +114,7 @@ def render_window(video: Path, it: dict, w: int, h: int, fps_str: str, face_box,
 
 
 def apply(video: Path, out: Path, items: list[dict], w: int, h: int, fps_str: str, face_box, encoder: list[str],
-          work: Path, progress: Callable[[float, str], None]) -> None:
+          work: Path, progress: Callable[[float, str], None], source: Path | None = None) -> None:
     """Effekte in `video` einbauen → `out`. items kommen aus prepare()."""
     if not items:
         video.replace(out)
@@ -100,12 +128,12 @@ def apply(video: Path, out: Path, items: list[dict], w: int, h: int, fps_str: st
         if done[0] % 15 == 0:
             progress(0.85 * done[0] / total_frames, f"Building effects ({done[0] * 100 // total_frames}%)")
 
-    seg = fx.Segmenter() if any(it.get("type") in fx.NEEDS_MASK for it in items) else None
+    seg = fx.Segmenter() if any(it.get("type") in fx.NEEDS_MASK | {"flash"} for it in items) else None
     clips: list[tuple[dict, Path]] = []
     try:
         for k, it in enumerate(items):
             p = work / f"fx_{k:03d}.mp4"
-            render_window(video, it, w, h, fps_str, face_box, p, seg, tick)
+            render_window(video, it, w, h, fps_str, face_box, p, seg, tick, source)
             clips.append((it, p))
     finally:
         if seg:

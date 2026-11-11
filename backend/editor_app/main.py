@@ -294,7 +294,7 @@ def effect_preview_live(pid: str, body: PreviewBody):
     item["start"] = float(item.get("start", 0))
     item["end"] = max(item["start"] + 0.8, float(item.get("end", item["start"] + 4)))
     item["items"] = [str(x) for x in item.get("items") or [] if str(x).strip()]
-    return _effect_preview(pid, item)
+    return _effect_preview_video(pid, item)
 
 
 def _effect_preview(pid: str, item: dict, clip: dict | None = None):
@@ -329,15 +329,90 @@ def _effect_preview(pid: str, item: dict, clip: dict | None = None):
     it = dict(item)
     times = [x - item["start"] for x in item.get("item_t") or []]
     it["times"] = times or None
-    seg = fx.Segmenter() if item.get("type") in fx.NEEDS_MASK else None
+    seg = fx.Segmenter() if item.get("type") in fx.NEEDS_MASK | {"flash"} else None
     try:
         out = tmp / "p.jpg"
-        fx.preview_png(dict(it, start=0, end=item["end"] - item["start"]), w, h, face, frame, out.with_suffix(".png"), seg)
+        from . import fxrender
+        stills = fxrender.load_stills(item, None if clip else projects.path(pid, "vorschau.mp4"), w, h, seg)
+        fx.preview_png(dict(it, start=0, end=item["end"] - item["start"]), w, h, face, frame, out.with_suffix(".png"), seg,
+                       stills)
         Image.open(out.with_suffix(".png")).convert("RGB").resize((w // 2, h // 2)).save(out, quality=85)
     finally:
         if seg:
             seg.close()
     return FileResponse(out, media_type="image/jpeg", headers={"Cache-Control": "no-store"})
+
+
+def _effect_preview_video(pid: str, item: dict, clip: dict | None = None):
+    """Kurzes Vorschau-Video des Effekts (halbe Größe, 15 Bilder/s) auf dem echten Video an dieser Stelle."""
+    import subprocess
+    import tempfile
+
+    import numpy as np
+    from PIL import Image
+
+    from . import effects, fx, fxrender, gaze
+    p = projects.load(pid)
+    info = p.get("info") or {}
+    sw, sh = info.get("width", 1920), info.get("height", 1080)
+    scale = 540 / min(sw, sh)
+    w, h = int(sw * scale) // 2 * 2, int(sh * scale) // 2 * 2
+    d = max(0.8, min(6.0, item["end"] - item["start"]))
+    fps = 15
+    t0 = effects.clip_to_orig(clip["segments"], item["start"]) if clip else item["start"]
+    gf = projects.path(pid, "blick.json")
+    face = gaze.face_box(json.loads(gf.read_text(encoding="utf-8"))) if gf.exists() else None
+    vf = f"fps={fps},scale={w}:{h}"
+    if clip:
+        top, vh = render.clip_layout(info)
+        if top:
+            vf = f"fps={fps},scale=540:{vh // 2 // 2 * 2},pad=540:960:0:{top // 2}:black"
+        else:
+            vf = f"fps={fps},scale=540:960"
+        w, h = 540, 960
+        face = render.clip_face_box(info, face)
+    proxy = projects.path(pid, "vorschau.mp4")
+    r = subprocess.run([media.ffmpeg(), "-hide_banner", "-loglevel", "error", "-ss", f"{t0:.2f}", "-i", str(proxy),
+                        "-t", f"{d:.2f}", "-vf", vf, "-f", "rawvideo", "-pix_fmt", "rgb24", "-"],
+                       capture_output=True, creationflags=media._NO_WINDOW)
+    size = w * h * 3
+    frames = [Image.frombuffer("RGB", (w, h), r.stdout[k:k + size], "raw", "RGB", 0, 1)
+              for k in range(0, len(r.stdout) - size + 1, size)] or [Image.new("RGB", (w, h), (90, 90, 90))]
+    it = fx.with_placeholders(item)
+    it["times"] = [x - item["start"] for x in item.get("item_t") or []] or None
+    words = []
+    if not clip:
+        try:
+            words = [{"w": x["w"], "s": x["s"] - item["start"], "e": x["e"] - item["start"]}
+                     for x in cuts.flat_words(cutstore._transcript(pid)) if item["start"] - 0.3 <= x["s"] <= item["end"]]
+        except Exception:  # noqa: BLE001
+            words = []
+    ctx = fx.Ctx(w, h, face, words or [{"w": "Beispiel", "s": 0, "e": 99}])
+    seg = fx.Segmenter() if item.get("type") in fx.NEEDS_MASK | {"flash"} else None
+    tmp = Path(tempfile.mkdtemp())
+    out = tmp / "preview.mp4"
+    try:
+        ctx.stills = fxrender.load_stills(item, None if clip else proxy, w, h, seg)
+        enc = subprocess.Popen([media.ffmpeg(), "-hide_banner", "-loglevel", "error", "-y", "-f", "rawvideo",
+                                "-pix_fmt", "rgb24", "-s", f"{w}x{h}", "-r", str(fps), "-i", "-", "-c:v", "libx264",
+                                "-preset", "ultrafast", "-crf", "26", "-pix_fmt", "yuv420p", "-movflags", "+faststart",
+                                str(out)], stdin=subprocess.PIPE, creationflags=media._NO_WINDOW)
+        n = max(1, int(d * fps))
+        mask = None
+        for k in range(n):
+            frame = frames[min(k, len(frames) - 1)]
+            if seg and (mask is None or k % 2 == 0):
+                mask = seg.mask(frame)
+            img = fx.render_frame(frame, it, k / fps, d, ctx, mask)
+            enc.stdin.write(np.asarray(img, dtype=np.uint8).tobytes())
+        enc.stdin.close()
+        enc.wait()
+    finally:
+        if seg:
+            seg.close()
+    if not out.exists():
+        raise UserError("The preview could not be created.")
+    return FileResponse(out, media_type="video/mp4", headers={"Cache-Control": "no-store"})
 
 
 class ClipEffectsBody(BaseModel):
@@ -372,7 +447,7 @@ def clip_effect_preview(pid: str, cid: str, body: PreviewBody):
     item = effects.clean(body.item, c.get("duration"))
     if not item:
         raise UserError("Unknown effect.")
-    return _effect_preview(pid, item, c)
+    return _effect_preview_video(pid, item, c)
 
 
 @app.post("/api/projects/{pid}/animations/{engine}")

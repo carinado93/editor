@@ -302,7 +302,7 @@ def render(src: Path, info: dict, segments: list[list[float]], out: Path, work: 
     if fx_items:
         from . import fxrender
         fxrender.apply(tmp, out.with_suffix(".fx.mp4"), fx_items, out_w, out_h, fps_str, face, encoder, work,
-                       lambda f, m: report(0.06 + 0.94 * (0.6 + 0.4 * f), m))
+                       lambda f, m: report(0.06 + 0.94 * (0.6 + 0.4 * f), m), source=src)
         tmp.unlink(missing_ok=True)
         tmp = out.with_suffix(".fx.mp4")
     if opts.get("speed"):

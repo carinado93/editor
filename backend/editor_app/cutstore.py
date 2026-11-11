@@ -403,7 +403,23 @@ def suggest_effects(pid: str, engine: str, allowed: list[str], wish: str = "") -
     t = _transcript(pid)
     cl = load(pid)
     flags = cuts.evaluate(t, cl)["flags"]
-    items = effects.suggest(t, flags, allowed, engine, bool(cl["settings"].get("no_cuts")), wish)
+    if not cuts.flat_words(t):  # Clip ohne Sprechen: Claude schaut sich Standbilder an
+        from . import media
+        p = projects.load(pid)
+        proxy = projects.path(pid, "vorschau.mp4")
+        src = proxy if proxy.exists() else projects.path(pid, p["original_file"])
+        dur = (p.get("info") or {}).get("duration", 10)
+        stills = media.stills_base64(src, dur, n=6)
+        idea = ""
+        rt = projects.path(pid, "reel_texte.json")
+        if rt.exists():
+            try:
+                idea = json.loads(rt.read_text(encoding="utf-8")).get("idea", "")
+            except ValueError:
+                pass
+        items = effects.suggest_silent(stills, dur, t.get("language", "de"), allowed, engine, wish, idea)
+    else:
+        items = effects.suggest(t, flags, allowed, engine, bool(cl["settings"].get("no_cuts")), wish)
     view_ = set_effects(pid, items)
     with _lock:
         c = load(pid)
@@ -461,6 +477,9 @@ def set_overlays(pid: str, overlays: list[dict]) -> dict:
                 item["items"] = [str(x).strip()[:60] for x in o.get("items") or [] if str(x).strip()][:6]
                 item["item_t"] = [round(float(x), 2) for x in o.get("item_t") or []][:6]
                 item["why"] = str(o.get("why") or "")[:160]
+                item["bg_t"] = round(float(o["bg_t"]), 2) if o.get("bg_t") is not None else None
+                item["pose_t"] = [round(float(x), 2) for x in o.get("pose_t") or []][:8]
+                item["mode"] = "appear" if o.get("mode") == "appear" else "vanish"
             clean.append(item)
         cl["overlays"] = clean
     return _change(pid, fn)

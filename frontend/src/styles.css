@@ -1798,3 +1798,19 @@ kbd {
   font-size: 12px;
   padding: 3px 8px;
 }
+.fx-add-text {
+  min-width: 260px;
+  min-height: 38px;
+  resize: vertical;
+}
+.fx-tripod {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: #f4f0fa;
+  border-radius: 8px;
+  padding: 8px;
+}
+.fx-tripod .pill {
+  margin-right: 4px;
+}

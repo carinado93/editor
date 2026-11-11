@@ -67,7 +67,10 @@ def clean(o: dict, duration: float | None = None) -> dict | None:
             "title": title, "text": title or typ, "items": [str(x).strip()[:60] for x in o.get("items") or []
                                                            if str(x).strip()][:6],
             "item_t": [round(float(x), 2) for x in o.get("item_t") or []][:6], "start": round(s_, 2),
-            "end": round(e_, 2), "why": str(o.get("why") or "")[:160]}
+            "end": round(e_, 2), "why": str(o.get("why") or "")[:160],
+            "bg_t": round(float(o["bg_t"]), 2) if o.get("bg_t") is not None else None,
+            "pose_t": [round(float(x), 2) for x in o.get("pose_t") or []][:8],
+            "mode": "appear" if o.get("mode") == "appear" else "vanish"}
 
 
 def clip_transcript(transcript: dict, flags: list, segments: list[list[float]]) -> dict:
@@ -160,6 +163,73 @@ def parse(data: dict, words: list[dict], flags: list, allowed: list[str]) -> lis
             clean[-1]["end"] = round(o["start"] - 0.1, 2)
         clean.append(o)
     return clean
+
+
+SILENT_SCHEMA = {
+    "type": "object",
+    "properties": {"items": {"type": "array", "items": {
+        "type": "object",
+        "properties": {
+            "type": {"type": "string", "enum": list(fx.TYPES)},
+            "place": {"type": "string", "enum": ["scene", "side"]},
+            "start": {"type": "number"}, "end": {"type": "number"},
+            "title": {"type": "string"},
+            "items": {"type": "array", "items": {"type": "string"}},
+            "why": {"type": "string"},
+        },
+        "required": ["type", "place", "start", "end", "title", "items", "why"],
+        "additionalProperties": False,
+    }}},
+    "required": ["items"],
+    "additionalProperties": False,
+}
+
+
+def suggest_silent(stills: list[str], duration: float, language: str, allowed: list[str], engine: str,
+                   wish: str = "", idea: str = "") -> list[dict]:
+    """Clip ohne Sprechen: Claude schaut sich Standbilder an und plant Effekte mit Texten nach Sekunden."""
+    allowed = [a for a in allowed if a in fx.TYPES and a not in ("bigwords", "sticker")] or ["headline", "pill"]
+    lang = "Deutsch" if language == "de" else "Englisch"
+    times = ", ".join(f"Bild {k + 1} ≈ {duration * (k + 0.5) / len(stills):.1f} s" for k in range(len(stills)))
+    menu = "\n".join(f"- {k} ({fx.TYPES[k][1]}): {DESCRIBE[k]}" for k in allowed)
+    prompt = f"""Du bist Video-Editorin für Carina Dorca (Stress- und Burnout-Prävention). Ihr Reel ist {duration:.1f} s
+lang und sie spricht darin NICHT – die Texte im Video erzählen die Botschaft. Angehängt sind Standbilder ({times}).
+Texte auf {lang}.
+{f'Ihre Idee / Anweisung: {idea.strip()}' if idea.strip() else 'Leite das Thema aus den Bildern ab.'}
+{f'Wunsch: {wish.strip()}' if wish.strip() else ''}
+
+Erlaubte Effekte:
+{menu}
+
+Regeln:
+- Der erste Effekt beginnt bei 0 s und ist der Hook (sagt sofort, worum es geht, polarisierend und konkret).
+- Danach 1–4 weitere Effekte, die die Botschaft Schritt für Schritt erzählen; jeder 2,5–6 s lang, nie gleichzeitig.
+- "start"/"end" in Sekunden (0 bis {duration:.1f}). Texte kurz, in Carinas warmer, direkter Stimme, keine Heilversprechen.
+- Bei Listen-Effekten stehen die Punkte in "items", sonst leer.
+Antworte NUR mit JSON nach dem Schema."""
+    if engine == "claude":
+        from . import claude
+        data = claude.ask_json(prompt, SILENT_SCHEMA, effort="medium", images=stills)
+    else:
+        from . import llm
+        data = llm.ask_json(prompt.replace("Antworte NUR mit JSON nach dem Schema.",
+                                           'Antworte NUR mit JSON: {"items": [{"type": "headline", "place": "scene", '
+                                           '"start": 0, "end": 4, "title": "...", "items": [], "why": "..."}]}'),
+                            "Du antwortest ausschließlich mit gültigem JSON.", timeout=600, images=stills)
+    out = []
+    for i, it in enumerate((data or {}).get("items") or []):
+        o = clean(dict(it, id=f"fx-{int(time.time() * 1000) % 10_000_000}-{i}"), duration)
+        if o and o["type"] in allowed:
+            out.append(o)
+    out.sort(key=lambda x: x["start"])
+    clean_list = []
+    for o in out:
+        if clean_list and o["start"] < clean_list[-1]["end"]:
+            clean_list[-1]["end"] = round(max(clean_list[-1]["start"] + 1.0, o["start"] - 0.1), 2)
+        clean_list.append(o)
+    if not clean_list:
+        raise UserError("No effects were suggested. Please write a short idea into the wish box and try again.")
+    return clean_list
 
 
 def suggest(transcript: dict, flags: list, allowed: list[str], engine: str, reel: bool, wish: str = "") -> list[dict]:

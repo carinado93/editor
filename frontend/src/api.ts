@@ -81,11 +81,15 @@ export interface Overlay {
   items?: string[];
   item_t?: number[];
   why?: string;
+  /** Stativ-Tricks: leerer Raum, Posen (Original-Zeit), Verschwinden oder Auftauchen */
+  bg_t?: number | null;
+  pose_t?: number[];
+  mode?: "vanish" | "appear";
 }
 
 export interface EffectType {
   key: string;
-  group: "A" | "B" | "C";
+  group: "A" | "B" | "C" | "D";
   label: string;
   places: ("scene" | "side")[];
 }
