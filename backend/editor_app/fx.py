@@ -894,13 +894,15 @@ def draw_flash(base, ctx, it, t, d, mask):
     freigestellt auf dem leeren Raum). Jede neue Pose beginnt mit einer weiß leuchtenden Silhouette."""
     plate = ctx.stills.get("plate")
     poses = ctx.stills.get("poses") or []
-    if plate is None or not poses:
+    if not poses:
         return base
+    if not ctx.stills.get("own_plate"):
+        plate = None  # ohne eigene Aufnahme: jede Pose als ganzes Bild, Wechsel mit weißem Blitz
     hold = d / len(poses)
     k = min(len(poses) - 1, int(t / hold))
     local = t - k * hold
-    img = plate.convert("RGBA").copy()
     still, m = poses[k]
+    img = plate.convert("RGBA").copy() if plate is not None else still.convert("RGBA").copy()
     flash = 0.16
     if local < flash:
         # weiße Silhouette mit Schein (erst ganz weiß), die dann in die Person übergeht

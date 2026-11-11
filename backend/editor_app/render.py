@@ -382,9 +382,12 @@ def render_clip(src: Path, info: dict, segments: list[list[float]], out: Path, w
                                       hook_y_override=hook_y), encoding="utf-8")
     ass_f = f",ass={_filter_path(ass_path)}" + (f":fontsdir={_filter_path(Path(fonts_dir))}" if fonts_dir else "")
     n = len(frames)
-    parts = [f"[0:{info['video_index']}]fps={fps_str},split={n}" + "".join(f"[i{k}]" for k in range(n))]
+    # Jedes Stück direkt anspringen (statt das lange Video von vorn bis zur letzten Stelle zu lesen)
+    seg_inputs, parts = [], []
     for k, (a, b) in enumerate(frames):
-        parts.append(f"[i{k}]trim=start_frame={a}:end_frame={b},setpts=PTS-STARTPTS[s{k}]")
+        ta, tb = float(Fraction(a) / fps), float(Fraction(b) / fps)
+        seg_inputs += ["-ss", f"{ta:.4f}", "-t", f"{tb - ta + 0.5:.4f}", "-i", str(src)]
+        parts.append(f"[{k}:{info['video_index']}]fps={fps_str},trim=end_frame={b - a},setpts=PTS-STARTPTS[s{k}]")
     parts.append("".join(f"[s{k}]" for k in range(n)) + f"concat=n={n}:v=1:a=0[c]")
     parts.append(f"[c]{layout},setsar=1,format=yuv420p{ass_f}[v]")
     script = work / "clip_filter.txt"
@@ -397,8 +400,8 @@ def render_clip(src: Path, info: dict, segments: list[list[float]], out: Path, w
     enc = (["-c:v", "h264_nvenc", "-preset", "p5", "-rc", "vbr", "-cq", "20", *rate] if enc[1] == "h264_nvenc"
            else ["-c:v", "libx264", "-preset", "fast", "-crf", "20", *rate])
     tmp = out.with_suffix(".tmp.mp4")
-    args = ["-i", str(src), "-f", "s16le", "-ar", str(SR), "-ac", str(CH), "-i", str(audio),
-            *media.filter_script_args(script), "-map", "[v]", "-map", "1:a", *enc, "-profile:v", "high",
+    args = [*seg_inputs, "-f", "s16le", "-ar", str(SR), "-ac", str(CH), "-i", str(audio),
+            *media.filter_script_args(script), "-map", "[v]", "-map", f"{n}:a", *enc, "-profile:v", "high",
             "-r", fps_str, "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", "-map_metadata", "-1",
             "-shortest", str(tmp)]
     fx_items = []

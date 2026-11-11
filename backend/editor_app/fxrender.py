@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Callable
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageFilter
 
 from . import fx, media
 from .errors import UserError
@@ -58,20 +58,109 @@ def grab_frame(source: Path, t: float, w: int, h: int) -> Image.Image | None:
     return Image.frombuffer("RGB", (w, h), r.stdout[: w * h * 3], "raw", "RGB", 0, 1).copy()
 
 
+_samples_cache: dict = {}
+
+
+def _samples(source: Path, w: int, h: int, segmenter: fx.Segmenter, n: int = 24) -> list[tuple[float, Image.Image, Image.Image]]:
+    """Gleichmäßig verteilte Bilder aus dem ganzen Video mit Personen-Maske (einmal pro Video berechnet)."""
+    key = (str(source), w, h)
+    if key in _samples_cache:
+        return _samples_cache[key]
+    dur = float(media.probe(source)["duration"])
+    out = []
+    for k in range(n):
+        t = dur * (k + 0.5) / n
+        fr = grab_frame(source, t, w, h)
+        if fr is not None:
+            out.append((t, fr, segmenter.mask(fr)))
+    _samples_cache[key] = out
+    return out
+
+
+def auto_plate(source: Path, w: int, h: int, segmenter: fx.Segmenter, sharp: Image.Image | None = None) -> Image.Image | None:
+    """Leerer Raum OHNE eigene Aufnahme: aus vielen Bildern des Videos die Stellen nehmen, an denen Carina gerade
+    nicht ist (Median), was sie immer verdeckt wird aus der Umgebung ergänzt. Wo im aktuellen Bild schon Raum zu sehen
+    ist, bleibt das scharfe Originalbild."""
+    import cv2
+
+    cache = source.parent / f"leerer_raum_{w}x{h}.png"
+    if cache.exists() and sharp is None:
+        return Image.open(cache).convert("RGB")
+    smp = _samples(source, w, h, segmenter)
+    if not smp:
+        return None
+    sw = 640
+    sh = max(2, int(round(h * sw / w)))
+    stack, valid = [], []
+    for _, fr, m in smp:
+        stack.append(np.asarray(fr.resize((sw, sh)), dtype=np.float32))
+        # großzügig um Carina herum aussparen, sonst bleibt ein Umriss ihrer Haare im leeren Raum
+        mm = np.asarray(m.resize((sw, sh)).point(lambda v: 255 if v > 45 else 0).filter(ImageFilter.MaxFilter(31)),
+                        dtype=np.uint8) < 128
+        valid.append(mm)
+    arr = np.stack(stack)
+    ok = np.stack(valid)[..., None]
+    arr = np.where(ok, arr, np.nan)
+    import warnings
+    with np.errstate(all="ignore"), warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        med = np.nanmedian(arr, axis=0)
+    hole = np.isnan(med[..., 0])
+    med = np.nan_to_num(med, nan=0).clip(0, 255).astype(np.uint8)
+    if hole.any():
+        med = cv2.inpaint(med, hole.astype(np.uint8) * 255, 12, cv2.INPAINT_TELEA)
+    soft = Image.fromarray(med).resize((w, h), Image.BICUBIC).filter(ImageFilter.GaussianBlur(1.5))
+    base = sharp if sharp is not None else smp[len(smp) // 2][1]
+    # weiter Rand um Carina: dünne Haarsträhnen und Brillenränder dürfen nicht durchscheinen
+    k = max(3, int(w / 24) | 1)
+    bmask = (segmenter.mask(base).point(lambda v: 255 if v > 60 else 0).filter(ImageFilter.MaxFilter(k))
+             .filter(ImageFilter.GaussianBlur(w / 100)))
+    plate = Image.composite(soft, base, bmask)
+    if sharp is None:
+        try:
+            plate.save(cache)
+        except OSError:
+            pass
+    return plate
+
+
+def auto_poses(source: Path, w: int, h: int, segmenter: fx.Segmenter, n: int = 4) -> list:
+    """Posen ohne Auswahl: Momente im Video, in denen Carina an möglichst verschiedenen Stellen ist."""
+    smp = _samples(source, w, h, segmenter)
+    cand = []
+    for t, fr, m in smp:
+        box = m.point(lambda v: 255 if v > 128 else 0).getbbox()
+        if box:
+            cand.append(((box[0] + box[2]) / 2, (box[1] + box[3]) / 2, fr, m))
+    if not cand:
+        return []
+    picks = [cand[0]]
+    while len(picks) < min(n, len(cand)):
+        best = max(cand, key=lambda c: min(abs(c[0] - p[0]) + abs(c[1] - p[1]) for p in picks))
+        if best in picks:
+            break
+        picks.append(best)
+    return [(fr, m) for _, _, fr, m in picks]
+
+
 def load_stills(it: dict, source: Path | None, w: int, h: int, segmenter: fx.Segmenter | None) -> dict:
-    """Leerer Raum und Posen für die Stativ-Tricks aus dem Originalvideo holen."""
+    """Leerer Raum und Posen für die Stativ-Tricks. Ohne eigene Aufnahme vom leeren Raum baut die App ihn selbst."""
     out: dict = {}
     if source is None or it.get("type") not in fx.NEEDS_STILLS:
         return out
     if it.get("bg_t") is not None:
         out["plate"] = grab_frame(source, float(it["bg_t"]), w, h)
+    elif segmenter is not None:
+        sharp = grab_frame(source, float(it.get("start", 0)), w, h)
+        out["plate"] = auto_plate(source, w, h, segmenter, sharp)
     if it.get("type") == "flash" and segmenter is not None:
         poses = []
         for t in it.get("pose_t") or []:
             fr = grab_frame(source, float(t), w, h)
             if fr is not None:
                 poses.append((fr, segmenter.mask(fr)))
-        out["poses"] = poses
+        out["poses"] = poses or auto_poses(source, w, h, segmenter)
+        out["own_plate"] = it.get("bg_t") is not None
     return out
 
 
