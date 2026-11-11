@@ -8,6 +8,7 @@ import shutil
 import time
 import webbrowser
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
@@ -241,6 +242,71 @@ def render_options(pid: str, body: RenderOptionsBody):
 @app.post("/api/projects/{pid}/cuts/buzzword")
 def buzzword(pid: str, body: BuzzBody):
     return cutstore.set_buzzword(pid, body.start, body.end, body.on)
+
+
+class EffectsBody(BaseModel):
+    allowed: list[str] = []
+    wish: str = ""
+
+
+@app.get("/api/effects/types")
+def effect_types():
+    from . import fx
+    return {"types": [{"key": k, "group": g, "label": lbl, "places": list(pl)} for k, (g, lbl, pl) in fx.TYPES.items()]}
+
+
+@app.post("/api/projects/{pid}/effects/{engine}")
+def effects_suggest(pid: str, engine: str, body: EffectsBody):
+    if engine not in ("claude", "ollama"):
+        raise UserError("Unknown AI.")
+    return cutstore.suggest_effects(pid, engine, body.allowed, body.wish)
+
+
+class SpeedBody(BaseModel):
+    ranges: list[dict]
+
+
+@app.put("/api/projects/{pid}/cuts/speed")
+def put_speed(pid: str, body: SpeedBody):
+    return cutstore.set_speed(pid, body.ranges)
+
+
+@app.get("/api/projects/{pid}/effects/preview/{fid}")
+def effect_preview(pid: str, fid: str):
+    """Standbild eines Effekts auf einem Bild aus dem Video (für die Vorschau)."""
+    import tempfile
+
+    from . import fx
+    p = projects.load(pid)
+    item = next((o for o in cutstore.view(pid)["cutlist"].get("overlays", []) if o.get("id") == fid), None)
+    if not item or item.get("kind") != "fx":
+        raise HTTPException(404)
+    info = p.get("info") or {}
+    w, h = info.get("width", 1920), info.get("height", 1080)
+    scale = 1080 / min(w, h)
+    w, h = int(w * scale) // 2 * 2, int(h * scale) // 2 * 2
+    t = item["start"] + (item["end"] - item["start"]) * 0.75
+    tmp = Path(tempfile.mkdtemp())
+    frame_path = tmp / "f.png"
+    media.run([media.ffmpeg(), "-hide_banner", "-loglevel", "error", "-y", "-ss", f"{t:.2f}", "-i",
+               str(projects.path(pid, "vorschau.mp4")), "-frames:v", "1", "-vf", f"scale={w}:{h}", str(frame_path)])
+    from PIL import Image
+    frame = Image.open(frame_path).convert("RGB") if frame_path.exists() else None
+    gf = projects.path(pid, "blick.json")
+    from . import gaze
+    face = gaze.face_box(json.loads(gf.read_text(encoding="utf-8"))) if gf.exists() else None
+    it = dict(item)
+    times = [x - item["start"] for x in item.get("item_t") or []]
+    it["times"] = times or None
+    seg = fx.Segmenter() if item.get("type") in fx.NEEDS_MASK else None
+    try:
+        out = tmp / "p.jpg"
+        fx.preview_png(dict(it, start=0, end=item["end"] - item["start"]), w, h, face, frame, out.with_suffix(".png"), seg)
+        Image.open(out.with_suffix(".png")).convert("RGB").resize((w // 2, h // 2)).save(out, quality=85)
+    finally:
+        if seg:
+            seg.close()
+    return FileResponse(out, media_type="image/jpeg", headers={"Cache-Control": "no-store"})
 
 
 @app.post("/api/projects/{pid}/animations/{engine}")

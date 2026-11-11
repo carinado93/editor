@@ -392,6 +392,44 @@ def auto_animations(pid: str) -> None:
         _save(pid, c)
 
 
+def set_effects(pid: str, items: list[dict]) -> dict:
+    """Große Effekte ersetzen (andere Texte und Animationen bleiben)."""
+    others = [o for o in load(pid).get("overlays", []) if o.get("kind") != "fx"]
+    return set_overlays(pid, others + items)
+
+
+def suggest_effects(pid: str, engine: str, allowed: list[str], wish: str = "") -> dict:
+    from . import effects
+    t = _transcript(pid)
+    cl = load(pid)
+    flags = cuts.evaluate(t, cl)["flags"]
+    items = effects.suggest(t, flags, allowed, engine, bool(cl["settings"].get("no_cuts")), wish)
+    view_ = set_effects(pid, items)
+    with _lock:
+        c = load(pid)
+        c["fx_allowed"] = list(allowed)
+        _save(pid, c)
+    view_["cutlist"]["fx_allowed"] = list(allowed)
+    return view_
+
+
+def set_speed(pid: str, ranges: list[dict]) -> dict:
+    """Zeitraffer/Zeitlupe: [{start, end, factor, mute}] in Original-Zeit."""
+    from .fxrender import SPEEDS
+
+    def fn(cl):
+        clean = []
+        for r in ranges:
+            f = float(r.get("factor", 1))
+            s_, e_ = float(r.get("start", 0)), float(r.get("end", 0))
+            if f in SPEEDS and e_ - s_ >= 0.3:
+                clean.append({"start": round(s_, 2), "end": round(e_, 2), "factor": f,
+                              "mute": bool(r.get("mute", f > 2))})
+        clean.sort(key=lambda r: r["start"])
+        cl["speed"] = clean
+    return _change(pid, fn)
+
+
 def set_overlays(pid: str, overlays: list[dict]) -> dict:
     t = _transcript(pid)
     dur = t.get("duration", 0)
@@ -399,7 +437,7 @@ def set_overlays(pid: str, overlays: list[dict]) -> dict:
     def fn(cl):
         clean = []
         for o in overlays:
-            text = str(o.get("text", "")).strip()
+            text = str(o.get("text", "")).strip() or (o.get("type", "") if o.get("kind") == "fx" else "")
             if not text:
                 continue
             s_, e_ = max(0.0, float(o.get("start", 0))), float(o.get("end", 0))
@@ -414,6 +452,15 @@ def set_overlays(pid: str, overlays: list[dict]) -> dict:
                 item["number"] = str(o.get("number") or "")[:12]
                 item["list"] = [{"text": str(p.get("text", "")).strip()[:48], "t": round(float(p.get("t", s_)), 2)}
                                 for p in o.get("list") or [] if str(p.get("text", "")).strip()]
+            if item["kind"] == "fx":  # große Effekte: Typ, Platz, Texte, Punkt-Zeiten behalten
+                from . import fx
+                item["type"] = o.get("type") if o.get("type") in fx.TYPES else "headline"
+                places = fx.TYPES[item["type"]][2]
+                item["place"] = o.get("place") if o.get("place") in places else places[0]
+                item["title"] = str(o.get("title") or "").strip()[:80]
+                item["items"] = [str(x).strip()[:60] for x in o.get("items") or [] if str(x).strip()][:6]
+                item["item_t"] = [round(float(x), 2) for x in o.get("item_t") or []][:6]
+                item["why"] = str(o.get("why") or "")[:160]
             clean.append(item)
         cl["overlays"] = clean
     return _change(pid, fn)

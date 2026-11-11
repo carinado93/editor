@@ -74,6 +74,27 @@ export interface Overlay {
   style?: "label" | "sticker" | "check" | "quote" | "number" | "name";
   number?: string;
   list?: { text: string; t: number }[];
+  /** nur große Effekte (kind "fx") */
+  type?: string;
+  place?: "scene" | "side";
+  title?: string;
+  items?: string[];
+  item_t?: number[];
+  why?: string;
+}
+
+export interface EffectType {
+  key: string;
+  group: "A" | "B" | "C";
+  label: string;
+  places: ("scene" | "side")[];
+}
+
+export interface SpeedRange {
+  start: number;
+  end: number;
+  factor: number;
+  mute: boolean;
 }
 
 export interface ReelTexts {
@@ -133,6 +154,8 @@ export interface CutView {
     pause_keep: number[];
     buzzwords: { start: number; end: number }[];
     overlays?: Overlay[];
+    speed?: SpeedRange[];
+    fx_allowed?: string[];
     render_options: RenderOptions;
   };
   evaluation: { flags: (CutType | null)[]; keep: [number, number][]; pauses: Pause[]; new_duration: number; old_duration: number };
@@ -234,6 +257,12 @@ export const api = {
   renderOptions: (id: string, o: Partial<RenderOptions>) =>
     call<CutView>(`/api/projects/${id}/cuts/render-options`, { ...json(o), method: "PUT" }),
   buzzword: (id: string, start: number, end: number, on: boolean) => call<CutView>(`/api/projects/${id}/cuts/buzzword`, json({ start, end, on })),
+  effectTypes: () => call<{ types: EffectType[] }>(`/api/effects/types`),
+  suggestEffects: (id: string, engine: "claude" | "ollama", allowed: string[], wish: string) =>
+    call<CutView>(`/api/projects/${id}/effects/${engine}`, json({ allowed, wish })),
+  effectPreviewUrl: (id: string, fid: string, v: number) => `/api/projects/${id}/effects/preview/${fid}?v=${v}`,
+  setSpeed: (id: string, ranges: SpeedRange[]) =>
+    call<CutView>(`/api/projects/${id}/cuts/speed`, { ...json({ ranges }), method: "PUT" }),
   suggestAnimations: (id: string, engine: "claude" | "ollama") =>
     call<CutView>(`/api/projects/${id}/animations/${engine}`, { method: "POST" }),
   suggestBuzz: (id: string) => call<CutView>(`/api/projects/${id}/cuts/buzzwords-suggest`, { method: "POST" }),

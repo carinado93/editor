@@ -2,6 +2,7 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import { YoutubePackage } from "./YoutubePackage";
 import { ReelPackage } from "./ReelPackage";
 import { YoutubeAnimations } from "./YoutubeAnimations";
+import { EffectsPanel } from "./EffectsPanel";
 import { api, formatSize, formatTime, type CutType, type CutView, type Detection, type Project, type Transcript, type Word } from "./api";
 
 interface FlatWord extends Word {
@@ -616,6 +617,16 @@ export function ProjectView({ id }: { id: string }) {
                 <button className="btn ghost" onClick={() => seek(words[sel[0]].s)}>
                   ▶ Listen
                 </button>
+                <span className="speed-btns small" title="Time-lapse / slow motion for the selected words">
+                  Speed:
+                  {[0.25, 0.5, 2, 4, 8].map((f) => (
+                    <button key={f} className="link" disabled={busy} onClick={() => {
+                      const a = words[sel[0]].s, b = words[sel[1]].e;
+                      const rest = (cuts?.cutlist.speed ?? []).filter((r) => r.end <= a || r.start >= b);
+                      run(() => api.setSpeed(id, [...rest, { start: a, end: b, factor: f, mute: f > 2 }]));
+                    }}>{f < 1 ? (f === 0.25 ? "¼×" : "½×") : `${f}×`}</button>
+                  ))}
+                </span>
                 <button className="link" onClick={() => setSel(null)}>
                   close
                 </button>
@@ -648,6 +659,7 @@ export function ProjectView({ id }: { id: string }) {
                       isSugg ? "suggestion" : "",
                       sel && w.i >= sel[0] && w.i <= sel[1] ? "selected" : "",
                       buzzOf.has(w.i) && !f ? "buzz" : "",
+                      (cuts?.cutlist.speed ?? []).some((r) => w.s >= r.start - 0.01 && w.e <= r.end + 0.01) ? "speed" : "",
                     ].join(" ");
                     const title = f
                       ? f === "manuell"
@@ -697,6 +709,7 @@ export function ProjectView({ id }: { id: string }) {
         </div>
       </div>
       {cutMode && cuts && <YoutubeAnimations id={id} cuts={cuts} onCuts={setCuts} onSeek={(t) => seek(t, false)} />}
+      {editMode && cuts && <EffectsPanel id={id} cuts={cuts} onCuts={setCuts} time={time} onSeek={(t) => seek(t, false)} />}
       {cutMode && <YoutubePackage id={id} />}
       {reelMode && cuts && <ReelPackage id={id} cuts={cuts} onCuts={setCuts} time={time} duration={duration} />}
     </div>
@@ -728,6 +741,7 @@ function TextOverlay({
   const fb = faceBox ?? [0.3, 0.1, 0.7, 0.5];
   const hook = (cuts.cutlist.overlays ?? []).find((h) => h.on && h.kind !== "yt" && time >= h.start && time <= h.end);
   const yt = (cuts.cutlist.overlays ?? []).find((h) => h.on && h.kind === "yt" && time >= h.start && time <= h.end);
+  const fxNow = (cuts.cutlist.overlays ?? []).find((h) => h.on && h.kind === "fx" && time >= h.start && time <= h.end);
   const right = (fb[0] + fb[2]) / 2 < 0.55;
   const sideStyle: React.CSSProperties = right
     ? { left: `${Math.min(80, (fb[2] + 0.05) * 100)}%`, top: `${Math.max(18, ((fb[1] + fb[3]) / 2) * 100)}%` }
@@ -750,6 +764,9 @@ function TextOverlay({
             part.startsWith("*") && part.endsWith("*") ? <em key={k}>{part.slice(1, -1)}</em> : <span key={k}>{part}</span>,
           )}
         </span>
+      )}
+      {fxNow && (
+        <span className="ov-fx-badge">✦ {fxNow.type}{fxNow.title ? `: ${fxNow.title.replace(/[|*]/g, " ")}` : ""}</span>
       )}
       {yt && (yt.style === "label" || yt.style === "quote") && (
         <span key={yt.id} className={`ov-yt ov-yt-${yt.style}`} style={chestStyle}>

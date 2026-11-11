@@ -229,7 +229,7 @@ def render(src: Path, info: dict, segments: list[list[float]], out: Path, work: 
     buzz = subtitles.buzz_events(opts.get("buzzwords") or [], words, tmap) if words else []
     burn_subs = opts["subtitles"] == "einbrennen" and groups
     hooks = [{"s": tmap.clamp(o["start"]), "e": tmap.clamp(o["end"]), "text": o["text"], "anim": o.get("anim", "karte")}
-             for o in opts.get("overlays") or [] if o.get("kind") != "yt"]
+             for o in opts.get("overlays") or [] if o.get("kind") not in ("yt", "fx")]
     face = gaze.face_box(gaze_data) if gaze_data else None
     yt_items = [o for o in opts.get("overlays") or [] if o.get("kind") == "yt"]
     yt_events = animations.ass_events(yt_items, tmap, out_w, out_h, face) if yt_items else []
@@ -293,7 +293,27 @@ def render(src: Path, info: dict, segments: list[list[float]], out: Path, work: 
         msg = f"Rendering video ({f:.0%})" + (f", about {int(rest // 60)} min {int(rest % 60)} s left" if rest else "")
         report(0.06 + 0.94 * f, msg)
 
-    media._run_with_progress(args, new_duration, on_video)
+    fx_items = []
+    if opts.get("overlays"):
+        from . import fxrender
+        kw_all = subtitles.kept_words(words, flags, tmap) if words else []
+        fx_items = fxrender.prepare(opts["overlays"], tmap, kw_all, new_duration)
+    media._run_with_progress(args, new_duration, (lambda f: on_video(f * (0.6 if fx_items else 1.0))))
+    if fx_items:
+        from . import fxrender
+        fxrender.apply(tmp, out.with_suffix(".fx.mp4"), fx_items, out_w, out_h, fps_str, face, encoder, work,
+                       lambda f, m: report(0.06 + 0.94 * (0.6 + 0.4 * f), m))
+        tmp.unlink(missing_ok=True)
+        tmp = out.with_suffix(".fx.mp4")
+    if opts.get("speed"):
+        from . import fxrender
+        sp = fxrender.prepare_speed(opts["speed"], tmap, new_duration)
+        if sp:
+            fxrender.apply_speed(tmp, out.with_suffix(".speed.mp4"), sp, encoder, fps_str, work,
+                                 lambda f, m: report(0.95 + 0.05 * f, m))
+            tmp.unlink(missing_ok=True)
+            tmp = out.with_suffix(".speed.mp4")
+            new_duration = float(media.probe(tmp)["duration"])
     tmp.replace(out)
     for f in ("ton_schnitt.pcm", "ton_fertig.pcm"):
         try:

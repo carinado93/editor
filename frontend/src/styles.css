@@ -1614,3 +1614,103 @@ kbd {
     grid-column: 1 / -1;
   }
 }
+
+/* ---------- Große Effekte ---------- */
+.fx-card {
+  margin-top: 16px;
+}
+.fx-palette {
+  display: grid;
+  gap: 10px;
+  margin: 10px 0;
+}
+.fx-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+.fx-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--creme-2);
+  border-radius: 999px;
+  font-size: 13px;
+  cursor: pointer;
+  background: #fff;
+}
+.fx-chip.on {
+  border-color: var(--lila);
+  background: #efe9f7;
+}
+.fx-chip input {
+  margin: 0;
+}
+.fx-add {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+.fx-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+}
+.fx-row {
+  border: 1px solid var(--creme-2);
+  border-radius: 10px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.fx-row.off {
+  opacity: 0.5;
+}
+.fx-row-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.fx-title {
+  width: 100%;
+}
+.fx-preview {
+  display: block;
+  max-width: 100%;
+  width: 420px;
+  border-radius: 8px;
+  margin: 4px 0;
+}
+.fx-speed {
+  margin: 4px 0;
+}
+.speed-btns {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}
+.word.speed {
+  text-decoration: underline wavy #8b9a6b;
+  text-underline-offset: 4px;
+}
+.ov-fx-badge {
+  position: absolute;
+  left: 2%;
+  top: 3%;
+  background: rgba(100, 68, 165, 0.92);
+  color: #fff;
+  font-family: "Poppins", sans-serif;
+  font-weight: 600;
+  font-size: 1.6cqw;
+  padding: 0.25em 0.7em;
+  border-radius: 999px;
+  max-width: 70%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

@@ -91,6 +91,7 @@ def _render(pid: str, quality: str) -> None:
         "flags": v["evaluation"]["flags"],
         "buzzwords": v["cutlist"].get("buzzwords", []),
         "overlays": [o for o in v["cutlist"].get("overlays", []) if o.get("on", True)],
+        "speed": v["cutlist"].get("speed", []),
         "gaze": json.loads(gf.read_text(encoding="utf-8")) if gf.exists() else None,
         "fonts_dir": str(config.ROOT / "assets" / "fonts"),
     }
