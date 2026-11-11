@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { api, formatTime, type CutView, type EffectType, type Overlay, type SpeedRange } from "./api";
 import { Status } from "./ReelPackage";
 
@@ -18,10 +18,13 @@ const HINT: Record<string, string> = {
   checklist: "one point per line",
   endcard: "the big call to action, e.g. Comment CALM",
   bigwords: "key words that turn purple, one per line",
+  clothesline: "one card per line, optional: Big word|small line",
 };
 
 /** Vorschau-Bild, das sich bei jeder Änderung selbst neu zeichnet (kurz warten, dann neu laden). */
-function FxPreview({ pid, item }: { pid: string; item: Overlay }) {
+type PreviewFn = (item: Overlay, signal: AbortSignal) => Promise<string>;
+
+function FxPreview({ preview, item }: { preview: PreviewFn; item: Overlay }) {
   const [src, setSrc] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -33,7 +36,7 @@ function FxPreview({ pid, item }: { pid: string; item: Overlay }) {
       setLoading(true);
       setFailed(false);
       try {
-        const url = await api.effectPreviewLive(pid, item, ctrl.signal);
+        const url = await preview(item, ctrl.signal);
         if (last.current) URL.revokeObjectURL(last.current);
         last.current = url;
         setSrc(url);
@@ -48,7 +51,7 @@ function FxPreview({ pid, item }: { pid: string; item: Overlay }) {
       ctrl.abort();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key, pid]);
+  }, [key]);
   return (
     <div className="fx-preview-box">
       {src && <img className={`fx-preview ${loading ? "loading" : ""}`} src={src} alt="Effect preview" />}
@@ -60,14 +63,74 @@ function FxPreview({ pid, item }: { pid: string; item: Overlay }) {
 
 const SPEED_LABEL: Record<number, string> = { 0.25: "¼× slow", 0.5: "½× slow", 2: "2× fast", 4: "4× fast", 8: "8× fast" };
 
-/** Große Effekte (Kästen, Text hinter dir, Puff …) und Zeitraffer/Zeitlupe. Du wählst, Claude schlägt vor. */
+/** Große Effekte im ganzen Video (YouTube / Reel veredeln) plus Zeitraffer/Zeitlupe. */
 export function EffectsPanel({ id, cuts, onCuts, time, onSeek }: {
   id: string; cuts: CutView; onCuts: (c: CutView) => void; time: number; onSeek: (t: number) => void;
 }) {
+  const [busy, setBusy] = useState(false);
+  const fxItems = (cuts.cutlist.overlays ?? []).filter((o) => o.kind === "fx");
+  const speed = cuts.cutlist.speed ?? [];
+  const removeSpeed = async (r: SpeedRange) => {
+    setBusy(true);
+    try {
+      onCuts(await api.setSpeed(id, speed.filter((x) => x !== r)));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <section className="card fx-card">
+      <h3>Effects</h3>
+      <EffectsEditor
+        items={fxItems}
+        allowedInit={cuts.cutlist.fx_allowed}
+        time={time}
+        onSeek={onSeek}
+        preview={(item, signal) => api.effectPreviewLive(id, item, signal)}
+        onSave={async (list) => {
+          const others = (cuts.cutlist.overlays ?? []).filter((o) => o.kind !== "fx");
+          onCuts(await api.setOverlays(id, [...others, ...list]));
+        }}
+        onSuggest={async (engine, allowed, wish) => {
+          const v = await api.suggestEffects(id, engine, allowed, wish);
+          onCuts(v);
+          return (v.cutlist.overlays ?? []).filter((o) => o.kind === "fx").length;
+        }}
+      >
+        <h4 style={{ marginTop: 20 }}>Fast & slow motion</h4>
+        <p className="small muted">
+          In the transcript, select the words (click, Shift+click) and choose a speed in the bar that appears. Time-lapse
+          is muted, slow motion keeps your voice.
+        </p>
+        {!speed.length && <p className="small muted">No speed changes yet.</p>}
+        {speed.map((r, k) => (
+          <div key={k} className="small fx-speed">
+            <button className="time" onClick={() => onSeek(r.start)}>{formatTime(r.start)}</button>
+            – {formatTime(r.end)} · <strong>{SPEED_LABEL[r.factor] ?? `${r.factor}×`}</strong>
+            {r.mute ? " · muted" : ""}{" "}
+            <button className="link danger" disabled={busy} onClick={() => removeSpeed(r)}>remove</button>
+          </div>
+        ))}
+      </EffectsEditor>
+    </section>
+  );
+}
+
+/** Die Effekt-Liste selbst (für das ganze Video und für jedes Reel). Du wählst, Claude schlägt vor. */
+export function EffectsEditor({ items: source, allowedInit, time, onSeek, preview, onSave, onSuggest, children, compact }: {
+  items: Overlay[];
+  allowedInit?: string[];
+  time: number;
+  onSeek: (t: number) => void;
+  preview: PreviewFn;
+  onSave: (list: Overlay[]) => Promise<void>;
+  onSuggest: (engine: "claude" | "ollama", allowed: string[], wish: string) => Promise<number>;
+  children?: ReactNode;
+  compact?: boolean;
+}) {
   const [types, setTypes] = useState<EffectType[]>([]);
-  const [allowed, setAllowed] = useState<string[]>(cuts.cutlist.fx_allowed ?? []);
-  const fromCuts = () => (cuts.cutlist.overlays ?? []).filter((o) => o.kind === "fx");
-  const [items, setItems] = useState<Overlay[]>(fromCuts);
+  const [allowed, setAllowed] = useState<string[]>(allowedInit ?? []);
+  const [items, setItems] = useState<Overlay[]>(source);
   const [dirty, setDirty] = useState(false);
   const [addType, setAddType] = useState("headline");
   const [wish, setWish] = useState("");
@@ -82,9 +145,9 @@ export function EffectsPanel({ id, cuts, onCuts, time, onSeek }: {
     }).catch(() => {});
   }, []);
   useEffect(() => {
-    if (!dirty) setItems(fromCuts());
+    if (!dirty) setItems(source);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cuts]);
+  }, [JSON.stringify(source)]);
 
   const act = async (label: string, fn: () => Promise<void>) => {
     setBusy(label);
@@ -101,19 +164,15 @@ export function EffectsPanel({ id, cuts, onCuts, time, onSeek }: {
 
   const save = (list = items) =>
     act("save", async () => {
-      const others = (cuts.cutlist.overlays ?? []).filter((o) => o.kind !== "fx");
-      const v = await api.setOverlays(id, [...others, ...list]);
+      await onSave(list);
       setDirty(false);
-      onCuts(v);
       setMsg("Saved ✓ – the effects are built in when you render.");
     });
 
   const suggest = (engine: "claude" | "ollama") =>
     act(engine, async () => {
-      const v = await api.suggestEffects(id, engine, allowed, wish);
+      const n = await onSuggest(engine, allowed, wish);
       setDirty(false);
-      onCuts(v);
-      const n = (v.cutlist.overlays ?? []).filter((o) => o.kind === "fx").length;
       setMsg(`${n} effects suggested ✓ – check them below, change the type or remove what doesn't fit.`);
     });
 
@@ -133,16 +192,12 @@ export function EffectsPanel({ id, cuts, onCuts, time, onSeek }: {
     }].sort((a, b) => a.start - b.start));
   };
 
-  const speed = cuts.cutlist.speed ?? [];
-  const removeSpeed = (r: SpeedRange) =>
-    act("speed", async () => onCuts(await api.setSpeed(id, speed.filter((x) => x !== r))));
 
   const groups = ["A", "B", "C"];
   const typeOf = (k?: string) => types.find((t) => t.key === k);
 
   return (
-    <section className="card fx-card">
-      <h3>Effects</h3>
+    <div className={compact ? "fx-editor compact" : "fx-editor"}>
       <p className="small muted">
         Big effects in the style of the reel you liked, in your purple, sage and gold. First tick which effects may be
         used, then let Claude suggest moments – or add one yourself at the current video position.
@@ -198,10 +253,10 @@ export function EffectsPanel({ id, cuts, onCuts, time, onSeek }: {
       <div className="fx-list">
         {items.map((o, i) => {
           const t = typeOf(o.type);
-          const listType = ["steps", "cards", "tags", "scores", "checklist", "endcard", "bigwords"].includes(o.type ?? "");
+          const listType = ["steps", "cards", "tags", "scores", "checklist", "endcard", "bigwords", "clothesline"].includes(o.type ?? "");
           return (
             <div key={o.id} className={`fx-row ${o.on ? "" : "off"}`}>
-              <FxPreview pid={id} item={o} />
+              <FxPreview preview={preview} item={o} />
               <div className="fx-row-main">
               <div className="fx-row-head">
                 <input type="checkbox" checked={o.on} onChange={(e) => upd(i, { on: e.target.checked })} />
@@ -253,20 +308,7 @@ export function EffectsPanel({ id, cuts, onCuts, time, onSeek }: {
         })}
       </div>
 
-      <h4 style={{ marginTop: 20 }}>Fast & slow motion</h4>
-      <p className="small muted">
-        In the transcript, select the words (click, Shift+click) and choose a speed in the bar that appears. Time-lapse
-        is muted, slow motion keeps your voice.
-      </p>
-      {!speed.length && <p className="small muted">No speed changes yet.</p>}
-      {speed.map((r, k) => (
-        <div key={k} className="small fx-speed">
-          <button className="time" onClick={() => onSeek(r.start)}>{formatTime(r.start)}</button>
-          – {formatTime(r.end)} · <strong>{SPEED_LABEL[r.factor] ?? `${r.factor}×`}</strong>
-          {r.mute ? " · muted" : ""}{" "}
-          <button className="link danger" disabled={!!busy} onClick={() => removeSpeed(r)}>remove</button>
-        </div>
-      ))}
-    </section>
+      {children}
+    </div>
   );
 }

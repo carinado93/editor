@@ -23,6 +23,8 @@ DESCRIBE = {
     "glow": "leuchtender Umriss um Carina (title optional als Pille) – emotionaler Moment",
     "background": "neuer Lavendel-Hintergrund hinter Carina (title optional als Überschrift) – Themenwechsel",
     "card": "Video als Karte auf Lavendel mit Treppen-Überschrift darüber (title, Zeilen mit |) – Einstieg/Kapitel",
+    "clothesline": "Wäscheleine oben, 2–5 Karten hängen an Klammern (items = Kartentexte, je 1–3 Wörter; title optional als großes Wort darunter) – Dinge, die sie nutzt/zeigt, Beispiele",
+    "lighttrail": "Leuchtspur läuft um Carinas Umriss (title leer) – Aha-Moment, Betonung",
     "poof": "Puff-Wolke (Verschwinden/Auftauchen) – nur genau an einem Schnitt, an dem sie den Ort wechselt",
 }
 
@@ -45,6 +47,50 @@ SCHEMA = {
     "required": ["items"],
     "additionalProperties": False,
 }
+
+
+def clean(o: dict, duration: float | None = None) -> dict | None:
+    """Einen Effekt aus dem Formular prüfen und aufräumen (gleich für Video und Reel)."""
+    typ = o.get("type")
+    if typ not in fx.TYPES:
+        return None
+    s_ = max(0.0, float(o.get("start", 0)))
+    e_ = max(s_ + 0.8, float(o.get("end", s_ + 4)))
+    if duration:
+        e_ = min(e_, duration)
+        if e_ - s_ < 0.5:
+            return None
+    places = fx.TYPES[typ][2]
+    title = str(o.get("title") or "").strip()[:80]
+    return {"id": str(o.get("id") or f"fx-{int(time.time() * 1000)}"), "kind": "fx", "type": typ,
+            "place": o.get("place") if o.get("place") in places else places[0], "on": bool(o.get("on", True)),
+            "title": title, "text": title or typ, "items": [str(x).strip()[:60] for x in o.get("items") or []
+                                                           if str(x).strip()][:6],
+            "item_t": [round(float(x), 2) for x in o.get("item_t") or []][:6], "start": round(s_, 2),
+            "end": round(e_, 2), "why": str(o.get("why") or "")[:160]}
+
+
+def clip_transcript(transcript: dict, flags: list, segments: list[list[float]]) -> dict:
+    """Die Wörter eines Reels in Reel-Zeit (Stücke können aus verschiedenen Stellen kommen)."""
+    words = cuts.flat_words(transcript)
+    out, offset = [], 0.0
+    for a, b in segments:
+        for k, w in enumerate(words):
+            if not (flags and flags[k]) and a <= (w["s"] + w["e"]) / 2 <= b:
+                out.append({"w": w["w"], "s": round(offset + max(0.0, w["s"] - a), 3),
+                            "e": round(offset + min(b, w["e"]) - a, 3), "p": w.get("p", 1)})
+        offset += b - a
+    return {"language": transcript.get("language", "de"), "segments": [{"s": 0, "e": offset, "text": "", "words": out}]}
+
+
+def clip_to_orig(segments: list[list[float]], t: float) -> float:
+    """Reel-Zeit → Zeit im langen Video."""
+    off = 0.0
+    for a, b in segments:
+        if t <= off + (b - a):
+            return a + (t - off)
+        off += b - a
+    return segments[-1][1] if segments else t
 
 
 def build_prompt(words: list[dict], flags: list, language: str, allowed: list[str], reel: bool, wish: str = "") -> str:

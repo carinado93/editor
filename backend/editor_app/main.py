@@ -297,25 +297,35 @@ def effect_preview_live(pid: str, body: PreviewBody):
     return _effect_preview(pid, item)
 
 
-def _effect_preview(pid: str, item: dict):
+def _effect_preview(pid: str, item: dict, clip: dict | None = None):
+    """clip: Effekt in einem Reel aus dem langen Video (Zeit = Reel-Zeit, Bild im Hochformat mit Balken)."""
     import tempfile
 
-    from . import fx
+    from PIL import Image
+
+    from . import effects, fx, gaze
     p = projects.load(pid)
     info = p.get("info") or {}
     w, h = info.get("width", 1920), info.get("height", 1080)
     scale = 1080 / min(w, h)
     w, h = int(w * scale) // 2 * 2, int(h * scale) // 2 * 2
     t = item["start"] + (item["end"] - item["start"]) * 0.75
+    if clip:
+        t = effects.clip_to_orig(clip["segments"], t)
     tmp = Path(tempfile.mkdtemp())
     frame_path = tmp / "f.png"
     media.run([media.ffmpeg(), "-hide_banner", "-loglevel", "error", "-y", "-ss", f"{t:.2f}", "-i",
                str(projects.path(pid, "vorschau.mp4")), "-frames:v", "1", "-vf", f"scale={w}:{h}", str(frame_path)])
-    from PIL import Image
     frame = Image.open(frame_path).convert("RGB") if frame_path.exists() else None
     gf = projects.path(pid, "blick.json")
-    from . import gaze
     face = gaze.face_box(json.loads(gf.read_text(encoding="utf-8"))) if gf.exists() else None
+    if clip:  # wie im fertigen Reel: 1080×1920, Querformat als Band mit schwarzen Balken
+        top, vh = render.clip_layout(info)
+        canvas = Image.new("RGB", (1080, 1920), (0, 0, 0))
+        if frame:
+            canvas.paste(frame.resize((1080, vh) if top else (1080, 1920)), (0, top))
+        frame, w, h = canvas, 1080, 1920
+        face = render.clip_face_box(info, face)
     it = dict(item)
     times = [x - item["start"] for x in item.get("item_t") or []]
     it["times"] = times or None
@@ -328,6 +338,41 @@ def _effect_preview(pid: str, item: dict):
         if seg:
             seg.close()
     return FileResponse(out, media_type="image/jpeg", headers={"Cache-Control": "no-store"})
+
+
+class ClipEffectsBody(BaseModel):
+    items: list[dict]
+
+
+@app.put("/api/projects/{pid}/clips/{cid}/effects")
+def put_clip_effects(pid: str, cid: str, body: ClipEffectsBody):
+    from . import clips, effects
+    c = clips.get_clip(pid, cid)
+    items = [x for x in (effects.clean(o, c.get("duration")) for o in body.items) if x]
+    clips.update_clip(pid, cid, fx=sorted(items, key=lambda x: x["start"]))
+    return clips.load(pid)
+
+
+@app.post("/api/projects/{pid}/clips/{cid}/effects/{engine}")
+def suggest_clip_effects(pid: str, cid: str, engine: str, body: EffectsBody):
+    from . import clips, effects
+    if engine not in ("claude", "ollama"):
+        raise UserError("Unknown AI.")
+    c = clips.get_clip(pid, cid)
+    t = effects.clip_transcript(cutstore._transcript(pid), cutstore.view(pid)["evaluation"]["flags"], c["segments"])
+    items = effects.suggest(t, [], body.allowed, engine, True, body.wish)
+    clips.update_clip(pid, cid, fx=items)
+    return clips.load(pid)
+
+
+@app.post("/api/projects/{pid}/clips/{cid}/effects-preview")
+def clip_effect_preview(pid: str, cid: str, body: PreviewBody):
+    from . import clips, effects
+    c = clips.get_clip(pid, cid)
+    item = effects.clean(body.item, c.get("duration"))
+    if not item:
+        raise UserError("Unknown effect.")
+    return _effect_preview(pid, item, c)
 
 
 @app.post("/api/projects/{pid}/animations/{engine}")

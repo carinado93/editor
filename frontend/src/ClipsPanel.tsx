@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api, formatSize, formatTime, type Clip } from "./api";
 import { Status } from "./ReelPackage";
+import { EffectsEditor } from "./EffectsPanel";
 
 function copy(text: string, done: (m: string) => void) {
   navigator.clipboard.writeText(text).then(
@@ -200,6 +201,22 @@ function ClipCard({ id, clip, onChange, onMsg, onErr }: {
           <button className="link" onClick={() => copy(clip.shorts_title, onMsg)}>
             Copy Shorts title
           </button>
+        </details>
+        <details className="small clip-fx">
+          <summary>Effects in this reel ({(clip.fx ?? []).filter((o) => o.on).length})</summary>
+          <EffectsEditor
+            compact
+            items={clip.fx ?? []}
+            time={elapsed}
+            onSeek={() => preview()}
+            preview={(item, signal) => api.clipEffectPreview(id, clip.id, item, signal)}
+            onSave={async (list) => onChange((await api.setClipEffects(id, clip.id, list)).clips)}
+            onSuggest={async (engine, allowed, wish) => {
+              const d = await api.suggestClipEffects(id, clip.id, engine, allowed, wish);
+              onChange(d.clips);
+              return d.clips.find((c) => c.id === clip.id)?.fx?.length ?? 0;
+            }}
+          />
         </details>
         <div className="row-buttons">
           <button className="btn" disabled={rendering} onClick={() => run(() => api.renderClip(id, clip.id))}>

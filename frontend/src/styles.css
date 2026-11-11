@@ -1769,3 +1769,32 @@ kbd {
   background: #000;
   margin-top: 8px;
 }
+.fx-editor.compact .fx-preview-box {
+  flex: 0 0 150px;
+}
+.fx-editor.compact .fx-row {
+  padding: 8px;
+}
+.clip-fx summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--lila);
+}
+.fx-chip {
+  white-space: nowrap;
+  width: auto;
+}
+.fx-editor input[type="checkbox"] {
+  width: auto;
+  flex: 0 0 auto;
+}
+.fx-editor label.fx-chip {
+  display: inline-flex;
+}
+.clip-fx .fx-chips {
+  gap: 4px;
+}
+.clip-fx .fx-chip {
+  font-size: 12px;
+  padding: 3px 8px;
+}

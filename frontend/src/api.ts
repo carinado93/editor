@@ -111,6 +111,7 @@ export interface Clip {
   title: string;
   hook_text: string;
   texts?: string[];
+  fx?: Overlay[];
   parts: number[][];
   segments: [number, number][];
   duration: number;
@@ -264,6 +265,17 @@ export const api = {
   /** Vorschau-Bild eines Effekts, so wie er gerade im Formular steht (ohne Speichern) */
   effectPreviewLive: async (id: string, item: Overlay, signal?: AbortSignal): Promise<string> => {
     const r = await fetch(`/api/projects/${id}/effects-preview`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ item }), signal,
+    });
+    if (!r.ok) throw new Error("Preview not possible");
+    return URL.createObjectURL(await r.blob());
+  },
+  setClipEffects: (id: string, cid: string, items: Overlay[]) =>
+    call<{ clips: Clip[] }>(`/api/projects/${id}/clips/${cid}/effects`, { ...json({ items }), method: "PUT" }),
+  suggestClipEffects: (id: string, cid: string, engine: "claude" | "ollama", allowed: string[], wish: string) =>
+    call<{ clips: Clip[] }>(`/api/projects/${id}/clips/${cid}/effects/${engine}`, json({ allowed, wish })),
+  clipEffectPreview: async (id: string, cid: string, item: Overlay, signal?: AbortSignal): Promise<string> => {
+    const r = await fetch(`/api/projects/${id}/clips/${cid}/effects-preview`, {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ item }), signal,
     });
     if (!r.ok) throw new Error("Preview not possible");

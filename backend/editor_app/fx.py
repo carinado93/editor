@@ -63,8 +63,10 @@ TYPES = {
     "background": ("C", "New background", ("side",)),
     "card": ("C", "Video as card", ("scene",)),
     "poof": ("C", "Poof (disappear / appear)", ("side",)),
+    "clothesline": ("A", "Clothesline", ("side", "scene")),
+    "lighttrail": ("C", "Light trail", ("side",)),
 }
-NEEDS_MASK = {"behind", "glow", "background"}
+NEEDS_MASK = {"behind", "glow", "background", "lighttrail", "clothesline"}
 
 
 @functools.cache
@@ -649,10 +651,133 @@ def draw_poof(layer, ctx, it, t, d, place):
                     (x - r * 0.28, y + r * 0.28), (x - r, y), (x - r * 0.28, y - r * 0.28)], fill=c)
 
 
+def draw_clothesline(layer, ctx, it, t, d, place):
+    """Wäscheleine oben quer durchs Bild, Karten hängen an Holzklammern und schaukeln sanft.
+    items = Texte auf den Karten (2–5). Mit title erscheint zusätzlich ein großes Wort (bei "Text hinter dir" dahinter)."""
+    w, h = ctx.w, ctx.h
+    items = (it.get("items") or [])[:5]
+    n = max(1, len(items))
+    times = item_times(n, it.get("times"), d, first=0.3)
+    y_line = int(h * (0.16 if ctx.portrait else 0.14))
+    sag = int(h * 0.05)
+    dr = ImageDraw.Draw(layer)
+    grow = ease_out(t / 0.4)
+    out = min(1.0, max(0.0, (d - t) / 0.25))
+    al = int(255 * out)
+    # Leine (leicht durchhängend), wächst von links nach rechts
+    pts = []
+    for k in range(41):
+        x = w * k / 40
+        if x > w * grow:
+            break
+        pts.append((x, y_line + sag * math.sin(math.pi * k / 40)))
+    if len(pts) > 1:
+        dr.line(pts, fill=TINTE + (al,), width=max(2, int(3 * ctx.u)))
+    cw = int(min(w / (n + 0.6), 260 * ctx.u))
+    ch = int(cw * 1.2)
+    f = font("hand", int(cw * 0.2))
+    for k, txt in enumerate(items):
+        px = w * (k + 0.75) / (n + 0.5)
+        py = y_line + sag * math.sin(math.pi * px / w)
+        key = ("line", k, txt, cw)
+        if key not in ctx.cache:
+            card = card_sprite(cw, ch, ctx.u, fill=WEISS, radius=6)
+            cd = ImageDraw.Draw(card)
+            m = int(cw * 0.08)
+            fill = [LAVENDEL, CREME, (226, 232, 214), LAVENDEL_HELL][k % 4]
+            ink = [LILA, TINTE, SALBEI_TIEF, LILA][k % 4]
+            cd.rectangle((m, m, cw - m, int(ch * 0.66)), fill=fill)
+            big, _, small_txt = txt.partition("|")
+            fb = font("head", int(cw * 0.17))
+            lines = wrap(big.strip(), fb, cw - 3 * m)[:3]
+            while lines and max(fb.getlength(ln) for ln in lines) > cw - 3 * m and fb.size > 12:
+                fb = font("head", int(fb.size * 0.9))
+                lines = wrap(big.strip(), fb, cw - 3 * m)[:3]
+            lh = fb.size * 1.08
+            y0 = m + (int(ch * 0.66) - m) / 2 - (len(lines) - 1) * lh / 2
+            for j, ln in enumerate(lines):
+                cd.text((cw / 2, y0 + j * lh), ln, font=fb, fill=ink, anchor="mm")
+            if small_txt.strip():
+                cd.text((cw / 2, int(ch * 0.83)), small_txt.strip(), font=f, fill=TINTE, anchor="mm")
+            sp = Image.new("RGBA", (cw + 40, ch + int(60 * ctx.u)), (0, 0, 0, 0))
+            sp.alpha_composite(_shadow(card, int(8 * ctx.u), int(6 * ctx.u)).resize((cw + 40, ch + 40)), (0, int(30 * ctx.u)))
+            pd = ImageDraw.Draw(sp)
+            pw, ph = int(cw * 0.12), int(60 * ctx.u)  # Holzklammer
+            pd.rounded_rectangle((sp.width / 2 - pw / 2, 0, sp.width / 2 + pw / 2, ph), radius=int(4 * ctx.u),
+                                 fill=(201, 165, 104, 255), outline=(150, 118, 70, 255), width=max(1, int(2 * ctx.u)))
+            ctx.cache[key] = sp
+        sp = ctx.cache[key]
+        prog = ease_out((t - times[k]) / 0.5)
+        if prog <= 0:
+            continue
+        # fällt von oben an die Leine und schaukelt aus
+        swing = math.sin((t - times[k]) * 5.5) * 6 * math.exp(-(t - times[k]) * 1.6) + math.sin(t * 1.7 + k) * 1.2
+        y = py - (1 - prog) * h * 0.25 + sp.height / 2 - int(14 * ctx.u)
+        paste_scaled(layer, sp, (px, y), 1.0, out, rot=swing)
+    if it.get("title") and place == "scene":
+        _title(layer, ctx, (int(0.08 * w), int(h * 0.62), int(0.92 * w), h), it["title"], t, 0.2, d, size=90)
+
+
+def _contour(mask: Image.Image, n: int = 220) -> list[tuple[float, float]]:
+    """Umriss der Person als Punktfolge (Strahlen vom Mittelpunkt, je der äußerste Rand)."""
+    small = mask.resize((mask.width // 4, mask.height // 4))
+    a = np.asarray(small) > 128
+    ys, xs = np.nonzero(a)
+    if len(xs) < 50:
+        return []
+    cx, cy = xs.mean(), ys.mean()
+    ang = np.arctan2(ys - cy, xs - cx)
+    dist = np.hypot(xs - cx, ys - cy)
+    bins = ((ang + math.pi) / (2 * math.pi) * n).astype(int) % n
+    far = np.zeros(n)
+    px = np.full(n, np.nan)
+    py = np.full(n, np.nan)
+    order = np.argsort(dist)
+    far[bins[order]] = dist[order]
+    px[bins[order]] = xs[order]
+    py[bins[order]] = ys[order]
+    pts = [(float(px[k]) * 4, float(py[k]) * 4) for k in range(n) if not np.isnan(px[k])]
+    return pts
+
+
+def draw_lighttrail(base: Image.Image, ctx, it, t, d, mask: Image.Image) -> Image.Image:
+    """Leuchtspur: ein heller Strich läuft um Carinas Umriss, mit weich auslaufendem Schweif."""
+    w, h = base.size
+    pts = _contour(mask)
+    if len(pts) < 10:
+        return base
+    n = len(pts)
+    head = (t / max(0.8, d * 0.6)) * n  # eine Runde in ~60 % der Zeit, dann weiter
+    tail = int(n * 0.45)
+    glow = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    gd = ImageDraw.Draw(glow)
+    core = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    cdr = ImageDraw.Draw(core)
+    out = min(1.0, max(0.0, (d - t) / 0.3)) * min(1.0, t / 0.2)
+    for j in range(tail):
+        k0 = int(head - j) % n
+        k1 = int(head - j - 1) % n
+        fade = (1 - j / tail) * out
+        if fade <= 0:
+            continue
+        gd.line((pts[k1], pts[k0]), fill=PLUM + (int(255 * fade),), width=int(30 * ctx.u))
+        cdr.line((pts[k1], pts[k0]), fill=WEISS + (int(255 * fade),), width=max(3, int(8 * ctx.u)))
+    glow = glow.filter(ImageFilter.GaussianBlur(12 * ctx.u))
+    res0 = base.copy()
+    res0.alpha_composite(glow)
+    res0.alpha_composite(glow)  # doppelt = kräftiger Schein
+    base = res0
+    res = base.copy()
+    res.alpha_composite(glow)
+    res.alpha_composite(core)
+    return res
+
+
 # Zeichner, die nur eine Ebene über dem Bild brauchen
 LAYER_DRAWERS = {"steps": draw_steps, "cards": draw_cards, "tags": draw_tags, "scores": draw_scores,
                  "headline": draw_headline, "checklist": draw_checklist, "endcard": draw_endcard,
-                 "bigwords": draw_bigwords, "pill": draw_pill, "poof": draw_poof}
+                 "bigwords": draw_bigwords, "pill": draw_pill, "poof": draw_poof,
+                 "clothesline": draw_clothesline}
 
 
 def render_frame(frame: Image.Image, it: dict, t: float, d: float, ctx: Ctx, mask: Image.Image | None) -> Image.Image:
@@ -679,6 +804,8 @@ def render_frame(frame: Image.Image, it: dict, t: float, d: float, ctx: Ctx, mas
             LAYER_DRAWERS[typ](layer, ctx, it, t, d, place)
             out = base.copy()
             out.alpha_composite(layer)
+            if typ == "clothesline" and mask is not None:
+                out = Image.composite(base, out, mask)  # Carina steht VOR der Leine
         return out.convert("RGB")
 
     if typ == "card":
@@ -721,6 +848,8 @@ def render_frame(frame: Image.Image, it: dict, t: float, d: float, ctx: Ctx, mas
         withtext = base.copy()
         withtext.alpha_composite(layer)
         return Image.composite(base, withtext, mask).convert("RGB")
+    if typ == "lighttrail":
+        return draw_lighttrail(base, ctx, it, t, d, mask).convert("RGB")
     if typ == "glow":
         edge = mask.filter(ImageFilter.MaxFilter(int(9 + 6 * ctx.u) | 1)).filter(ImageFilter.GaussianBlur(10 * ctx.u))
         a = edge.point(lambda v: min(255, int(v * 2 * vis)))

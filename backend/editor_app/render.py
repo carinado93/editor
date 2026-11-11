@@ -329,7 +329,8 @@ def render(src: Path, info: dict, segments: list[list[float]], out: Path, work: 
 
 def render_clip(src: Path, info: dict, segments: list[list[float]], out: Path, work: Path, words: list[dict],
                 flags: list, hook_text: str, face_box: list[float] | None, fonts_dir: str | None,
-                progress: Callable[[float, str], None] | None = None, texts: list[str] | None = None) -> dict:
+                progress: Callable[[float, str], None] | None = None, texts: list[str] | None = None,
+                fx: list[dict] | None = None) -> dict:
     """Reel aus Stücken eines langen Videos (Reihenfolge frei). 1080×1920; Querformat ohne Zoom mittig mit
     schwarzen Balken (Hook-Text im oberen Balken), Untertitel mit Karaoke, Ton auf -14 LUFS, < 30 MB."""
     from . import subtitles
@@ -400,12 +401,43 @@ def render_clip(src: Path, info: dict, segments: list[list[float]], out: Path, w
             *media.filter_script_args(script), "-map", "[v]", "-map", "1:a", *enc, "-profile:v", "high",
             "-r", fps_str, "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", "-map_metadata", "-1",
             "-shortest", str(tmp)]
-    media._run_with_progress(args, total, lambda f: report(0.05 + 0.95 * f, f"Rendering reel ({f:.0%})"))
+    fx_items = []
+    if fx:
+        from . import fxrender
+        fx_items = fxrender.prepare(fx, subtitles.TimeMap([(0.0, total)]), clip_words, total)
+    share = 0.55 if fx_items else 1.0
+    media._run_with_progress(args, total, lambda f: report(0.05 + 0.95 * share * f, f"Rendering reel ({f:.0%})"))
+    if fx_items:
+        from . import fxrender
+        face_out = clip_face_box(info, face_box)
+        fxrender.apply(tmp, out.with_suffix(".fx.mp4"), fx_items, W, H, fps_str, face_out, enc + ["-profile:v", "high"],
+                       work, lambda f, m: report(0.05 + 0.95 * (share + (1 - share) * f), m))
+        tmp.unlink(missing_ok=True)
+        tmp = out.with_suffix(".fx.mp4")
     tmp.replace(out)
     srt = out.with_suffix(".srt")
     srt.write_text(subtitles.srt(groups), encoding="utf-8")
     report(1.0, "Done")
     return {"file": out.name, "duration": round(total, 2), "size": out.stat().st_size, "srt": srt.name}
+
+
+def clip_layout(info: dict) -> tuple[int, int]:
+    """Wo das Video im Hochformat-Reel liegt: (oben, Höhe) in Pixeln von 1920."""
+    if info["width"] > info["height"]:
+        vh = int(round(1080 * info["height"] / info["width"] / 2)) * 2
+        return 1250 - vh, vh
+    return 0, 1920
+
+
+def clip_face_box(info: dict, face_box: list[float] | None) -> list[float] | None:
+    """Gesichts-Position im Reel (Querformat-Videos liegen als Band in der Mitte)."""
+    if not face_box:
+        return None
+    top, vh = clip_layout(info)
+    if top == 0:
+        return face_box
+    fx0, fy0, fx1, fy1 = face_box
+    return [fx0, (top + fy0 * vh) / 1920, fx1, (top + fy1 * vh) / 1920]
 
 
 def safe_name(name: str) -> str:
