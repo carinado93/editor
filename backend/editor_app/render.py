@@ -124,14 +124,15 @@ ZOOM_LEVELS = [1.0, 1.08, 1.15]
 
 
 def _zoom_filters(frames: list[tuple[int, int]], fps: Fraction, out_w: int, out_h: int,
-                  centers: list[tuple[float, float] | None]) -> str:
-    """Abwechselnde Zoom-Stufen pro Abschnitt (100/108/115 %), Ausschnitt um das Gesicht."""
+                  centers: list[tuple[float, float] | None], k0: int = 0) -> str:
+    """Abwechselnde Zoom-Stufen pro Abschnitt (100/108/115 %), Ausschnitt um das Gesicht.
+    k0: Nummer des ersten Abschnitts (beim Rendern in Teilen geht der Wechsel nahtlos weiter)."""
     big_w, big_h = int(round(out_w * 1.15 / 2)) * 2, int(round(out_h * 1.15 / 2)) * 2
     z_terms, x_terms, y_terms = [], [], []
     pos = 0
     for k, (a, b) in enumerate(frames):
         n = b - a
-        z = ZOOM_LEVELS[k % len(ZOOM_LEVELS)]
+        z = ZOOM_LEVELS[(k + k0) % len(ZOOM_LEVELS)]
         cx, cy = centers[k] or (0.5, 0.45)
         rng = f"between(in\\,{pos}\\,{pos + n - 1})"
         if z != 1.0:
@@ -298,7 +299,14 @@ def render(src: Path, info: dict, segments: list[list[float]], out: Path, work: 
         from . import fxrender
         kw_all = subtitles.kept_words(words, flags, tmap) if words else []
         fx_items = fxrender.prepare(opts["overlays"], tmap, kw_all, new_duration)
-    media._run_with_progress(args, new_duration, (lambda f: on_video(f * (0.6 if fx_items else 1.0))))
+    share = 0.6 if fx_items else 1.0
+    if len(frames) > CHUNK_SEGMENTS:
+        # Viele Schnitte: in Teilen rendern (eine einzige riesige Schnitt-Regel bringt ffmpeg 7/8 zum Absturz:
+        # "Cannot allocate memory"), dann die Teile ohne Qualitätsverlust aneinanderhängen
+        _render_chunked(src, info, frames, fps, fps_str, out_w, out_h, opts, gaze_data, keep_t, ass_filter, audio,
+                        audio_in, audio_map, audio_codec, encoder, tmp, work, lambda f: on_video(f * share))
+    else:
+        media._run_with_progress(args, new_duration, (lambda f: on_video(f * share)))
     if fx_items:
         from . import fxrender
         fxrender.apply(tmp, out.with_suffix(".fx.mp4"), fx_items, out_w, out_h, fps_str, face, encoder, work,
@@ -325,6 +333,60 @@ def render(src: Path, info: dict, segments: list[list[float]], out: Path, work: 
             "size": out.stat().st_size, "quality": quality, "extra": extra_files,
             "options": {k: opts[k] for k in ("zoom", "loudness", "denoise", "subtitles", "karaoke", "audio_copy", "reel")},
             "buzzwords": len(buzz)}
+
+
+CHUNK_SEGMENTS = 60
+
+
+def _render_chunked(src, info, frames, fps, fps_str, out_w, out_h, opts, gaze_data, keep_t, ass_filter, audio,
+                    audio_in, audio_map, audio_codec, encoder, tmp: Path, work: Path, on_video) -> None:
+    """Video in Teilen von höchstens CHUNK_SEGMENTS Stücken rendern (jeder Teil springt direkt an seine Stelle im
+    Original), Untertitel/Texte laufen mit der Gesamtzeit weiter, am Ende werden die Teile verlustfrei verbunden."""
+    from . import gaze
+    total = sum(b - a for a, b in frames)
+    done = 0
+    parts = []
+    h = 0.5 / float(fps)
+    for c0 in range(0, len(frames), CHUNK_SEGMENTS):
+        chunk = frames[c0:c0 + CHUNK_SEGMENTS]
+        cs = max(0.0, float(Fraction(chunk[0][0]) / fps) - 1.0)  # etwas früher anspringen, dann bildgenau auswählen
+        ce = float(Fraction(chunk[-1][1]) / fps) + 0.5
+        terms = "+".join(f"between(t\\,{float(Fraction(a) / fps) - cs - h:.6f}\\,{float(Fraction(b) / fps) - cs - h:.6f})"
+                         for a, b in chunk)
+        n_chunk = sum(b - a for a, b in chunk)
+        if opts["zoom"] and len(frames) > 1:
+            centers = [gaze.face_center(gaze_data, a, b) if gaze_data else None for a, b in keep_t[c0:c0 + len(chunk)]]
+            scale = _zoom_filters(chunk, fps, out_w, out_h, centers, k0=c0)
+        else:
+            scale = f"scale={out_w}:{out_h}:flags=lanczos"
+        offset = done  # Bildnummer im fertigen Video, an der dieser Teil beginnt
+        graph = (f"[0:{info['video_index']}]fps={fps_str},select='{terms}',setpts=N/({fps_str})/TB,"
+                 f"{scale},setsar=1,format=yuv420p,setpts=PTS+{offset}/({fps_str})/TB{ass_filter},"
+                 f"setpts=PTS-STARTPTS[v]")
+        script = work / f"filter_part{c0:05d}.txt"
+        script.write_text(graph, encoding="utf-8")
+        part = work / f"teil_{c0:05d}.mp4"
+        args = ["-ss", f"{cs:.4f}", "-t", f"{ce - cs:.4f}", "-i", str(src), *media.filter_script_args(script),
+                "-map", "[v]", "-frames:v", str(n_chunk), *encoder, "-r", fps_str, "-an", str(part)]
+        base = done
+        media._run_with_progress(args, n_chunk / float(fps), lambda f, base=base, n=n_chunk: on_video((base + f * n) / total))
+        parts.append(part)
+        done += n_chunk
+    lst = work / "teile.txt"
+    lst.write_text("".join(f"file '{p.as_posix()}'\n" for p in parts), encoding="utf-8")
+    if opts["audio_copy"]:
+        audio_args = ["-i", str(src)]
+        amap = ["-map", f"1:{info['audio_index']}"]
+    elif audio_in:
+        audio_args = audio_in
+        amap = ["-map", "1:a"]
+    else:
+        audio_args, amap = [], []
+    args = ["-f", "concat", "-safe", "0", "-i", str(lst), *audio_args, "-map", "0:v", *amap, "-c:v", "copy",
+            *audio_codec, "-movflags", "+faststart", "-map_metadata", "-1", "-shortest", str(tmp)]
+    media._run_with_progress(args, total / float(fps), None)
+    for p in parts:
+        p.unlink(missing_ok=True)
 
 
 def render_clip(src: Path, info: dict, segments: list[list[float]], out: Path, work: Path, words: list[dict],
