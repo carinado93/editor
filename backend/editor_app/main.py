@@ -1033,6 +1033,32 @@ def update_now():
     return updater.update_and_restart(busy)
 
 
+def _started_version() -> str:
+    from . import updater
+    global _STARTED_VERSION
+    if _STARTED_VERSION is None:
+        _STARTED_VERSION = updater.version()
+    return _STARTED_VERSION
+
+
+_STARTED_VERSION: str | None = None
+
+
+@app.get("/api/engine")
+def engine_info():
+    """Welche Version dieser laufende Motor beim Start geladen hat (für start.bat: alten Motor ablösen)."""
+    return {"version": _started_version(), "running": jobs.running()}
+
+
+@app.post("/api/stop")
+def stop_engine():
+    """Motor beenden (start.bat ruft das auf, wenn noch eine alte Version läuft). Unterbrochene Arbeit läuft beim
+    nächsten Start automatisch weiter."""
+    import threading
+    threading.Timer(0.5, lambda: os._exit(0)).start()
+    return {"ok": True}
+
+
 @app.get("/api/version")
 def app_version():
     from . import updater
@@ -1072,13 +1098,43 @@ def run() -> None:
 
     import socket
 
+    import json as _json
+    import time as _time
+    import urllib.request
+
     url = f"http://{config.HOST}:{config.PORT}"
-    with socket.socket() as sock:
-        if sock.connect_ex((config.HOST, config.PORT)) == 0:
-            # Läuft schon (z. B. doppelt gestartet): nur den Browser öffnen
+
+    def busy() -> bool:
+        with socket.socket() as sock:
+            return sock.connect_ex((config.HOST, config.PORT)) == 0
+
+    if busy():
+        # Läuft schon. Gleiche Version → nur Browser öffnen. Ältere Version → ablösen, damit Updates wirken.
+        mine = _started_version()
+        try:
+            with urllib.request.urlopen(url + "/api/engine", timeout=5) as r:
+                theirs = _json.loads(r.read().decode()).get("version")
+        except Exception:  # noqa: BLE001 – sehr alter Motor kennt /api/engine nicht
+            theirs = None
+        if theirs == mine:
             print(f"\n  The app is already running. Open {url}\n")
             webbrowser.open(url)
             return
+        print("\n  An older version of the app is still running – replacing it …")
+        try:
+            urllib.request.urlopen(urllib.request.Request(url + "/api/stop", method="POST"), timeout=5)
+        except Exception:  # noqa: BLE001
+            pass
+        for _ in range(20):
+            if not busy():
+                break
+            _time.sleep(0.5)
+        if busy():
+            print("\n  The old version could not be stopped automatically.\n"
+                  "  Please open the Task Manager (Ctrl+Shift+Esc), end \"Python\" and start start.bat again.\n")
+            webbrowser.open(url)
+            return
+    _started_version()
     print(f"\n  Carina's Video Editor is running:  {url}\n  Close this window to stop it.\n")
     if config.HOST in ("127.0.0.1", "localhost") and not os.environ.get("EDITOR_NO_BROWSER"):
         try:
