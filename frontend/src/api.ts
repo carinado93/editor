@@ -261,6 +261,15 @@ export const api = {
   suggestEffects: (id: string, engine: "claude" | "ollama", allowed: string[], wish: string) =>
     call<CutView>(`/api/projects/${id}/effects/${engine}`, json({ allowed, wish })),
   effectPreviewUrl: (id: string, fid: string, v: number) => `/api/projects/${id}/effects/preview/${fid}?v=${v}`,
+  /** Vorschau-Bild eines Effekts, so wie er gerade im Formular steht (ohne Speichern) */
+  effectPreviewLive: async (id: string, item: Overlay, signal?: AbortSignal): Promise<string> => {
+    const r = await fetch(`/api/projects/${id}/effects-preview`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ item }), signal,
+    });
+    if (!r.ok) throw new Error("Preview not possible");
+    return URL.createObjectURL(await r.blob());
+  },
+  exportWatchUrl: (id: string, file: string) => `/api/projects/${id}/export/${encodeURIComponent(file)}?inline=1`,
   setSpeed: (id: string, ranges: SpeedRange[]) =>
     call<CutView>(`/api/projects/${id}/cuts/speed`, { ...json({ ranges }), method: "PUT" }),
   suggestAnimations: (id: string, engine: "claude" | "ollama") =>

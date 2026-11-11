@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api, formatTime, type CutView, type EffectType, type Overlay, type SpeedRange } from "./api";
 import { Status } from "./ReelPackage";
 
@@ -20,6 +20,44 @@ const HINT: Record<string, string> = {
   bigwords: "key words that turn purple, one per line",
 };
 
+/** Vorschau-Bild, das sich bei jeder Änderung selbst neu zeichnet (kurz warten, dann neu laden). */
+function FxPreview({ pid, item }: { pid: string; item: Overlay }) {
+  const [src, setSrc] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const last = useRef<string | null>(null);
+  const key = JSON.stringify([item.type, item.place, item.title, item.items, item.start, item.end]);
+  useEffect(() => {
+    const ctrl = new AbortController();
+    const timer = setTimeout(async () => {
+      setLoading(true);
+      setFailed(false);
+      try {
+        const url = await api.effectPreviewLive(pid, item, ctrl.signal);
+        if (last.current) URL.revokeObjectURL(last.current);
+        last.current = url;
+        setSrc(url);
+      } catch (e) {
+        if ((e as Error).name !== "AbortError") setFailed(true);
+      } finally {
+        setLoading(false);
+      }
+    }, 600);
+    return () => {
+      clearTimeout(timer);
+      ctrl.abort();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, pid]);
+  return (
+    <div className="fx-preview-box">
+      {src && <img className={`fx-preview ${loading ? "loading" : ""}`} src={src} alt="Effect preview" />}
+      {!src && <div className="fx-preview placeholder small muted">{failed ? "No preview" : "Drawing preview …"}</div>}
+      {src && loading && <span className="fx-preview-busy small">updating …</span>}
+    </div>
+  );
+}
+
 const SPEED_LABEL: Record<number, string> = { 0.25: "¼× slow", 0.5: "½× slow", 2: "2× fast", 4: "4× fast", 8: "8× fast" };
 
 /** Große Effekte (Kästen, Text hinter dir, Puff …) und Zeitraffer/Zeitlupe. Du wählst, Claude schlägt vor. */
@@ -33,7 +71,6 @@ export function EffectsPanel({ id, cuts, onCuts, time, onSeek }: {
   const [dirty, setDirty] = useState(false);
   const [addType, setAddType] = useState("headline");
   const [wish, setWish] = useState("");
-  const [preview, setPreview] = useState<Record<string, number>>({});
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
@@ -164,6 +201,8 @@ export function EffectsPanel({ id, cuts, onCuts, time, onSeek }: {
           const listType = ["steps", "cards", "tags", "scores", "checklist", "endcard", "bigwords"].includes(o.type ?? "");
           return (
             <div key={o.id} className={`fx-row ${o.on ? "" : "off"}`}>
+              <FxPreview pid={id} item={o} />
+              <div className="fx-row-main">
               <div className="fx-row-head">
                 <input type="checkbox" checked={o.on} onChange={(e) => upd(i, { on: e.target.checked })} />
                 <button className="time" title="Jump here" onClick={() => onSeek(o.start)}>{formatTime(o.start)}</button>
@@ -208,18 +247,6 @@ export function EffectsPanel({ id, cuts, onCuts, time, onSeek }: {
                 />
               )}
               {o.why && <div className="small muted">{o.why}</div>}
-              <div className="small">
-                {preview[o.id] ? (
-                  <img className="fx-preview" src={api.effectPreviewUrl(id, o.id, preview[o.id])} alt="Effect preview" />
-                ) : null}
-                <button
-                  className="link"
-                  disabled={dirty}
-                  title={dirty ? "Save first" : ""}
-                  onClick={() => setPreview({ ...preview, [o.id]: Date.now() })}
-                >
-                  {dirty ? "save to see a preview" : preview[o.id] ? "refresh preview" : "show preview image"}
-                </button>
               </div>
             </div>
           );

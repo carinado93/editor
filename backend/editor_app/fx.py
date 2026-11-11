@@ -792,4 +792,5 @@ def preview_png(it: dict, w: int, h: int, face_box, frame: Image.Image | None, o
     ctx = Ctx(w, h, face_box, it.get("_words"))
     frame = frame or Image.new("RGB", (w, h), (90, 90, 90))
     mask = segmenter.mask(frame) if (segmenter and it.get("type") in NEEDS_MASK) else None
-    render_frame(frame, it, d * 0.75, d, ctx, mask).save(out)
+    t = 0.3 if it.get("type") == "poof" else d * 0.75  # Puff: im dichtesten Moment zeigen
+    render_frame(frame, it, t, d, ctx, mask).save(out)

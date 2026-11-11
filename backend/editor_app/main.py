@@ -273,14 +273,35 @@ def put_speed(pid: str, body: SpeedBody):
 
 @app.get("/api/projects/{pid}/effects/preview/{fid}")
 def effect_preview(pid: str, fid: str):
-    """Standbild eines Effekts auf einem Bild aus dem Video (für die Vorschau)."""
+    """Standbild eines gespeicherten Effekts."""
+    item = next((o for o in cutstore.view(pid)["cutlist"].get("overlays", []) if o.get("id") == fid), None)
+    if not item or item.get("kind") != "fx":
+        raise HTTPException(404)
+    return _effect_preview(pid, item)
+
+
+class PreviewBody(BaseModel):
+    item: dict
+
+
+@app.post("/api/projects/{pid}/effects-preview")
+def effect_preview_live(pid: str, body: PreviewBody):
+    """Standbild eines Effekts, so wie er gerade im Formular steht (ohne Speichern)."""
+    from . import fx
+    item = dict(body.item)
+    if item.get("type") not in fx.TYPES:
+        raise UserError("Unknown effect.")
+    item["start"] = float(item.get("start", 0))
+    item["end"] = max(item["start"] + 0.8, float(item.get("end", item["start"] + 4)))
+    item["items"] = [str(x) for x in item.get("items") or [] if str(x).strip()]
+    return _effect_preview(pid, item)
+
+
+def _effect_preview(pid: str, item: dict):
     import tempfile
 
     from . import fx
     p = projects.load(pid)
-    item = next((o for o in cutstore.view(pid)["cutlist"].get("overlays", []) if o.get("id") == fid), None)
-    if not item or item.get("kind") != "fx":
-        raise HTTPException(404)
     info = p.get("info") or {}
     w, h = info.get("width", 1920), info.get("height", 1080)
     scale = 1080 / min(w, h)
@@ -340,11 +361,12 @@ def start_render(pid: str, body: RenderBody):
 
 
 @app.get("/api/projects/{pid}/export/{name}")
-def get_export(pid: str, name: str):
+def get_export(pid: str, name: str, inline: int = 0):
     f = projects.path(pid, "export") / name
     if "/" in name or "\\" in name or not f.is_file():
         raise HTTPException(404, "File not found.")
-    return FileResponse(f, filename=name)
+    # inline=1: im Browser abspielen (Vorschau des fertigen Videos), sonst herunterladen
+    return FileResponse(f, filename=name, content_disposition_type="inline" if inline else "attachment")
 
 
 @app.post("/api/projects/{pid}/open-folder")

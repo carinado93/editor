@@ -216,6 +216,10 @@ function ClipCard({ id, clip, onChange, onMsg, onErr }: {
         )}
         {clip.status === "fehler" && <div className="small error-text">⚠ {clip.error}</div>}
         {clip.file && (
+          <video className="watch-video" src={api.exportWatchUrl(id, clip.file)} controls preload="metadata" playsInline
+            style={{ maxWidth: 240 }} />
+        )}
+        {clip.file && (
           <div className="small">
             <a href={api.exportUrl(id, clip.file)} download>
               ⬇ Download reel

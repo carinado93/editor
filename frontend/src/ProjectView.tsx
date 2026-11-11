@@ -57,6 +57,7 @@ export function ProjectView({ id }: { id: string }) {
   const [quality, setQuality] = useState("1080");
   const [faceBox, setFaceBox] = useState<number[] | null>(null);
   const [suggesting, setSuggesting] = useState(false);
+  const [watch, setWatch] = useState<string | null>(null);
   const video = useRef<HTMLVideoElement>(null);
   const textBox = useRef<HTMLDivElement>(null);
   const previewRef = useRef(preview);
@@ -537,10 +538,21 @@ export function ProjectView({ id }: { id: string }) {
                 </div>
               )}
               {r?.status === "fehler" && <div className="small error-text">⚠ {r.error}</div>}
+              {!!project.exports?.length && !rendering && (() => {
+                const shown = watch ?? project.exports[project.exports.length - 1].file;
+                return (
+                  <div className="watch">
+                    <h4>Your finished video</h4>
+                    <video key={shown} className="watch-video" src={api.exportWatchUrl(id, shown)} controls preload="metadata" playsInline />
+                    <div className="small muted">{shown}</div>
+                  </div>
+                );
+              })()}
               {!!project.exports?.length && (
                 <ul className="exports small">
                   {[...project.exports].reverse().map((x) => (
                     <li key={x.file}>
+                      <button className="link" onClick={() => setWatch(x.file)}>▶ watch</button>{" "}
                       <a href={api.exportUrl(id, x.file)} download>
                         ⬇ {x.file}
                       </a>

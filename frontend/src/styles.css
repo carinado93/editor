@@ -1714,3 +1714,58 @@ kbd {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.fx-row {
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 14px;
+}
+.fx-row-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.fx-preview-box {
+  position: relative;
+  flex: 0 0 300px;
+}
+.fx-preview-box .fx-preview {
+  width: 100%;
+  margin: 0;
+}
+.fx-preview.loading {
+  opacity: 0.6;
+}
+.fx-preview.placeholder {
+  aspect-ratio: 16 / 9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #efe9f7;
+  border-radius: 8px;
+}
+.fx-preview-busy {
+  position: absolute;
+  left: 8px;
+  top: 8px;
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: 6px;
+  padding: 2px 6px;
+}
+@media (max-width: 800px) {
+  .fx-row {
+    flex-direction: column;
+  }
+  .fx-preview-box {
+    flex-basis: auto;
+    width: 100%;
+  }
+}
+.watch-video {
+  width: 100%;
+  max-height: 70vh;
+  border-radius: 10px;
+  background: #000;
+  margin-top: 8px;
+}
