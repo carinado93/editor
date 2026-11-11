@@ -1,7 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { YoutubePackage } from "./YoutubePackage";
 import { ReelPackage } from "./ReelPackage";
-import { YoutubeAnimations } from "./YoutubeAnimations";
 import { EffectsPanel } from "./EffectsPanel";
 import { api, formatSize, formatTime, type CutType, type CutView, type Detection, type Project, type Transcript, type Word } from "./api";
 
@@ -56,7 +55,6 @@ export function ProjectView({ id }: { id: string }) {
   const [busy, setBusy] = useState(false);
   const [quality, setQuality] = useState("1080");
   const [faceBox, setFaceBox] = useState<number[] | null>(null);
-  const [suggesting, setSuggesting] = useState(false);
   const [watch, setWatch] = useState<string | null>(null);
   const [busyWith, setBusyWith] = useState<string | null>(null);
   // Beim Warten zeigen, womit die App gerade beschäftigt ist
@@ -142,13 +140,15 @@ export function ProjectView({ id }: { id: string }) {
     return m;
   }, [cuts]);
 
+  // Buzzwords sind jetzt Effekte: Wörter markieren, die in einem Buzzword-Effekt stehen
   const buzzOf = useMemo(() => {
     const m = new Map<number, { start: number; end: number }>();
-    cuts?.cutlist.buzzwords.forEach((b) => {
-      for (let k = b.start; k < b.end; k++) m.set(k, b);
+    const bz = (cuts?.cutlist.overlays ?? []).filter((o) => o.kind === "fx" && o.type === "buzzword");
+    words.forEach((w) => {
+      if (bz.some((o) => w.s >= o.start - 0.05 && w.s < o.start + 0.6)) m.set(w.i, { start: w.i, end: w.i + 1 });
     });
     return m;
-  }, [cuts]);
+  }, [cuts, words]);
 
   // Untertitel-Zeilen für die Vorschau (gleiche Regeln wie beim Rendern)
   const subLines = useMemo(() => {
@@ -518,23 +518,6 @@ export function ProjectView({ id }: { id: string }) {
                       Karaoke (spoken word turns purple)
                     </label>
                   )}
-                  <div className="buzz-row">
-                    <span>
-                      ★ Buzzwords: {cuts.cutlist.buzzwords.length}
-                      {cuts.cutlist.buzzwords.length === 0 && <span className="muted"> (click a word in the transcript → "★ Make buzzword")</span>}
-                    </span>
-                    <button
-                      className="link"
-                      disabled={suggesting || busy}
-                      onClick={async () => {
-                        setSuggesting(true);
-                        await run(() => api.suggestBuzz(id));
-                        setSuggesting(false);
-                      }}
-                    >
-                      {suggesting ? "local AI is thinking …" : "suggest (Ollama)"}
-                    </button>
-                  </div>
                 </div>
               )}
               <div className="render-row">
@@ -739,7 +722,6 @@ export function ProjectView({ id }: { id: string }) {
           )}
         </div>
       </div>
-      {cutMode && cuts && <YoutubeAnimations id={id} cuts={cuts} onCuts={setCuts} onSeek={(t) => seek(t, false)} />}
       {editMode && cuts && <EffectsPanel id={id} cuts={cuts} onCuts={setCuts} time={time} onSeek={(t) => seek(t, false)} />}
       {cutMode && <YoutubePackage id={id} />}
       {reelMode && cuts && <ReelPackage id={id} cuts={cuts} onCuts={setCuts} time={time} duration={duration} />}
@@ -770,7 +752,7 @@ function TextOverlay({
     return time >= s && time <= e;
   });
   const fb = faceBox ?? [0.3, 0.1, 0.7, 0.5];
-  const hook = (cuts.cutlist.overlays ?? []).find((h) => h.on && h.kind !== "yt" && time >= h.start && time <= h.end);
+  const hook = (cuts.cutlist.overlays ?? []).find((h) => h.on && h.kind !== "yt" && h.kind !== "fx" && time >= h.start && time <= h.end);
   const yt = (cuts.cutlist.overlays ?? []).find((h) => h.on && h.kind === "yt" && time >= h.start && time <= h.end);
   const fxNow = (cuts.cutlist.overlays ?? []).find((h) => h.on && h.kind === "fx" && time >= h.start && time <= h.end);
   const right = (fb[0] + fb[2]) / 2 < 0.55;
@@ -797,7 +779,9 @@ function TextOverlay({
         </span>
       )}
       {fxNow && (
-        <span className="ov-fx-badge">✦ {fxNow.type}{fxNow.title ? `: ${fxNow.title.replace(/[|*]/g, " ")}` : ""}</span>
+        <span className="ov-fx-badge" title="Only a note while editing – the effect itself is in the final video. See its preview video in Effects.">
+          ✦ effect here: {fxNow.type} (only a note – see preview in Effects)
+        </span>
       )}
       {yt && (yt.style === "label" || yt.style === "quote") && (
         <span key={yt.id} className={`ov-yt ov-yt-${yt.style}`} style={chestStyle}>

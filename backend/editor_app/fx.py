@@ -77,6 +77,12 @@ TYPES = {
     "switch": ("C", "Switch reveal (your text)", ("side",)),
     "repeat": ("B", "Repeating line (& again …)", ("side",)),
     "wordswap": ("B", "Changing last word", ("side",)),
+    "label": ("B", "Purple label", ("side",)),
+    "quotepill": ("B", "Quote pill", ("side",)),
+    "number": ("B", "Big number (word|×3)", ("side",)),
+    "name": ("B", "Name + title", ("side",)),
+    "stickers": ("B", "Sticker list", ("side",)),
+    "buzzword": ("B", "Buzzword pop", ("side",)),
 }
 NO_AUTO_FILL = {"switch"}  # Carina schreibt den Text selbst – Claude füllt ihn nie aus
 NEEDS_MASK = {"behind", "glow", "background", "lighttrail", "clothesline", "vanish", "sticker", "counter", "ghost",
@@ -231,7 +237,8 @@ class Ctx:
 
     def __init__(self, w: int, h: int, face_box: list[float] | None, words: list[dict] | None = None):
         self.w, self.h = w, h
-        self.u = min(w, h) / 1080
+        self.base_u = min(w, h) / 1080
+        self.u = self.base_u
         self.portrait = h > w
         self.face = face_box or [0.35, 0.12, 0.65, 0.5]
         self.words = words or []  # [{w, s, e}] in Zeit relativ zum Effekt-Beginn
@@ -1216,18 +1223,163 @@ def draw_switch(base, ctx, it, t, d, mask):
     return Image.blend(base, out, fade)
 
 
+def _chest(ctx):
+    fx0, fy0, fx1, fy1 = ctx.face
+    return (fx0 + fx1) / 2 * ctx.w, ctx.h * min(0.82, max(0.56, fy1 + 0.22))
+
+
+def _side(ctx):
+    fx0, fy0, fx1, fy1 = ctx.face
+    right = (fx0 + fx1) / 2 < 0.55
+    x = ctx.w * (min(0.8, fx1 + 0.05) if right else max(0.2, fx0 - 0.05))
+    return x, ctx.h * max(0.18, (fy0 + fy1) / 2), right
+
+
+def _box_text(text, f, fg, bg, pad_x, pad_y, radius, f_acc=None, acc=None):
+    w = rich_width(text, f, f_acc or f) if f_acc else int(f.getlength(text))
+    hgt = int(f.size * 1.25)
+    im = Image.new("RGBA", (w + 2 * pad_x, hgt + 2 * pad_y), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    d.rounded_rectangle((0, 0, im.width - 1, im.height - 1), radius=radius, fill=bg)
+    if f_acc:
+        rich_line(d, (pad_x, pad_y + int(f.size * 0.95)), text, f, f_acc, fg, acc)
+    else:
+        d.text((pad_x, pad_y + int(f.size * 0.95)), text, font=f, fill=fg, anchor="ls")
+    return im
+
+
+def draw_label(layer, ctx, it, t, d, place):
+    """Lila Kasten, weiße Großbuchstaben (Poppins ExtraBold) auf Brusthöhe – Kernaussage, SEO-Wort."""
+    txt = (it.get("title") or "").replace("*", "").replace("|", " ").upper()
+    if not txt:
+        return
+    f = font("head", int(56 * ctx.u))
+    lines = wrap(txt, f, int(ctx.w * 0.5))
+    cx, cy = _chest(ctx)
+    for k, ln in enumerate(lines):
+        key = ("lbl", ln, f.size)
+        if key not in ctx.cache:
+            ctx.cache[key] = _box_text(ln, f, WEISS, LILA, int(18 * ctx.u), int(6 * ctx.u), int(6 * ctx.u))
+        s_, a = appear(t, 0.0 + k * 0.08, 0, d)
+        sp = ctx.cache[key]
+        paste_scaled(layer, sp, (cx, cy + k * sp.height * 1.02), s_, a)
+
+
+def draw_quotepill(layer, ctx, it, t, d, place):
+    """Cremefarbene Pille, Cormorant, *Wort* lila-kursiv – ruhiger Merksatz."""
+    txt = (it.get("title") or "").replace("|", " ")
+    if not txt:
+        return
+    f = font("serif", int(56 * ctx.u))
+    fa = font("serif_i", int(56 * ctx.u))
+    cx, cy = _chest(ctx)
+    key = ("qp", txt, f.size)
+    if key not in ctx.cache:
+        ctx.cache[key] = _shadow(_box_text(txt, f, TINTE, CREME, int(26 * ctx.u), int(10 * ctx.u), int(22 * ctx.u), fa, LILA),
+                                 int(8 * ctx.u), int(5 * ctx.u))
+    s_, a = appear(t, 0.0, 0, d)
+    paste_scaled(layer, ctx.cache[key], (cx, cy), s_, a)
+
+
+def draw_number(layer, ctx, it, t, d, place):
+    """Wort + große Zahl ("BURNOUT" + "×3") neben Carina."""
+    word, _, num = (it.get("title") or "").partition("|")
+    if not num and it.get("items"):
+        num = it["items"][0]
+    x, y, right = _side(ctx)
+    f = font("head", int(54 * ctx.u))
+    fn = font("black", int(130 * ctx.u))
+    if word.strip():
+        key = ("nw", word, f.size)
+        if key not in ctx.cache:
+            ctx.cache[key] = _box_text(word.strip().upper(), f, WEISS, LILA, int(16 * ctx.u), int(6 * ctx.u), int(6 * ctx.u))
+        sp = ctx.cache[key]
+        s_, a = appear(t, 0.0, 0, d)
+        paste_scaled(layer, sp, (x + (sp.width / 2 if right else -sp.width / 2), y), s_, a)
+    if num.strip():
+        key = ("nn", num, fn.size)
+        if key not in ctx.cache:
+            ctx.cache[key] = _box_text(num.strip(), fn, GOLD, LILA_TIEF, int(18 * ctx.u), int(4 * ctx.u), int(8 * ctx.u))
+        sp = ctx.cache[key]
+        s_, a = appear(t, 0.2, 0, d)
+        paste_scaled(layer, sp, (x + (sp.width / 2 if right else -sp.width / 2), y + sp.height * 0.9), s_, a)
+
+
+def draw_name(layer, ctx, it, t, d, place):
+    """Bauchbinde: Name (Cormorant auf Creme) + Titel (kleine lila Zeile)."""
+    name, _, title = (it.get("title") or "").partition("|")
+    if not name.strip():
+        return
+    x, y, right = _side(ctx)
+    f = font("serif", int(48 * ctx.u))
+    ft = font("semi", int(24 * ctx.u))
+    key = ("nm", name, title, f.size)
+    if key not in ctx.cache:
+        a = _box_text(name.strip(), f, TINTE, CREME, int(16 * ctx.u), int(4 * ctx.u), int(4 * ctx.u))
+        b = _box_text(title.strip(), ft, WEISS, LILA, int(12 * ctx.u), int(4 * ctx.u), int(4 * ctx.u)) if title.strip() else None
+        w = max(a.width, b.width if b else 0)
+        im = Image.new("RGBA", (w, a.height + (b.height + int(4 * ctx.u) if b else 0)), (0, 0, 0, 0))
+        im.alpha_composite(a, (0, 0))
+        if b:
+            im.alpha_composite(b, (0, a.height + int(4 * ctx.u)))
+        ctx.cache[key] = im
+    sp = ctx.cache[key]
+    s_, al = appear(t, 0.0, 0, d)
+    paste_scaled(layer, sp, (x + (sp.width / 2 if right else -sp.width / 2), y), s_, al)
+
+
+def draw_stickers(layer, ctx, it, t, d, place):
+    """Weiße Zettel mit Handschrift, erscheinen nacheinander untereinander neben Carina (Aufzählung)."""
+    items = (it.get("items") or [])[:6]
+    if not items:
+        return
+    times = item_times(len(items), it.get("times"), d, first=0.15)
+    x, y, right = _side(ctx)
+    f = font("hand", int(46 * ctx.u))
+    step = f.size * 1.5
+    for k, txt in enumerate(items):
+        key = ("stk", txt.upper(), f.size)
+        if key not in ctx.cache:
+            ctx.cache[key] = _shadow(_box_text(txt.upper(), f, TINTE, WEISS, int(14 * ctx.u), int(4 * ctx.u), int(4 * ctx.u)),
+                                     int(6 * ctx.u), int(4 * ctx.u))
+        sp = ctx.cache[key]
+        s_, a = appear(t, times[k], 0, d)
+        paste_scaled(layer, sp, (x + (sp.width / 2 if right else -sp.width / 2), y + k * step), s_, a,
+                     rot=(-2 if k % 2 == 0 else 1.5))
+
+
+def draw_buzzword(layer, ctx, it, t, d, place):
+    """Buzzword-Pop: ein Wort groß in Cormorant auf hellem Flieder neben Carinas Gesicht."""
+    txt = (it.get("title") or "").replace("*", "").replace("|", " ").strip()
+    if not txt:
+        return
+    x, y, right = _side(ctx)
+    f = font("serif", int(84 * ctx.u))
+    key = ("bz", txt, f.size)
+    if key not in ctx.cache:
+        ctx.cache[key] = _box_text(txt, f, LILA_TIEF, (205, 191, 224), int(18 * ctx.u), int(4 * ctx.u), int(8 * ctx.u))
+    sp = ctx.cache[key]
+    s_, a = appear(t, 0.0, 0, d, pop=0.26)
+    paste_scaled(layer, sp, (x + (sp.width / 2 if right else -sp.width / 2), y), s_, a)
+
+
 # Zeichner, die nur eine Ebene über dem Bild brauchen
 LAYER_DRAWERS = {"steps": draw_steps, "cards": draw_cards, "tags": draw_tags, "scores": draw_scores,
                  "headline": draw_headline, "checklist": draw_checklist, "endcard": draw_endcard,
                  "bigwords": draw_bigwords, "pill": draw_pill, "poof": draw_poof,
                  "clothesline": draw_clothesline, "typewriter": draw_typewriter, "quote": draw_quote,
-                 "repeat": draw_repeat, "wordswap": draw_wordswap}
+                 "repeat": draw_repeat, "wordswap": draw_wordswap, "label": draw_label, "quotepill": draw_quotepill,
+                 "number": draw_number, "name": draw_name, "stickers": draw_stickers, "buzzword": draw_buzzword}
 
 
 def render_frame(frame: Image.Image, it: dict, t: float, d: float, ctx: Ctx, mask: Image.Image | None) -> Image.Image:
     """Ein Bild des Effekts. frame: RGB-Bild des Videos in diesem Moment. mask: Person (L, 255 = Carina)."""
     typ = it.get("type", "headline")
     place = it.get("place", "scene")
+    try:  # Größe, die Carina mit dem Schieberegler eingestellt hat
+        ctx.u = ctx.base_u * max(0.4, min(2.5, float(it.get("scale") or 1)))
+    except (TypeError, ValueError):
+        ctx.u = ctx.base_u
     if place not in TYPES.get(typ, ("", "", ("scene",)))[2]:
         place = TYPES.get(typ, ("", "", ("scene",)))[2][0]
     w, h = frame.size
@@ -1379,14 +1531,15 @@ def with_placeholders(it: dict) -> dict:
     it = dict(it)
     if not (it.get("title") or "").strip() and it.get("type") not in ("poof", "glow", "lighttrail", "ghost", "whip",
                                                                        "vanish", "flash", "sticker", "bigwords"):
-        it["title"] = {"counter": "120|Tage", "behind": "TEXT", "switch": "YOUR HEADLINE",
+        it["title"] = {"counter": "120|Tage", "behind": "TEXT", "switch": "YOUR HEADLINE", "number": "Burnout|×3",
+                       "name": "Carina Dorca|Stress- & Burnout-Coach", "buzzword": "Burnout",
                        "statement": "YOUR SHORT LINE.", "quote": "\u201eyour quote\u201c",
                        "repeat": "Don't forget to try again", "wordswap": "trust the timing of your life even when it feels"
                        }.get(it.get("type"), "Dein *Text*|hier")
     if not it.get("items") and it.get("type") == "wordswap":
         it["items"] = ["heavy", "slow", "uncertain"]
     if not it.get("items") and it.get("type") in ("steps", "cards", "tags", "scores", "checklist", "clothesline",
-                                                  "endcard"):
+                                                  "endcard", "stickers"):
         it["items"] = ["Punkt 1|7", "Punkt 2|5", "Punkt 3|8"] if it.get("type") != "endcard" else ["Kommentiere RUHE"]
     return it
 

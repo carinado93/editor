@@ -1814,3 +1814,34 @@ kbd {
 .fx-tripod .pill {
   margin-right: 4px;
 }
+.time-range {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+.time-box {
+  width: 64px;
+  padding: 2px 6px;
+  font-variant-numeric: tabular-nums;
+}
+.anim-row {
+  grid-template-columns: auto 140px auto 1fr auto;
+}
+@media (max-width: 1100px) {
+  .anim-row {
+    grid-template-columns: auto 1fr auto;
+  }
+  .anim-row .anim-text {
+    grid-column: 1 / -1;
+  }
+}
+
+.fx-size {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.fx-size input[type="range"] {
+  width: 180px;
+}

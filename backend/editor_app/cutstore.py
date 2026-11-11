@@ -129,10 +129,56 @@ def load(pid: str) -> dict:
     return cl
 
 
+def _anim_to_fx(o: dict) -> dict | None:
+    """Alte YouTube-Animation (kind "yt") → Effekt (alles liegt jetzt in "Effects")."""
+    style = o.get("style", "label")
+    base = {"id": "fx-" + str(o.get("id", "")).replace("yt-", ""), "kind": "fx", "on": o.get("on", True),
+            "start": o["start"], "end": o["end"], "place": "side", "items": [], "item_t": [], "why": ""}
+    if style == "number":
+        title = f"{o.get('text', '')}|{o.get('number', '')}"
+        return {**base, "type": "number", "title": title, "text": title}
+    if style in ("sticker", "check"):
+        lst = o.get("list") or [{"text": o.get("text", ""), "t": o["start"]}]
+        return {**base, "type": "stickers" if style == "sticker" else "checklist", "title": "",
+                "text": o.get("text") or style, "items": [p["text"] for p in lst], "item_t": [p["t"] for p in lst]}
+    typ = {"label": "label", "quote": "quotepill", "name": "name"}.get(style, "label")
+    return {**base, "type": typ, "title": o.get("text", ""), "text": o.get("text") or typ}
+
+
+def _buzz_to_fx(b: dict, words: list[dict]) -> dict | None:
+    if not (0 <= b["start"] < len(words)):
+        return None
+    ws = words[b["start"]:b["end"]]
+    text = b.get("text") or " ".join(re.sub(r"[.,!?;:…]+$", "", w["w"]) for w in ws)
+    s_ = ws[0]["s"]
+    return {"id": f"fx-bz-{b['start']}", "kind": "fx", "type": "buzzword", "place": "side", "on": True,
+            "title": text, "text": text, "items": [], "item_t": [], "why": "",
+            "start": round(s_, 2), "end": round(max(s_ + 1.8, ws[-1]["e"] + 0.8), 2)}
+
+
+def _migrate_to_effects(pid: str, cl: dict) -> dict:
+    """Animationen und Buzzwords sind jetzt Effekte (damit nichts doppelt im Video steht). Einmalig umwandeln."""
+    yts = [o for o in cl.get("overlays", []) if o.get("kind") == "yt"]
+    bzs = cl.get("buzzwords") or []
+    if not yts and not bzs:
+        return cl
+    words = cuts.flat_words(_transcript(pid))
+    new = [x for x in ([_anim_to_fx(o) for o in yts] + [_buzz_to_fx(b, words) for b in bzs]) if x]
+    with _lock:
+        c = load(pid)
+        c["overlays"] = [o for o in c.get("overlays", []) if o.get("kind") != "yt"] + new
+        c["overlays"].sort(key=lambda o: o.get("start", 0))
+        c["buzzwords"] = []
+        _save(pid, c)
+        return c
+
+
 def view(pid: str, cutlist: dict | None = None) -> dict:
     """Schnittliste + Auswertung (welche Wörter fallen weg, welche Zeitbereiche bleiben, neue Länge)."""
     t = _transcript(pid)
     cl = cutlist or load(pid)
+    if cutlist is None:
+        cl = _migrate_to_effects(pid, cl)
     ev = cuts.evaluate(t, cl)
     public = {k: v for k, v in cl.items() if k != "history"}
     public.setdefault("buzzwords", [])
@@ -288,11 +334,19 @@ def set_render_options(pid: str, options: dict) -> dict:
 
 
 def set_buzzword(pid: str, start: int, end: int, on: bool) -> dict:
+    """★ Buzzword im Transkript: legt einen Buzzword-Effekt an (oder entfernt ihn)."""
+    words = cuts.flat_words(_transcript(pid))
+
     def fn(cl):
-        items = [b for b in cl.get("buzzwords", []) if b["end"] <= start or b["start"] >= end]
+        s_, e_ = words[start]["s"], words[end - 1]["e"]
+        keep = [o for o in cl.get("overlays", []) if not (o.get("kind") == "fx" and o.get("type") == "buzzword"
+                                                       and o["start"] < e_ + 0.5 and o["end"] > s_)]
         if on:
-            items.append({"start": start, "end": end})
-        cl["buzzwords"] = sorted(items, key=lambda b: b["start"])
+            item = _buzz_to_fx({"start": start, "end": end}, words)
+            if item:
+                keep.append(item)
+        cl["overlays"] = sorted(keep, key=lambda o: o.get("start", 0))
+        cl["buzzwords"] = []
     return _change(pid, fn)
 
 
@@ -358,7 +412,8 @@ def suggest_animations(pid: str, engine: str) -> dict:
     t = _transcript(pid)
     flags = cuts.evaluate(t, load(pid))["flags"]
     items = animations.suggest_claude(t, flags) if engine == "claude" else animations.suggest_ollama(t, flags)
-    view_ = set_animations(pid, items)
+    fx_items = [x for x in (_anim_to_fx(o) for o in items) if x]  # alles als Effekte
+    view_ = set_effects(pid, [o for o in load(pid).get("overlays", []) if o.get("kind") == "fx"] + fx_items)
     with _lock:
         c = load(pid)
         c["anim_auto"] = engine
@@ -480,6 +535,10 @@ def set_overlays(pid: str, overlays: list[dict]) -> dict:
                 item["bg_t"] = round(float(o["bg_t"]), 2) if o.get("bg_t") is not None else None
                 item["pose_t"] = [round(float(x), 2) for x in o.get("pose_t") or []][:8]
                 item["mode"] = "appear" if o.get("mode") == "appear" else "vanish"
+                try:
+                    item["scale"] = round(max(0.4, min(2.5, float(o.get("scale") or 1))), 2)
+                except (TypeError, ValueError):
+                    item["scale"] = 1.0
             clean.append(item)
         cl["overlays"] = clean
     return _change(pid, fn)

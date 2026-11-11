@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { api, formatTime, type CutView, type EffectType, type Overlay, type SpeedRange } from "./api";
 import { Status } from "./ReelPackage";
+import { TimeRange } from "./TimeRange";
 
 const GROUP_LABEL: Record<string, string> = {
   A: "Boxes & cards",
@@ -23,6 +24,7 @@ const HINT: Record<string, string> = {
   repeat: "the repeating phrase, e.g. & again (empty = '&' + your last word)",
   wordswap: "the changing words, one per line (heavy, slow, uncertain …)",
   switch: "small line in the pill below (optional, your words)",
+  stickers: "one sticker per line",
 };
 
 /** Vorschau-Bild, das sich bei jeder Änderung selbst neu zeichnet (kurz warten, dann neu laden). */
@@ -33,7 +35,7 @@ function FxPreview({ preview, item }: { preview: PreviewFn; item: Overlay }) {
   const [loading, setLoading] = useState(false);
   const [failed, setFailed] = useState(false);
   const last = useRef<string | null>(null);
-  const key = JSON.stringify([item.type, item.place, item.title, item.items, item.start, item.end]);
+  const key = JSON.stringify([item.type, item.place, item.title, item.items, item.start, item.end, item.scale]);
   useEffect(() => {
     const ctrl = new AbortController();
     const timer = setTimeout(async () => {
@@ -188,7 +190,7 @@ export function EffectsEditor({ items: source, allowedInit, time, onSeek, previe
     setItems(items.map((o, j) => (j === i ? { ...o, ...patch } : o)));
   };
 
-  const LIST_TYPES = ["steps", "cards", "tags", "scores", "checklist", "endcard", "bigwords", "clothesline", "wordswap"];
+  const LIST_TYPES = ["steps", "cards", "tags", "scores", "checklist", "endcard", "bigwords", "clothesline", "wordswap", "stickers"];
   const add = () => {
     const t = types.find((x) => x.key === addType);
     const dur = addType === "poof" ? 1 : addType === "whip" ? 0.6 : 4;
@@ -269,14 +271,13 @@ export function EffectsEditor({ items: source, allowedInit, time, onSeek, previe
       <div className="fx-list">
         {items.map((o, i) => {
           const t = typeOf(o.type);
-          const listType = ["steps", "cards", "tags", "scores", "checklist", "endcard", "bigwords", "clothesline", "repeat", "wordswap", "switch"].includes(o.type ?? "");
+          const listType = ["steps", "cards", "tags", "scores", "checklist", "endcard", "bigwords", "clothesline", "repeat", "wordswap", "switch", "stickers"].includes(o.type ?? "");
           return (
             <div key={o.id} className={`fx-row ${o.on ? "" : "off"}`}>
               <FxPreview preview={preview} item={o} />
               <div className="fx-row-main">
               <div className="fx-row-head">
                 <input type="checkbox" checked={o.on} onChange={(e) => upd(i, { on: e.target.checked })} />
-                <button className="time" title="Jump here" onClick={() => onSeek(o.start)}>{formatTime(o.start)}</button>
                 <select value={o.type} onChange={(e) => {
                   const nt = typeOf(e.target.value);
                   upd(i, { type: e.target.value, place: nt && !nt.places.includes(o.place ?? "scene") ? nt.places[0] : o.place });
@@ -292,11 +293,11 @@ export function EffectsEditor({ items: source, allowedInit, time, onSeek, previe
                     ))}
                   </select>
                 )}
-                <span className="small muted">
-                  {((o.end - o.start)).toFixed(1)} s
-                  {" "}<button className="link" onClick={() => upd(i, { end: Math.max(o.start + 0.8, o.end - 0.5) })}>shorter</button>{" "}
-                  <button className="link" onClick={() => upd(i, { end: o.end + 0.5 })}>longer</button>
-                </span>
+                <TimeRange start={o.start} end={o.end} now={time} onSeek={onSeek}
+                  onChange={(st, en) => {
+                    const d = st - o.start;  // Listenpunkte wandern mit
+                    upd(i, { start: st, end: en, item_t: (o.item_t ?? []).map((x) => Math.round((x + d) * 10) / 10) });
+                  }} />
                 <button className="link danger" onClick={() => { setDirty(true); setItems(items.filter((_, j) => j !== i)); }}>
                   remove
                 </button>
@@ -311,6 +312,11 @@ export function EffectsEditor({ items: source, allowedInit, time, onSeek, previe
                       : o.type === "quote" ? "Your quote, e.g. \u201eIf I could go back …\u201c"
                       : o.type === "repeat" ? "Your sentence, e.g. Don't forget to try again"
                       : o.type === "wordswap" ? "The fixed part, e.g. trust the timing of your life even when it feels"
+                      : o.type === "label" ? "Purple label text, e.g. BURNOUT = JUST TIRED?"
+                      : o.type === "quotepill" ? "Quote, *word* = purple italic"
+                      : o.type === "number" ? "Word|number, e.g. Burnout|×3"
+                      : o.type === "name" ? "Name|title, e.g. Carina Dorca|Stress & Burnout Coach"
+                      : o.type === "buzzword" ? "The word, e.g. Burnout"
                       : "Title (optional)"}
                   value={o.title ?? ""}
                   onChange={(e) => upd(i, { title: e.target.value, text: e.target.value || o.type || "fx" })}
@@ -369,6 +375,13 @@ export function EffectsEditor({ items: source, allowedInit, time, onSeek, previe
                   </span>
                 </div>
               )}
+              <label className="small fx-size">
+                Size
+                <input type="range" min={0.5} max={2} step={0.1} value={o.scale ?? 1}
+                  onChange={(e) => upd(i, { scale: Number(e.target.value) })} />
+                <span className="muted">{Math.round((o.scale ?? 1) * 100)} %</span>
+                {(o.scale ?? 1) !== 1 && <button className="link" onClick={() => upd(i, { scale: 1 })}>reset</button>}
+              </label>
               {o.why && <div className="small muted">{o.why}</div>}
               </div>
             </div>

@@ -85,6 +85,8 @@ export interface Overlay {
   bg_t?: number | null;
   pose_t?: number[];
   mode?: "vanish" | "appear";
+  /** Größe des Effekts (1 = normal) */
+  scale?: number;
 }
 
 export interface EffectType {

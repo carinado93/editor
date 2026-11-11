@@ -30,6 +30,12 @@ DESCRIBE = {
     "typewriter": "Text tippt sich Buchstabe für Buchstabe oben ein (title, max. 8 Wörter) – Frage, Einstieg",
     "ghost": "durchsichtige Kopien von Carina folgen ihrer Bewegung (title leer) – nur wenn sie sich deutlich bewegt",
     "whip": "Zoom-Blur-Übergang (title leer, 0,6 s) – genau an einem Themenwechsel",
+    "label": "lila Kasten mit weißen Großbuchstaben auf Brusthöhe (title, max. 5 Wörter) – Kernaussage, SEO-Wort wie BURNOUT, STRESS, ANGST",
+    "quotepill": "cremefarbene Pille mit Merksatz, ein *Wort* lila-kursiv (title, max. 7 Wörter) – ruhige Erkenntnis",
+    "number": "Wort + große Zahl neben ihr (title = 'Wort|Zahl', z. B. 'Burnout|×3') – Zahlen, Wiederholungen",
+    "name": "Bauchbinde mit Name und Titel (title = 'Carina Dorca|Stress- & Burnout-Coach') – nur einmal, wenn sie sich vorstellt",
+    "stickers": "Handschrift-Zettel erscheinen nacheinander (items = Punkte, je 1–4 Wörter) – Aufzählungen",
+    "buzzword": "ein Schlüsselwort poppt neben ihrem Gesicht auf (title = 1–2 Wörter) – wichtige Begriffe, oft",
     "statement": "Statement-Karte: ganzer Bildschirm weicher Lila-Verlauf, eine kurze Zeile in kleinen fetten Großbuchstaben (title, max. 6 Wörter, z. B. 'ABER DU HAST ES NICHT GETAN.') – im Wechsel mit Clips, 1,5–2 s",
     "quote": "Zitat auf dem Clip in kursiver Serifenschrift (title, max. 12 Wörter, in Anführungszeichen) – Gedanke, innere Stimme",
     "repeat": "Satz oben, darunter wiederholt sich eine Wendung Zeile für Zeile (title = Satz, items = [Wendung, z. B. '& nochmal']) – Durchhalten, Wiederholung",
@@ -79,7 +85,8 @@ def clean(o: dict, duration: float | None = None) -> dict | None:
             "end": round(e_, 2), "why": str(o.get("why") or "")[:160],
             "bg_t": round(float(o["bg_t"]), 2) if o.get("bg_t") is not None else None,
             "pose_t": [round(float(x), 2) for x in o.get("pose_t") or []][:8],
-            "mode": "appear" if o.get("mode") == "appear" else "vanish"}
+            "mode": "appear" if o.get("mode") == "appear" else "vanish",
+            "scale": round(max(0.4, min(2.5, float(o.get("scale") or 1))), 2)}
 
 
 def clip_transcript(transcript: dict, flags: list, segments: list[list[float]]) -> dict:
