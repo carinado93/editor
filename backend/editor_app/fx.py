@@ -72,8 +72,15 @@ TYPES = {
     "typewriter": ("B", "Typewriter text", ("side",)),
     "ghost": ("C", "Ghost trail", ("side",)),
     "whip": ("B", "Zoom-blur transition", ("side",)),
+    "statement": ("A", "Statement card (full screen)", ("scene",)),
+    "quote": ("B", "Quote on the clip", ("side",)),
+    "switch": ("C", "Switch reveal (your text)", ("side",)),
+    "repeat": ("B", "Repeating line (& again …)", ("side",)),
+    "wordswap": ("B", "Changing last word", ("side",)),
 }
-NEEDS_MASK = {"behind", "glow", "background", "lighttrail", "clothesline", "vanish", "sticker", "counter", "ghost"}
+NO_AUTO_FILL = {"switch"}  # Carina schreibt den Text selbst – Claude füllt ihn nie aus
+NEEDS_MASK = {"behind", "glow", "background", "lighttrail", "clothesline", "vanish", "sticker", "counter", "ghost",
+              "switch"}
 # brauchen Standbilder aus dem Originalvideo (leerer Raum, Posen) – geht nur mit Stativ
 NEEDS_STILLS = {"vanish", "flash"}
 
@@ -1046,11 +1053,175 @@ def draw_whip(base, ctx, it, t, d):
     return Image.blend(base, blur, min(1.0, k * 1.4))
 
 
+@functools.cache
+def radial_bg(w: int, h: int) -> Image.Image:
+    """Weicher Farbverlauf von der Mitte nach außen: kräftiges Lila innen, helles Lavendel außen."""
+    y, x = np.mgrid[0:h, 0:w].astype(np.float32)
+    r = np.sqrt(((x - w / 2) / (w * 0.62)) ** 2 + ((y - h * 0.45) / (h * 0.55)) ** 2)
+    k = np.clip(r, 0, 1)[..., None] ** 1.2
+    inner = np.array((150, 112, 205), np.float32)
+    outer = np.array(LAVENDEL_HELL, np.float32)
+    arr = (inner * (1 - k) + outer * k).astype(np.uint8)
+    return Image.fromarray(arr, "RGB").convert("RGBA")
+
+
+def draw_statement(base, ctx, it, t, d):
+    """Statement-Karte: ganzer Bildschirm weicher Lila-Verlauf, mittig eine kurze Zeile in kleinen fetten Großbuchstaben."""
+    w, h = base.size
+    card = radial_bg(w, h).copy()
+    txt = (it.get("title") or "").replace("|", " ").replace("*", "").upper()
+    if txt:
+        f = font("head", int(44 * ctx.u))
+        lines = wrap(txt, f, int(w * 0.7))
+        dr = ImageDraw.Draw(card)
+        a = int(255 * min(1.0, t / 0.3, max(0.0, (d - t) / 0.2)))
+        y = h * 0.45 - (len(lines) - 1) * f.size * 0.6
+        for ln in lines:
+            dr.text((w / 2, y), ln, font=f, fill=CREME + (a,), anchor="mm")
+            y += f.size * 1.2
+    fade = min(1.0, t / 0.12, max(0.0, (d - t) / 0.12))
+    return Image.blend(base, card, fade)
+
+
+def draw_quote(layer, ctx, it, t, d, place):
+    """Zitat auf dem Clip: kursive Serifenschrift in Creme, mittig im unteren Drittel, weich eingeblendet."""
+    txt = (it.get("title") or "").replace("|", "\n")
+    if not txt.strip():
+        return
+    f = font("serif_i", int((64 if ctx.portrait else 58) * ctx.u))
+    lines = []
+    for part in txt.split("\n"):
+        lines += wrap(part, f, int(ctx.w * 0.78))
+    a = min(1.0, t / 0.4, max(0.0, (d - t) / 0.3))
+    dr = ImageDraw.Draw(layer)
+    y = ctx.h * (0.6 if ctx.portrait else 0.7) - (len(lines) - 1) * f.size * 0.55
+    for ln in lines:
+        dr.text((ctx.w / 2 + 3 * ctx.u, y + 3 * ctx.u), ln, font=f, fill=(0, 0, 0, int(110 * a)), anchor="mm")
+        dr.text((ctx.w / 2, y), ln, font=f, fill=CREME + (int(255 * a),), anchor="mm")
+        y += f.size * 1.1
+
+
+def draw_repeat(layer, ctx, it, t, d, place):
+    """Wiederholte Zeile: oben der Satz, darunter erscheint immer wieder dieselbe Wendung ("& again")."""
+    title = (it.get("title") or "").replace("|", " ").replace("*", "")
+    rep_txt = ((it.get("items") or [""])[0] or "").strip()
+    if not rep_txt and title:
+        rep_txt = "& " + title.split()[-1]
+    if not title and not rep_txt:
+        return
+    f = font("semi", int((42 if ctx.portrait else 38) * ctx.u))
+    lh = f.size * 1.12
+    x = ctx.w * (0.62 if ctx.portrait else 0.66)
+    y0 = ctx.h * 0.18
+    out = min(1.0, max(0.0, (d - t) / 0.3))
+    dr = ImageDraw.Draw(layer)
+    tl = wrap(title, f, int(ctx.w * 0.34)) if title else []
+    kw = dict(font=f, anchor="ma", stroke_width=max(1, int(2 * ctx.u)), stroke_fill=(0, 0, 0, int(60 * out)))
+    for k, ln in enumerate(tl):
+        dr.text((x, y0 + k * lh), ln, fill=WEISS + (int(255 * out),), **kw)
+    max_lines = max(0, int((ctx.h * 0.86 - y0) / lh) - len(tl))
+    shown = min(max_lines, int(max(0.0, t - 0.4) / 0.16) + (1 if t >= 0.4 else 0))
+    for k in range(shown):
+        dr.text((x, y0 + (len(tl) + k) * lh), rep_txt, fill=WEISS + (int(255 * out),), **kw)
+
+
+def draw_wordswap(layer, ctx, it, t, d, place):
+    """Fester Satz in Serifenschrift, das letzte Wort wechselt alle ~0,8 s (größer gesetzt)."""
+    fixed = (it.get("title") or "").replace("|", " ").replace("*", "")
+    words = [w.strip() for w in it.get("items") or [] if w.strip()]
+    if not fixed and not words:
+        return
+    f = font("serif", int((60 if ctx.portrait else 52) * ctx.u))
+    fb = font("serif", int((84 if ctx.portrait else 74) * ctx.u))
+    lines: list[str] = []
+    for wd in fixed.split():  # wie im Vorbild: kurze Zeilen
+        if lines and len(lines[-1]) + 1 + len(wd) <= 14:
+            lines[-1] += " " + wd
+        else:
+            lines.append(wd)
+    out = min(1.0, t / 0.3, max(0.0, (d - t) / 0.3))
+    dr = ImageDraw.Draw(layer)
+    x = ctx.w * 0.1
+    y = ctx.h * (0.52 if ctx.portrait else 0.4)
+    for ln in lines:
+        dr.text((x, y), ln, font=f, fill=CREME + (int(255 * out),), anchor="ls")
+        y += f.size * 0.95
+    if words:
+        k = int(t / 0.8) % len(words)
+        local = (t % 0.8) / 0.8
+        a = out if len(words) == 1 else out * min(1.0, local / 0.15, (1 - local) / 0.12)
+        dr.text((x, y + fb.size * 0.15), words[k], font=fb, fill=WEISS + (int(255 * max(0.0, a)),), anchor="ls")
+
+
+def draw_switch(base, ctx, it, t, d, mask):
+    """Schalter-Enthüllung: oben ein großer Schalter (grau → Salbeigrün); sobald Carina "drückt", leuchtet hinter
+    ihr ein Rahmen-Plakat auf (Lila, Gold-Schrift). Den Text schreibt Carina selbst (Überschrift + kleine Zeile)."""
+    w, h = base.size
+    tap = (it.get("times") or [min(0.8, d * 0.3)])[0]
+    on = ease_out((t - tap) / 0.25)
+    poster_layer = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    if on > 0:
+        pw, ph = int(w * (0.72 if ctx.portrait else 0.42)), int(h * (0.42 if ctx.portrait else 0.62))
+        px, py = (w - pw) // 2, int(h * (0.24 if ctx.portrait else 0.2))
+        key = ("poster", pw, ph, it.get("title"), tuple(it.get("items") or []))
+        if key not in ctx.cache:
+            poster = Image.new("RGBA", (pw, ph), (0, 0, 0, 0))
+            pd = ImageDraw.Draw(poster)
+            pd.rectangle((0, 0, pw - 1, ph - 1), fill=LILA_TIEF)
+            m = int(16 * ctx.u)
+            pd.rectangle((m, m, pw - 1 - m, ph - 1 - m), outline=GOLD, width=max(2, int(4 * ctx.u)))
+            title = (it.get("title") or "").replace("|", "\n").replace("*", "").upper()
+            if title.strip():
+                fh = font("black", int(min(130, ph / 4.2 / ctx.u) * ctx.u))
+                parts = title.split("\n")
+                lines = [ln for part in parts for ln in wrap(part, fh, pw - 4 * m)]
+                while lines and max(fh.getlength(x) for x in lines) > pw - 4 * m and fh.size > 20:
+                    fh = font("black", int(fh.size * 0.9))
+                    lines = [ln for part in parts for ln in wrap(part, fh, pw - 4 * m)]
+                y = ph * 0.42 - (len(lines) - 1) * fh.size * 0.5
+                for ln in lines:
+                    pd.text((pw / 2, y), ln, font=fh, fill=GOLD, anchor="mm")
+                    y += fh.size * 1.0
+            pill = ((it.get("items") or [""])[0] or "").strip().upper()
+            if pill:
+                fp = font("head", int(34 * ctx.u))
+                while fp.getlength(pill) > pw * 0.8 and fp.size > 12:
+                    fp = font("head", int(fp.size * 0.9))
+                tw = fp.getlength(pill)
+                bx0, by = pw / 2 - tw / 2 - 26 * ctx.u, ph * 0.78
+                pd.rounded_rectangle((bx0, by - fp.size * 0.85, pw - bx0, by + fp.size * 0.85), radius=int(40 * ctx.u),
+                                     fill=LAVENDEL, outline=GOLD, width=max(2, int(3 * ctx.u)))
+                pd.text((pw / 2, by), pill, font=fp, fill=LILA, anchor="mm")
+            glow = Image.new("RGBA", (pw + 120, ph + 120), (0, 0, 0, 0))
+            ImageDraw.Draw(glow).rectangle((60, 60, pw + 60, ph + 60), fill=(255, 236, 190, 200))
+            glow = glow.filter(ImageFilter.GaussianBlur(28 * ctx.u))
+            glow.alpha_composite(poster, (60, 60))
+            ctx.cache[key] = glow
+        paste_scaled(poster_layer, ctx.cache[key], (px + pw / 2, py + ph / 2), 0.92 + 0.08 * on, on)
+    out = base.copy()
+    out.alpha_composite(poster_layer)
+    if mask is not None:
+        out = Image.composite(base, out, mask)  # Carina steht vor dem Plakat
+    # Schalter oben, immer ganz vorn
+    sw_, sh_ = int(w * (0.36 if ctx.portrait else 0.16)), int(w * (0.36 if ctx.portrait else 0.16) * 0.42)
+    sx, sy = (w - sw_) // 2, int(h * (0.08 if ctx.portrait else 0.05))
+    col = tuple(int(a * (1 - on) + b * on) for a, b in zip((150, 150, 150), SALBEI))
+    pad = int(sh_ * 0.1)
+    kr = sh_ // 2 - pad
+    kx = sx + pad + kr + (sw_ - 2 * pad - 2 * kr) * on
+    sd = ImageDraw.Draw(out)
+    sd.rounded_rectangle((sx, sy, sx + sw_, sy + sh_), radius=sh_ // 2, fill=col + (255,))
+    sd.ellipse((kx - kr, sy + pad, kx + kr, sy + pad + 2 * kr), fill=WEISS + (255,))
+    fade = min(1.0, t / 0.2, max(0.0, (d - t) / 0.3))
+    return Image.blend(base, out, fade)
+
+
 # Zeichner, die nur eine Ebene über dem Bild brauchen
 LAYER_DRAWERS = {"steps": draw_steps, "cards": draw_cards, "tags": draw_tags, "scores": draw_scores,
                  "headline": draw_headline, "checklist": draw_checklist, "endcard": draw_endcard,
                  "bigwords": draw_bigwords, "pill": draw_pill, "poof": draw_poof,
-                 "clothesline": draw_clothesline, "typewriter": draw_typewriter}
+                 "clothesline": draw_clothesline, "typewriter": draw_typewriter, "quote": draw_quote,
+                 "repeat": draw_repeat, "wordswap": draw_wordswap}
 
 
 def render_frame(frame: Image.Image, it: dict, t: float, d: float, ctx: Ctx, mask: Image.Image | None) -> Image.Image:
@@ -1100,6 +1271,10 @@ def render_frame(frame: Image.Image, it: dict, t: float, d: float, ctx: Ctx, mas
         draw_headline(layer, ctx, dict(it, place="side"), max(0.0, t - 0.3), d, "side")
         return Image.blend(base, layer, vis).convert("RGB")
 
+    if typ == "statement":
+        return draw_statement(base, ctx, it, t, d).convert("RGB")
+    if typ == "switch":
+        return draw_switch(base, ctx, it, t, d, mask).convert("RGB")
     if typ == "whip":
         return draw_whip(base, ctx, it, t, d).convert("RGB")
     if typ == "flash":
@@ -1204,7 +1379,12 @@ def with_placeholders(it: dict) -> dict:
     it = dict(it)
     if not (it.get("title") or "").strip() and it.get("type") not in ("poof", "glow", "lighttrail", "ghost", "whip",
                                                                        "vanish", "flash", "sticker", "bigwords"):
-        it["title"] = {"counter": "120|Tage", "behind": "TEXT"}.get(it.get("type"), "Dein *Text*|hier")
+        it["title"] = {"counter": "120|Tage", "behind": "TEXT", "switch": "YOUR HEADLINE",
+                       "statement": "YOUR SHORT LINE.", "quote": "\u201eyour quote\u201c",
+                       "repeat": "Don't forget to try again", "wordswap": "trust the timing of your life even when it feels"
+                       }.get(it.get("type"), "Dein *Text*|hier")
+    if not it.get("items") and it.get("type") == "wordswap":
+        it["items"] = ["heavy", "slow", "uncertain"]
     if not it.get("items") and it.get("type") in ("steps", "cards", "tags", "scores", "checklist", "clothesline",
                                                   "endcard"):
         it["items"] = ["Punkt 1|7", "Punkt 2|5", "Punkt 3|8"] if it.get("type") != "endcard" else ["Kommentiere RUHE"]
@@ -1215,13 +1395,7 @@ def preview_png(it: dict, w: int, h: int, face_box, frame: Image.Image | None, o
                 segmenter: Segmenter | None = None, stills: dict | None = None) -> None:
     """Standbild des Effekts (für die Vorschau in der App), ca. bei 75 % der Dauer.
     Leere Texte werden für die Vorschau mit Beispieltext gefüllt, damit man den Stil sieht."""
-    it = dict(it)
-    if not (it.get("title") or "").strip() and it.get("type") not in ("poof", "glow", "lighttrail", "ghost", "whip",
-                                                                       "vanish", "flash", "sticker", "bigwords"):
-        it["title"] = {"counter": "120|Tage", "behind": "TEXT"}.get(it.get("type"), "Dein *Text*|hier")
-    if not it.get("items") and it.get("type") in ("steps", "cards", "tags", "scores", "checklist", "clothesline",
-                                                  "endcard"):
-        it["items"] = ["Punkt 1|7", "Punkt 2|5", "Punkt 3|8"] if it.get("type") != "endcard" else ["Kommentiere RUHE"]
+    it = with_placeholders(it)
     d = max(1.0, it["end"] - it["start"])
     ctx = Ctx(w, h, face_box, it.get("_words") or [{"w": "Beispiel", "s": 0, "e": 99}])
     ctx.stills = stills or {}

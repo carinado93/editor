@@ -25,6 +25,15 @@ DESCRIBE = {
     "card": "Video als Karte auf Lavendel mit Treppen-Überschrift darüber (title, Zeilen mit |) – Einstieg/Kapitel",
     "clothesline": "Wäscheleine oben, 2–5 Karten hängen an Klammern (items = Kartentexte, je 1–3 Wörter; title optional als großes Wort darunter) – Dinge, die sie nutzt/zeigt, Beispiele",
     "lighttrail": "Leuchtspur läuft um Carinas Umriss (title leer) – Aha-Moment, Betonung",
+    "sticker": "Sticker-Köpfe: Carinas Kopf zweimal als Sticker auf Lavendel, das gesprochene Wort groß in der Mitte (title leer) – lustiger, lockerer Moment, 2–4 s",
+    "counter": "große Zahl zählt hinter Carina hoch (title = 'Zahl|Wort', z. B. '120|Tage') – wenn sie eine Zahl nennt",
+    "typewriter": "Text tippt sich Buchstabe für Buchstabe oben ein (title, max. 8 Wörter) – Frage, Einstieg",
+    "ghost": "durchsichtige Kopien von Carina folgen ihrer Bewegung (title leer) – nur wenn sie sich deutlich bewegt",
+    "whip": "Zoom-Blur-Übergang (title leer, 0,6 s) – genau an einem Themenwechsel",
+    "statement": "Statement-Karte: ganzer Bildschirm weicher Lila-Verlauf, eine kurze Zeile in kleinen fetten Großbuchstaben (title, max. 6 Wörter, z. B. 'ABER DU HAST ES NICHT GETAN.') – im Wechsel mit Clips, 1,5–2 s",
+    "quote": "Zitat auf dem Clip in kursiver Serifenschrift (title, max. 12 Wörter, in Anführungszeichen) – Gedanke, innere Stimme",
+    "repeat": "Satz oben, darunter wiederholt sich eine Wendung Zeile für Zeile (title = Satz, items = [Wendung, z. B. '& nochmal']) – Durchhalten, Wiederholung",
+    "wordswap": "fester Satz, das letzte Wort wechselt (title = fester Teil, items = 4–6 wechselnde Wörter) – Gefühle, Zustände",
     "poof": "Puff-Wolke (Verschwinden/Auftauchen) – nur genau an einem Schnitt, an dem sie den Ort wechselt",
 }
 
@@ -188,7 +197,8 @@ SILENT_SCHEMA = {
 def suggest_silent(stills: list[str], duration: float, language: str, allowed: list[str], engine: str,
                    wish: str = "", idea: str = "") -> list[dict]:
     """Clip ohne Sprechen: Claude schaut sich Standbilder an und plant Effekte mit Texten nach Sekunden."""
-    allowed = [a for a in allowed if a in fx.TYPES and a not in ("bigwords", "sticker")] or ["headline", "pill"]
+    allowed = [a for a in allowed if a in fx.TYPES and a not in ("bigwords", "sticker") and a not in fx.NO_AUTO_FILL
+               and a in DESCRIBE] or ["headline", "pill"]
     lang = "Deutsch" if language == "de" else "Englisch"
     times = ", ".join(f"Bild {k + 1} ≈ {duration * (k + 0.5) / len(stills):.1f} s" for k in range(len(stills)))
     menu = "\n".join(f"- {k} ({fx.TYPES[k][1]}): {DESCRIBE[k]}" for k in allowed)
@@ -236,7 +246,7 @@ def suggest(transcript: dict, flags: list, allowed: list[str], engine: str, reel
     words = cuts.flat_words(transcript)
     if not words:
         raise UserError("There is no transcript yet. For a clip without speech, add effects by hand.")
-    allowed = [a for a in allowed if a in fx.TYPES] or list(fx.TYPES)
+    allowed = [a for a in allowed if a in fx.TYPES and a not in fx.NO_AUTO_FILL and a in DESCRIBE] or ["headline"]
     prompt = build_prompt(words, flags, transcript.get("language", "de"), allowed, reel, wish)
     if engine == "claude":
         from . import claude

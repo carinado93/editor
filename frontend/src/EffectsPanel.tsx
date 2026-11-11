@@ -20,6 +20,9 @@ const HINT: Record<string, string> = {
   endcard: "the big call to action, e.g. Comment CALM",
   bigwords: "key words that turn purple, one per line",
   clothesline: "one card per line, optional: Big word|small line",
+  repeat: "the repeating phrase, e.g. & again (empty = '&' + your last word)",
+  wordswap: "the changing words, one per line (heavy, slow, uncertain …)",
+  switch: "small line in the pill below (optional, your words)",
 };
 
 /** Vorschau-Bild, das sich bei jeder Änderung selbst neu zeichnet (kurz warten, dann neu laden). */
@@ -185,7 +188,7 @@ export function EffectsEditor({ items: source, allowedInit, time, onSeek, previe
     setItems(items.map((o, j) => (j === i ? { ...o, ...patch } : o)));
   };
 
-  const LIST_TYPES = ["steps", "cards", "tags", "scores", "checklist", "endcard", "bigwords", "clothesline"];
+  const LIST_TYPES = ["steps", "cards", "tags", "scores", "checklist", "endcard", "bigwords", "clothesline", "wordswap"];
   const add = () => {
     const t = types.find((x) => x.key === addType);
     const dur = addType === "poof" ? 1 : addType === "whip" ? 0.6 : 4;
@@ -266,7 +269,7 @@ export function EffectsEditor({ items: source, allowedInit, time, onSeek, previe
       <div className="fx-list">
         {items.map((o, i) => {
           const t = typeOf(o.type);
-          const listType = ["steps", "cards", "tags", "scores", "checklist", "endcard", "bigwords", "clothesline"].includes(o.type ?? "");
+          const listType = ["steps", "cards", "tags", "scores", "checklist", "endcard", "bigwords", "clothesline", "repeat", "wordswap", "switch"].includes(o.type ?? "");
           return (
             <div key={o.id} className={`fx-row ${o.on ? "" : "off"}`}>
               <FxPreview preview={preview} item={o} />
@@ -301,7 +304,14 @@ export function EffectsEditor({ items: source, allowedInit, time, onSeek, previe
               {!["poof", "glow", "bigwords", "lighttrail", "ghost", "whip", "vanish", "flash", "sticker"].includes(o.type ?? "") && (
                 <input
                   className="fx-title"
-                  placeholder={o.type === "headline" || o.type === "card" ? "Headline – lines with | , *word* = gold italic" : "Title (optional)"}
+                  placeholder={
+                    o.type === "headline" || o.type === "card" ? "Headline – lines with | , *word* = gold italic"
+                      : o.type === "switch" ? "Big headline in the glowing box (your words)"
+                      : o.type === "statement" ? "Your short line, e.g. But you didn't."
+                      : o.type === "quote" ? "Your quote, e.g. \u201eIf I could go back …\u201c"
+                      : o.type === "repeat" ? "Your sentence, e.g. Don't forget to try again"
+                      : o.type === "wordswap" ? "The fixed part, e.g. trust the timing of your life even when it feels"
+                      : "Title (optional)"}
                   value={o.title ?? ""}
                   onChange={(e) => upd(i, { title: e.target.value, text: e.target.value || o.type || "fx" })}
                 />
@@ -313,6 +323,15 @@ export function EffectsEditor({ items: source, allowedInit, time, onSeek, previe
                   value={(o.items ?? []).join("\n")}
                   onChange={(e) => upd(i, { items: e.target.value.split("\n") })}
                 />
+              )}
+              {o.type === "switch" && (
+                <div className="small fx-tripod">
+                  <span>
+                    Tap moment (switch turns on): <strong>{o.item_t?.length ? formatTime(o.item_t[0]) : "after ~0.8 s"}</strong>{" "}
+                    <button className="link" onClick={() => upd(i, { item_t: [time] })}>use current position ({formatTime(time)})</button>
+                  </span>
+                  <span className="muted">Move the video to the moment you tap the wall, then click the button.</span>
+                </div>
               )}
               {(o.type === "vanish" || o.type === "flash") && (
                 <div className="small fx-tripod">
