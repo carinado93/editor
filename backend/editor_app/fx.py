@@ -814,12 +814,14 @@ def draw_typewriter(layer, ctx, it, t, d, place):
 def _smoke(layer, ctx, cx, cy, size, t, seed, life=1.4, peak=0.45):
     """Große, weiche Rauchwolke (weiß/lavendel), steigt leicht auf und löst sich auf."""
     rnd = random.Random(seed)
-    smoke = Image.new("RGBA", layer.size, (0, 0, 0, 0))
+    # nur die Deckkraft zeichnen (Graustufen), Farbe ist überall hell → keine dunklen Ränder beim Verwischen
+    smoke = Image.new("L", (layer.width // 4, layer.height // 4), 0)
     dr = ImageDraw.Draw(smoke)
-    for k in range(70):
+    cx, cy, size = cx / 4, cy / 4, size / 4
+    for k in range(90):
         ang = rnd.uniform(0, 2 * math.pi)
-        dist = rnd.uniform(0.0, 0.9) * size
-        r0 = rnd.uniform(0.2, 0.42) * size
+        dist = rnd.uniform(0.0, 0.85) * size
+        r0 = rnd.uniform(0.25, 0.5) * size
         delay = rnd.uniform(0.0, peak * 0.6)
         p = (t - delay) / life
         if p <= 0 or p >= 1:
@@ -828,11 +830,29 @@ def _smoke(layer, ctx, cx, cy, size, t, seed, life=1.4, peak=0.45):
         x = cx + math.cos(ang) * dist * (0.4 + 0.8 * grow)
         y = cy + math.sin(ang) * dist * 0.9 * (0.4 + 0.8 * grow) - size * 0.35 * p
         r = r0 * (0.4 + 0.8 * grow)
-        a = int(255 * min(1.0, p * 5) * (1 - p) ** 1.1)
-        col = (WEISS, (246, 244, 250), LAVENDEL_HELL, WEISS)[k % 4]
-        dr.ellipse((x - r, y - r, x + r, y + r), fill=col + (a,))
-    sm = smoke.resize((smoke.width // 4, smoke.height // 4), Image.BILINEAR).filter(ImageFilter.GaussianBlur(7 * ctx.u))
-    layer.alpha_composite(sm.resize(layer.size, Image.BILINEAR))
+        a = int(255 * min(1.0, p * 6) * (1 - p) ** 0.8)
+        # übereinanderliegende Wolken addieren sich (dichter Kern)
+        blob = Image.new("L", smoke.size, 0)
+        ImageDraw.Draw(blob).ellipse((x - r, y - r, x + r, y + r), fill=a)
+        smoke = Image.fromarray(np.minimum(255, np.asarray(smoke, dtype=np.uint16) + np.asarray(blob, dtype=np.uint16)
+                                           * 3 // 4).astype(np.uint8))
+    alpha = smoke.filter(ImageFilter.GaussianBlur(5 * ctx.u))
+    # Rauch-Struktur: weiche Wolken-Flecken, die langsam wandern (heller/dunkler, dichter/durchsichtiger)
+    sw, sh = alpha.size
+    rng = np.random.default_rng(abs(hash(seed)) % (2 ** 32))
+    n1 = rng.random((12, 20)).astype(np.float32)
+    n2 = rng.random((24, 40)).astype(np.float32)
+    def up(a, shift):
+        im = Image.fromarray((a * 255).astype(np.uint8)).resize((sw + 40, sh + 40), Image.BICUBIC)
+        dx = int(shift * 30) % 40
+        return np.asarray(im.crop((dx, 40 - dx // 2, dx + sw, 40 - dx // 2 + sh)), dtype=np.float32) / 255
+    noise = 0.6 * up(n1, t * 0.6) + 0.4 * up(n2, t * 1.1)
+    a = np.asarray(alpha, dtype=np.float32) * (0.75 + 0.55 * noise)
+    a = np.minimum(240, a)
+    shade = 253 - 24 * (1 - noise)  # helle Wolke mit zarten grauen Schatten
+    rgba = np.dstack([shade, shade, shade + 3, a]).clip(0, 255).astype(np.uint8)
+    cloud = Image.fromarray(rgba, "RGBA").resize(layer.size, Image.BILINEAR)
+    layer.alpha_composite(cloud)
 
 
 def _bbox_center(mask: Image.Image | None, ctx) -> tuple[float, float, float]:
@@ -853,7 +873,11 @@ def draw_vanish(base, ctx, it, t, d, mask):
     peak = min(0.6, d * 0.35)
     mode = it.get("mode") or "vanish"
     if "center" not in ctx.cache:
-        ctx.cache["center"] = _bbox_center(mask, ctx)
+        fx0, fy0, fx1, fy1 = ctx.face
+        fh = (fy1 - fy0) * ctx.h
+        # Wolke um Kopf und Oberkörper, nicht über das ganze Bild
+        ctx.cache["center"] = ((fx0 + fx1) / 2 * ctx.w, min(ctx.h * 0.7, (fy0 + fy1) / 2 * ctx.h + fh * 0.45),
+                               min(ctx.h * 0.5, fh * 1.45))
     cx, cy, size = ctx.cache["center"]
     show_plate = (t >= peak) if mode == "vanish" else (t < peak)
     img = base.copy()
@@ -877,10 +901,10 @@ def draw_flash(base, ctx, it, t, d, mask):
     local = t - k * hold
     img = plate.convert("RGBA").copy()
     still, m = poses[k]
-    flash = 0.14
+    flash = 0.16
     if local < flash:
-        # weiße Silhouette mit Schein, die in die Person übergeht
-        a = 1 - local / flash
+        # weiße Silhouette mit Schein (erst ganz weiß), die dann in die Person übergeht
+        a = 1.0 if local < flash * 0.45 else 1 - (local - flash * 0.45) / (flash * 0.55)
         person = Image.composite(still.convert("RGBA"), img, m)
         white = Image.new("RGBA", img.size, WEISS + (0,))
         white.putalpha(m.point(lambda v: int(v * a)))
@@ -922,7 +946,7 @@ def draw_sticker(base, ctx, it, t, d, mask):
            int(min(w, fx1 * w + fw * 0.35)), int(min(h, fy1 * h + fh * 0.25)))
     if mask is not None and box[2] > box[0] and box[3] > box[1]:
         head = base.crop(box)
-        hm = mask.crop(box)
+        hm = mask.crop(box).point(lambda v: 255 if v > 150 else 0).filter(ImageFilter.GaussianBlur(1.5))
         # Kopf-Form: Maske, unten weich abgeschnitten
         cut = Image.new("L", head.size, 0)
         ImageDraw.Draw(cut).ellipse((-head.width * 0.1, -head.height * 0.2, head.width * 1.1, head.height * 1.02), fill=255)
@@ -934,7 +958,7 @@ def draw_sticker(base, ctx, it, t, d, mask):
         head_rgba.putalpha(hm)
         stk.alpha_composite(head_rgba)
         stk = _shadow(stk, int(10 * ctx.u), int(8 * ctx.u), alpha=50)
-        target = h * (0.3 if ctx.portrait else 0.42)
+        target = h * (0.36 if ctx.portrait else 0.62)
         sc = target / stk.height
         pos = [(w * 0.5, h * 0.25), (w * 0.5, h * 0.75)] if ctx.portrait else [(w * 0.25, h * 0.5), (w * 0.75, h * 0.5)]
         for j, (px, py) in enumerate(pos):
@@ -1073,6 +1097,12 @@ def render_frame(frame: Image.Image, it: dict, t: float, d: float, ctx: Ctx, mas
         draw_headline(layer, ctx, dict(it, place="side"), max(0.0, t - 0.3), d, "side")
         return Image.blend(base, layer, vis).convert("RGB")
 
+    if typ == "whip":
+        return draw_whip(base, ctx, it, t, d).convert("RGB")
+    if typ == "flash":
+        return draw_flash(base, ctx, it, t, d, mask).convert("RGB")
+    if typ == "vanish":
+        return draw_vanish(base, ctx, it, t, d, mask).convert("RGB")
     if mask is None:
         return frame
     if typ == "behind":
@@ -1094,12 +1124,6 @@ def render_frame(frame: Image.Image, it: dict, t: float, d: float, ctx: Ctx, mas
         withtext = base.copy()
         withtext.alpha_composite(layer)
         return Image.composite(base, withtext, mask).convert("RGB")
-    if typ == "whip":
-        return draw_whip(base, ctx, it, t, d).convert("RGB")
-    if typ == "flash":
-        return draw_flash(base, ctx, it, t, d, mask).convert("RGB")
-    if typ == "vanish":
-        return draw_vanish(base, ctx, it, t, d, mask).convert("RGB")
     if typ == "sticker":
         return draw_sticker(base, ctx, it, t, d, mask).convert("RGB")
     if typ == "counter":
