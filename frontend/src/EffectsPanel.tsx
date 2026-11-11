@@ -150,11 +150,10 @@ export function EffectsPanel({ id, cuts, onCuts, time, onSeek }: {
           </select>
           <button className="btn ghost" onClick={add}>+ Add at {formatTime(time)}</button>
         </span>
-        {dirty && (
-          <button className="btn" disabled={!!busy} onClick={() => save()}>
-            Save effects
-          </button>
-        )}
+        <button className={`btn ${dirty ? "" : "ghost"}`} disabled={!!busy || !dirty} onClick={() => save()}
+          title={dirty ? "" : "Everything is saved"}>
+          {dirty ? "Save effects" : "Saved ✓"}
+        </button>
       </div>
       <Status busy={busy} err={err} msg={msg} />
       {err?.includes("Settings") && <a className="small" href="#/einstellungen">→ go to Settings</a>}
