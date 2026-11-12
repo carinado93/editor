@@ -1633,7 +1633,11 @@ class Segmenter:
 def with_placeholders(it: dict) -> dict:
     """Für die Vorschau: leere Texte mit Beispieltext füllen, damit man den Stil sieht."""
     it = dict(it)
-    if not (it.get("title") or "").strip() and it.get("type") not in ("poof", "glow", "lighttrail", "ghost", "whip",
+    # Listen-Effekte: Überschrift ist freiwillig – sind schon Punkte da, bleibt sie leer (wie im fertigen Video)
+    has_items = any(str(x).strip() for x in (it.get("items") or []))
+    optional_title = it.get("type") in ("steps", "cards", "tags", "scores", "checklist", "clothesline", "stickers",
+                                        "endcard")
+    if not (it.get("title") or "").strip() and not (optional_title and has_items) and it.get("type") not in ("poof", "glow", "lighttrail", "ghost", "whip",
                                                                        "vanish", "flash", "sticker", "bigwords",
                                                                        "outro"):
         it["title"] = {"counter": "120|Tage", "behind": "TEXT", "switch": "YOUR HEADLINE", "number": "Burnout|×3",
