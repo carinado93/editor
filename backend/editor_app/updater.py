@@ -22,8 +22,10 @@ _NO_WINDOW = 0x08000000 if sys.platform == "win32" else 0
 
 
 def _git(*args: str, timeout: float = 30) -> subprocess.CompletedProcess:
+    # nie auf eine Anmeldung warten (im Hintergrund kann niemand ein Passwort eintippen)
+    env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
     return subprocess.run(["git", "-C", str(ROOT), *args], capture_output=True, text=True, timeout=timeout,
-                          encoding="utf-8", errors="replace", creationflags=_NO_WINDOW)
+                          encoding="utf-8", errors="replace", creationflags=_NO_WINDOW, env=env)
 
 
 def version() -> str:
@@ -45,7 +47,14 @@ def status(force: bool = False) -> dict:
     else:
         try:
             f = _git("fetch", "--quiet", "origin", timeout=40)
-            if f.returncode != 0:
+            err = (f.stderr or "").lower()
+            if f.returncode != 0 and any(x in err for x in ("authentication", "could not read username", "403",
+                                                             "not found", "terminal prompts disabled", "denied")):
+                # privates Repo: Git muss sich einmal bei GitHub anmelden (Fenster erscheint beim ersten "git pull")
+                data["reason"] = ("GitHub needs you to sign in once (the repo is private): close the app, open the "
+                                  "app folder in a terminal, type  git pull  and sign in in the window that opens. "
+                                  "After that updates work again.")
+            elif f.returncode != 0:
                 data["reason"] = "No connection to GitHub (internet?)."
             else:
                 r = _git("rev-list", "--count", "HEAD..@{u}")
