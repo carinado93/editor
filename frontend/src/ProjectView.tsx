@@ -254,7 +254,8 @@ export function ProjectView({ id }: { id: string }) {
   const selWords = sel ? Array.from({ length: sel[1] - sel[0] + 1 }, (_, k) => sel[0] + k) : [];
   const selHasCut = !!flags && selWords.some((k) => flags[k]);
   const selDet = sel && sel[0] === sel[1] ? detOf.get(sel[0]) : sel ? detOf.get(sel[0]) : undefined;
-  const selDetExact = selDet && sel && sel[0] >= selDet.start && sel[1] < selDet.end ? selDet : undefined;
+  // nur wenn genau der ganze Vorschlag markiert ist – ein einzelnes Wort darin wird nur als Wort behandelt
+  const selDetExact = selDet && sel && sel[0] === selDet.start && sel[1] === selDet.end - 1 ? selDet : undefined;
 
   const deleteSel = () => sel && run(() => api.cutWords(id, selWords, true));
   const restoreSel = () => {
