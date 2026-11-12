@@ -10,6 +10,7 @@ import { api, type SystemInfo } from "./api";
 import { ProjectList } from "./ProjectList";
 import { ProjectView } from "./ProjectView";
 import { ContentChat } from "./ContentChat";
+import { CarouselStudio } from "./CarouselStudio";
 import { Settings } from "./Settings";
 
 function useHash() {
@@ -106,8 +107,11 @@ function App() {
           </span>
         </a>
         <nav className="topnav">
-          <a href="#/" className={!hash.startsWith("#/content") && !hash.startsWith("#/einstellungen") ? "on" : ""}>
+          <a href="#/" className={!hash.startsWith("#/content") && !hash.startsWith("#/einstellungen") && !hash.startsWith("#/karussell") ? "on" : ""}>
             Projects
+          </a>
+          <a href="#/karussell" className={hash.startsWith("#/karussell") ? "on" : ""}>
+            Carousel
           </a>
           <a href="#/content" className={hash.startsWith("#/content") ? "on" : ""}>
             Social Media Content
@@ -126,7 +130,9 @@ function App() {
       <UpdateBanner />
       {offline && <div className="banner error page">No connection to the engine. Please start the app with start.bat.</div>}
       {system && !system.ffmpeg && <div className="banner error page">ffmpeg is missing. Please start the app with start.bat, it installs it.</div>}
-      {hash.startsWith("#/content") ? (
+      {hash.startsWith("#/karussell") ? (
+        <CarouselStudio />
+      ) : hash.startsWith("#/content") ? (
         <ContentChat />
       ) : hash.startsWith("#/einstellungen") ? (
         <Settings />

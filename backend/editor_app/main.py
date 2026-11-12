@@ -961,6 +961,87 @@ def cover_color_used(body: ColorBody):
     return {"next": covers.advance_cover_color(body.used)}
 
 
+# ---------- Karussell-Generator ----------
+
+class CarouselDraftBody(BaseModel):
+    topic: str = ""
+    points: int = 5
+    language: str = "en"
+    project: str = ""  # optional: Video als Grundlage
+
+
+class CarouselEditBody(BaseModel):
+    topic: str | None = None
+    cover_title: str | None = None
+    teaser: str | None = None
+    caption: str | None = None
+    theme: str | None = None
+    slides: list[dict] | None = None
+    hashtags: list[str] | None = None
+
+
+@app.get("/api/carousels")
+def carousels():
+    from . import carousel
+
+    return {"carousels": carousel.list_all()}
+
+
+@app.post("/api/carousels/{engine}")
+def carousel_draft(engine: str, body: CarouselDraftBody):
+    from . import carousel
+
+    if engine not in ("claude", "ollama"):
+        raise UserError("Unknown AI.")
+    source, lang = "", body.language if body.language in ("de", "en") else "en"
+    if body.project:
+        _, _, sentences = _cut_context(body.project)
+        source = " ".join(s for _, s in sentences)
+        lang = cutstore._transcript(body.project).get("language", lang)
+    car = carousel.draft(engine, body.topic, body.points, lang, source)
+    return carousel.render(car["id"])
+
+
+@app.get("/api/carousel/{cid}")
+def carousel_get(cid: str):
+    from . import carousel
+
+    return carousel.load(cid)
+
+
+@app.put("/api/carousel/{cid}")
+def carousel_edit(cid: str, body: CarouselEditBody):
+    from . import carousel
+
+    carousel.update(cid, body.model_dump())
+    return carousel.render(cid)
+
+
+@app.delete("/api/carousel/{cid}")
+def carousel_delete(cid: str):
+    from . import carousel
+
+    carousel.delete(cid)
+    return {"carousels": carousel.list_all()}
+
+
+@app.get("/api/carousel/{cid}/file/{name}")
+def carousel_file(cid: str, name: str):
+    from . import carousel
+
+    return FileResponse(carousel.file_path(cid, name), media_type="image/png", filename=name)
+
+
+@app.get("/api/carousel/{cid}/zip")
+def carousel_zip(cid: str):
+    from fastapi.responses import Response
+
+    from . import carousel
+
+    return Response(carousel.zip_bytes(cid), media_type="application/zip",
+                    headers={"Content-Disposition": f'attachment; filename="carousel_{cid}.zip"'})
+
+
 # ---------- Claude (Schnittstelle) ----------
 
 class KeyBody(BaseModel):

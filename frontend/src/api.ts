@@ -207,6 +207,32 @@ export interface SystemInfo {
   disk_free_gb: number;
 }
 
+export interface CarouselSlide {
+  title: string;
+  lines: string[];
+}
+
+export interface Carousel {
+  id: string;
+  topic: string;
+  language: string;
+  theme: string;
+  cover_title: string;
+  teaser: string;
+  slides: CarouselSlide[];
+  caption: string;
+  hashtags: string[];
+  files: string[];
+}
+
+export interface CarouselSummary {
+  id: string;
+  topic: string;
+  cover_title: string;
+  created: number;
+  files: string[];
+}
+
 export interface CoverPhoto {
   file: string;
   face: number[] | null;
@@ -255,6 +281,14 @@ export const api = {
   updateNow: () => call<{ ok: boolean; version: string }>("/api/update", { method: "POST" }),
   version: () => call<{ version: string }>("/api/version"),
   projects: () => call<Project[]>("/api/projects"),
+  carousels: () => call<{ carousels: CarouselSummary[] }>("/api/carousels"),
+  carouselDraft: (engine: string, body: { topic: string; points: number; language: string; project: string }) =>
+    call<Carousel>(`/api/carousels/${engine}`, json(body)),
+  carousel: (cid: string) => call<Carousel>(`/api/carousel/${cid}`),
+  carouselEdit: (cid: string, patch: Partial<Carousel>) => call<Carousel>(`/api/carousel/${cid}`, { ...json(patch), method: "PUT" }),
+  carouselDelete: (cid: string) => call<{ carousels: CarouselSummary[] }>(`/api/carousel/${cid}`, { method: "DELETE" }),
+  carouselFile: (cid: string, name: string) => `/api/carousel/${cid}/file/${encodeURIComponent(name)}`,
+  carouselZip: (cid: string) => `/api/carousel/${cid}/zip`,
   project: (id: string) => call<Project>(`/api/projects/${id}`),
   transcript: (id: string) => call<Transcript>(`/api/projects/${id}/transcript`),
   create: (body: { name: string; mode: Mode; filename: string; size: number; model: string; language: string }) =>
