@@ -23,7 +23,7 @@ FADE = 0.010  # Sekunden
 
 QUALITIES = {
     "1080": "1080p (recommended)",
-    "2160": "4K (if the original is that big)",
+    "2160": "4K (sharper on YouTube – also from a 1080p video)",
     "original": "Original resolution",
 }
 
@@ -55,7 +55,8 @@ def _scale_filter(info: dict, quality: str) -> str:
     w, h = info["width"], info["height"]
     short = min(w, h)
     target = {"1080": 1080, "2160": 2160}.get(quality)
-    if target and short > target:
+    # 4K: auch hochrechnen – YouTube gibt 4K-Videos deutlich mehr Bitrate, das Bild wirkt schärfer
+    if target and (short > target or quality == "2160"):
         return f"scale={target}:-2" if w < h else f"scale=-2:{target}"
     return "scale=trunc(iw/2)*2:trunc(ih/2)*2"
 
@@ -109,7 +110,7 @@ def output_size(info: dict, quality: str) -> tuple[int, int]:
     w, h = info["width"], info["height"]
     short = min(w, h)
     target = {"1080": 1080, "2160": 2160}.get(quality)
-    if target and short > target:
+    if target and (short > target or quality == "2160"):
         f = target / short
         w, h = w * f, h * f
     return int(round(w / 2)) * 2, int(round(h / 2)) * 2
