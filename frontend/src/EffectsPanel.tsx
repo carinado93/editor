@@ -246,13 +246,22 @@ export function EffectsEditor({ items: source, allowedInit, time, onSeek, previe
     if (endAt == null) return;
     const endCut = toCut(keep, endAt);
     const start = Math.round(toOrig(keep, Math.max(0, endCut - 6)) * 100) / 100;
-    setDirty(true);
-    setItems([...items.filter((o) => o.type !== "outro"), {
-      id: `fx-${Date.now()}`, kind: "fx", type: "outro", place: "side" as const, on: true,
+    const nid = `fx-${Date.now()}`;
+    const list = [...items.filter((o) => o.type !== "outro"), {
+      id: nid, kind: "fx", type: "outro", place: "side" as const, on: true,
       title: "Thank you for watching", text: "Thank you for watching", items: [], item_t: [],
       start, end: Math.round((start + 6) * 100) / 100, bg_t: null, pose_t: [], mode: "vanish" as const,
-    }].sort((a, b) => a.start - b.start));
+    }].sort((a, b) => a.start - b.start);
+    setItems(list);
+    setDirty(true);
     onSeek(start);
+    // gleich speichern und zum neuen Effekt springen, damit man ihn sieht
+    void act("save", async () => {
+      await onSave(list);
+      setDirty(false);
+      setMsg("Like & Subscribe added at the end and saved ✓ – it's shown below (last effect in the list).");
+    });
+    setTimeout(() => document.getElementById(nid)?.scrollIntoView({ behavior: "smooth", block: "center" }), 300);
   };
 
 
@@ -325,7 +334,7 @@ export function EffectsEditor({ items: source, allowedInit, time, onSeek, previe
           const t = typeOf(o.type);
           const listType = ["steps", "cards", "tags", "scores", "checklist", "endcard", "bigwords", "clothesline", "repeat", "wordswap", "switch", "stickers"].includes(o.type ?? "");
           return (
-            <div key={o.id} className={`fx-row ${o.on ? "" : "off"}`}>
+            <div key={o.id} id={o.id} className={`fx-row ${o.on ? "" : "off"}`}>
               <FxPreview preview={preview} item={o} />
               <div className="fx-row-main">
               <div className="fx-row-head">
