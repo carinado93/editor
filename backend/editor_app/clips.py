@@ -114,6 +114,7 @@ Regeln für jedes Reel:
 Sätze des Videos:
 {listing}
 
+{meta.lang_rule(language)}
 Antworte NUR mit JSON:
 {{"clips": [{{"title": "kurzer Arbeitstitel", "hook_text": "…", "texts": ["…", "…"], "parts": [[12], [3, 4, 5]], "why": "warum stark",
   "caption": "…", "hashtags": ["#a", "#b", "#c", "#d", "#e"], "shorts_title": "…"}}]}}

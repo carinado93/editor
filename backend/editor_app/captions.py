@@ -44,6 +44,7 @@ Schreibe auf {lang}:
 3. Cover-Text: 2–4 kurze Zeilen, polarisierend und konkret (kein "in case no one told you").
 4. YouTube-Shorts-Titel: max. 70 Zeichen, neugierig machend.
 
+{meta.lang_rule(language)}
 Antworte NUR mit JSON in genau diesem Format:
 {SCHEMA}
 """
@@ -93,6 +94,7 @@ Schreibe auf {lang}:
 3. GENAU 5 Hashtags, bevorzugt aus: {bank}
 4. Cover-Text (2–4 kurze Zeilen) und YouTube-Shorts-Titel (max. 70 Zeichen).
 
+{meta.lang_rule(language)}
 Antworte NUR mit JSON in genau diesem Format:
 {SCENE_SCHEMA}
 """

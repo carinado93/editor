@@ -23,6 +23,18 @@ GUARDRAILS = """Inhaltliche Leitplanken (immer einhalten):
   Zielgruppe Gen Z und Boomer, professionell. Am Ende der Beschreibung klar sagen, was Carina anbietet.
 - In Carinas Stimme: warm, klar, direkt, "du"-Ansprache auf Deutsch."""
 
+
+def lang_rule(language: str) -> str:
+    """Klare Ansage, in welcher Sprache die Texte sein müssen. Die Anweisungen sind deutsch geschrieben –
+    ohne diese Zeile antwortet Claude sonst auch bei englischen Videos auf Deutsch."""
+    if language == "de":
+        return ("SPRACHE DER ANTWORT: Alle Texte, die im Video oder beim Posten erscheinen (Hook, Einblendungen, "
+                "Effekt-Texte, Caption, Titel, Hashtags), auf DEUTSCH.")
+    return ("OUTPUT LANGUAGE: The video is in ENGLISH. Write EVERY text in your answer in ENGLISH – titles, hook "
+            "text, on-screen texts, effect texts, captions, Shorts title, chapters, descriptions, notes and "
+            "explanations ('why'). Hashtags in English. These instructions are written in German, but your "
+            "answer must not contain German.")
+
 FORBIDDEN = [r"\bheil(en|ung|t)\b", r"nie wieder", r"besieg", r"\bbeat (your )?burnout\b", r"\bcure[sd]?\b",
              r"\bheal(s|ed|ing)?\b", r"garantiert", r"guaranteed", r"opfermentalität", r"victim mentality",
              r"emotionen im körper gespeichert", r"stored in (the|your) body", r"das eine geheimnis", r"the one secret"]
@@ -127,6 +139,7 @@ Aufgabe (alles auf {lang}):
 4. 10–15 Tags (Suchbegriffe) und GENAU 5 Hashtags (bevorzugt aus dieser Sammlung: {bank}).
 {f'Arbeitstitel von Carina: {title_hint}' if title_hint else ''}
 
+{lang_rule(language)}
 Antworte NUR mit JSON in genau diesem Format, ohne weiteren Text:
 {SCHEMA}
 

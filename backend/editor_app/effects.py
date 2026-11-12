@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import time
 
-from . import animations, cuts, fx
+from . import animations, cuts, fx, meta
 from .errors import UserError
 
 DESCRIBE = {
@@ -139,6 +139,7 @@ Regeln:
 Transkript (Zeit, [Nummer] vor jedem Wort):
 {animations.numbered_sentences(words, flags)}
 
+{meta.lang_rule(language)}
 Antworte NUR mit JSON nach dem Schema."""
 
 
@@ -224,6 +225,7 @@ Regeln:
 - Danach 1–4 weitere Effekte, die die Botschaft Schritt für Schritt erzählen; jeder 2,5–6 s lang, nie gleichzeitig.
 - "start"/"end" in Sekunden (0 bis {duration:.1f}). Texte kurz, in Carinas warmer, direkter Stimme, keine Heilversprechen.
 - Bei Listen-Effekten stehen die Punkte in "items", sonst leer.
+{meta.lang_rule(language)}
 Antworte NUR mit JSON nach dem Schema."""
     if engine == "claude":
         from . import claude

@@ -15,7 +15,7 @@ from __future__ import annotations
 import re
 import time
 
-from . import cuts
+from . import cuts, meta
 from .errors import UserError
 from .subtitles import BRAUN, CREME, LILA, LILA_TIEF, _esc, _esc_keep_stars, _fmt_ass, ass_color
 
@@ -102,6 +102,7 @@ So schneidet Carina (aus ihrem eigenen Video):
 Transkript (Zeit in Klammern, [Nummer] vor jedem Wort):
 {numbered_sentences(words, flags)}
 
+{meta.lang_rule(language)}
 Antworte NUR mit JSON nach dem Schema."""
 
 
