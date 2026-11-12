@@ -103,21 +103,19 @@ function PublishSettings() {
   );
   return (
     <section className="card settings-card">
-      <h3>Publishing (letter carousels → Metricool)</h3>
+      <h3>Publishing (letter carousels)</h3>
       <p className="small muted">
-        Metricool needs public links to your slides. The app puts the JPGs into your GitHub repo <code>carinado93/app</code> (folder
-        <code> media/letters/</code>, like before) and then schedules the posts. Everything stays only on your PC in the <code>.env</code> file.
+        The app puts the finished slides into your GitHub repo <code>carinado93/app</code> (branch <code>carousel-media</code>, folder
+        <code> media/letters/</code>, like before). Claude then schedules them with your Metricool connection and makes pictures with your
+        Canva connection – no Metricool API plan needed. The token stays only on your PC in the <code>.env</code> file.
       </p>
       <ol className="small steps">
         <li>GitHub → Settings → Developer settings → <strong>Fine-grained tokens</strong> → Generate: only repository <code>carinado93/app</code>,
           permission <strong>Contents: Read and write</strong>. Copy the token.</li>
-        <li>Metricool → <strong>Account settings → API</strong>: copy the <strong>user token</strong> and your <strong>userId</strong>.</li>
       </ol>
       <div className="publish-fields">
         {field("GITHUB_TOKEN", "GitHub token", true, "github_pat_…")}
-        {field("METRICOOL_USER_TOKEN", "Metricool user token", true, "")}
-        {field("METRICOOL_USER_ID", "Metricool userId", false, "e.g. 1234567")}
-        {field("GITHUB_MEDIA_BRANCH", "Branch in carinado93/app (optional)", false, "main")}
+        {field("GITHUB_MEDIA_BRANCH", "Branch in carinado93/app (optional)", false, "carousel-media")}
       </div>
       <button className="btn" onClick={async () => {
         setErr(null);

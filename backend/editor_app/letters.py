@@ -638,24 +638,185 @@ def image_prompt(part: dict, slide: dict) -> str:
     return (PAINT_PROMPT if part.get("style") == "painted" else ILLU_PROMPT).format(motif=m, scene=m)
 
 
-def schedule_part(letter: dict, lang: str, idx: int) -> dict:
-    """Ein Teil: JPGs nach carinado93/app hochladen, dann in Metricool planen."""
+# ================================================================ Übergabe an Claude (Metricool + Canva)
+
+CLAUDE_MD = """# Letter carousel "{title}" ({number}) – instructions for Claude
+
+Carina's Video-Editor app prepared this folder. Use Carina's **Metricool** and **Canva** connections.
+Never change her words, captions or slide order. The words "stress & burnout coach" must never appear.
+
+## A · "schedule" → job.json
+For every entry in `posts` of `job.json`, call Metricool **createScheduledPost** with exactly
+`blogId`, `date` and `info` (pass `info` as JSON, unchanged; media are public URLs in the right order,
+the last one is the Coming soon / Demnächst slide). Do not add music, do not edit the text.
+Then write `scheduled.json` in this folder: a list of objects
+`{{"lang": "en", "part": 1, "ok": true, "plannerUrl": "…"}}` (or `"ok": false, "error": "…"`) and commit it to
+branch `{branch}` of `{repo}`. If a post fails, schedule the others anyway.
+
+## B · "pictures" → pictures.json
+For every entry, create ONE image with Canva AI using `prompt` exactly (style notes are inside the prompt).
+Storyteller = single watercolor motif on a plain white background; Painted Scene = full-bleed painting, portrait 4:5.
+Soft and poetic; for anxiety / depression / "black dog" use shadowy, smoky, half-transparent figures, never scary.
+Download each result as PNG or JPG and save it as `art/<file>` in this folder (file names are given), then commit
+everything in one commit to branch `{branch}` of `{repo}`. Carina presses "Get pictures" in the app afterwards.
+"""
+
+
+def folder(letter: dict) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "-", letter.get("title", "letter").lower()).strip("-") or "letter"
+    return f"media/letters/{letter.get('number', '01')}-{slug}"
+
+
+def berlin_offset(dt: str) -> str:
+    """UTC-Abstand für Europe/Berlin (Sommerzeit: letzter Sonntag im März bis letzter Sonntag im Oktober, 1 Uhr UTC)."""
+    from datetime import datetime
+
+    d = datetime.fromisoformat(dt[:19])
+
+    def last_sunday(year, month):
+        x = date(year, month, 31)
+        return x - timedelta(days=(x.weekday() + 1) % 7)
+    start = datetime.combine(last_sunday(d.year, 3), datetime.min.time()).replace(hour=2)
+    end = datetime.combine(last_sunday(d.year, 10), datetime.min.time()).replace(hour=3)
+    return "+02:00" if start <= d < end else "+01:00"
+
+
+def _claude_md(letter: dict) -> bytes:
     from . import publish
 
-    part = letter["parts"][lang][idx]
-    if hashtag_count(part.get("caption", "")) != 5:
-        raise UserError(f"Part {idx + 1} ({lang.upper()}): the caption needs exactly 5 hashtags.")
-    if FORBIDDEN.search(part.get("caption", "")):
-        raise UserError('The words "stress & burnout coach" must never appear.')
-    if not re.sub(r"(?<!\w)#\w+", "", part.get("caption", "")).strip():
-        raise UserError(f"Part {idx + 1} ({lang.upper()}): please write 1–2 sentences before the hashtags.")
-    files = part.get("files") or render_part(letter, lang, idx)
-    slug = re.sub(r"[^a-z0-9]+", "-", letter.get("title", "letter").lower()).strip("-") or "letter"
-    folder = f"media/letters/{letter.get('number', '01')}-{slug}"
-    base = _dir(letter["id"]) / "out" / lang / f"teil{idx + 1}"
-    uploads = [(base / f"{n}.jpg", f"{folder}/{lang}{idx + 1}_{k:02d}.jpg") for k, n in enumerate(files, 1)]
-    urls = publish.upload_media(uploads, f"Add letter carousel media: {letter.get('title', '')} "
-                                         f"({lang.upper()} part {idx + 1})")
-    res = publish.schedule_instagram(ACCOUNTS[lang]["blog_id"], urls, part["caption"].strip(), part["time"])
-    part["scheduled"] = {"ok": True, "at": time.time(), "urls": urls, **res}
-    return part["scheduled"]
+    repo, branch = publish.repo_branch()
+    return CLAUDE_MD.format(title=letter.get("title", ""), number=letter.get("number", ""),
+                            repo=repo, branch=branch).encode("utf-8")
+
+
+def send_for_scheduling(letter: dict) -> str:
+    """Nach "Approve": alle noch nicht geplanten Teile rendern, JPGs + job.json + CLAUDE.md in EINEM Commit
+    nach carinado93/app (carousel-media). Gibt den Satz zurück, den Carina Claude schickt."""
+    from . import publish
+
+    try:  # erst nachsehen, was Claude schon geplant hat – nie etwas doppelt planen
+        sync(letter)
+    except UserError:
+        pass
+    todo = [(lg, i) for lg in letter["langs"] for i in range(3)
+            if letter["parts"][lg][i]["slides"] and not (letter["parts"][lg][i].get("scheduled") or {}).get("ok")]
+    if not todo:
+        raise UserError("Everything is already scheduled ✓")
+    for lg, i in todo:
+        part = letter["parts"][lg][i]
+        n = hashtag_count(part.get("caption", ""))
+        if n != 5:
+            raise UserError(f"{lg.upper()} part {i + 1}: the caption has {n} hashtags – it needs exactly 5.")
+        if not re.sub(r"(?<!\w)#\w+", "", part.get("caption", "")).strip():
+            raise UserError(f"{lg.upper()} part {i + 1}: please write 1–2 sentences before the hashtags.")
+        if FORBIDDEN.search(part.get("caption", "")):
+            raise UserError('The words "stress & burnout coach" must never appear.')
+        if not part.get("files"):
+            render_part(letter, lg, i)
+    repo, branch = publish.repo_branch()
+    base = folder(letter)
+    uploads, plan = [], []
+    for lg, i in todo:
+        files = letter["parts"][lg][i]["files"]
+        out = _dir(letter["id"]) / "out" / lg / f"teil{i + 1}"
+        paths = [f"{base}/{lg}{i + 1}_{k:02d}.jpg" for k in range(1, len(files) + 1)]
+        uploads += [((out / f"{n}.jpg").read_bytes(), p) for n, p in zip(files, paths)]
+        plan.append((lg, i, paths))
+    # erst die Bilder, damit job.json die festen Commit-Links enthält
+    commit, _ = publish.upload(uploads, f"Letter carousel media: {letter.get('title', '')}")
+    raw = f"https://raw.githubusercontent.com/{repo}/{commit}/"
+    posts = []
+    for lg, i, paths in plan:
+        part = letter["parts"][lg][i]
+        when = part["time"][:19]
+        posts.append({
+            "lang": lg, "part": i + 1, "account": ACCOUNTS[lg]["handle"],
+            "blogId": str(ACCOUNTS[lg]["blog_id"]), "date": when + berlin_offset(when),
+            "info": {
+                "autoPublish": True, "draft": False, "descendants": [], "firstCommentText": "",
+                "hasNotReadNotes": False, "media": [raw + p for p in paths], "mediaAltText": [],
+                "providers": [{"network": "instagram"}],
+                "publicationDate": {"dateTime": when, "timezone": "Europe/Berlin"},
+                "shortener": False, "smartLinkData": {"ids": []}, "text": part["caption"].strip(),
+                "instagramData": {"type": "POST", "collaborators": [], "carouselTags": {}, "showReelOnFeed": True,
+                                  "isAiGenerated": False},
+            }})
+    job = {"letter": letter.get("title", ""), "number": letter.get("number", ""), "created": time.time(), "posts": posts}
+    publish.upload([(json.dumps(job, ensure_ascii=False, indent=1).encode(), f"{base}/job.json"),
+                    (_claude_md(letter), f"{base}/CLAUDE.md")],
+                   f"Letter carousel job: {letter.get('title', '')}")
+    for lg, i, _ in plan:
+        letter["parts"][lg][i]["scheduled"] = {"ok": False, "waiting": True, "at": time.time()}
+    letter["sent"] = {"folder": base, "at": time.time()}
+    return (f"Please schedule my letter carousels: read {base}/CLAUDE.md in {repo} (branch {branch}) "
+            f"and do part A (job.json).")
+
+
+def request_pictures(letter: dict, only_missing: bool = True) -> str:
+    """Bild-Wünsche (Motiv → fertiger Prompt) als pictures.json hochladen. Gibt den Satz für Claude zurück."""
+    from . import publish
+
+    items = []
+    for lg in letter["langs"]:
+        for i, part in enumerate(letter["parts"][lg]):
+            painted = part.get("style") == "painted"
+            for k, sl in enumerate(part["slides"]):
+                if only_missing and sl.get("image"):
+                    continue
+                if not painted and not sl.get("wants_art"):
+                    continue
+                items.append({"lang": lg, "part": i + 1, "slide": k + 1, "style": part.get("style"),
+                              "motif": sl.get("motif", ""), "prompt": image_prompt(part, sl),
+                              "file": f"{lg}{i + 1}_{k + 1:02d}.png"})
+    if not items:
+        raise UserError("All slides that need a picture already have one.")
+    repo, branch = publish.repo_branch()
+    base = folder(letter)
+    publish.upload([(json.dumps({"letter": letter.get("title", ""), "items": items}, ensure_ascii=False,
+                                indent=1).encode(), f"{base}/pictures.json"),
+                    (_claude_md(letter), f"{base}/CLAUDE.md")],
+                   f"Letter carousel picture request: {letter.get('title', '')}")
+    letter["pictures_requested"] = {"at": time.time(), "count": len(items)}
+    return (f"Please make the pictures for my letter carousel with Canva AI: read {base}/CLAUDE.md in {repo} "
+            f"(branch {branch}) and do part B (pictures.json, {len(items)} pictures).")
+
+
+def sync(letter: dict) -> dict:
+    """Von GitHub holen, was Claude erledigt hat: Bilder aus art/ an die Folien hängen, Planungs-Ergebnis übernehmen."""
+    from . import publish
+
+    base = folder(letter)
+    got = 0
+    for f in publish.list_dir(f"{base}/art"):
+        m = re.fullmatch(r"(en|de)([123])_(\d{2})\.(png|jpe?g|webp)", f.get("name", ""), re.I)
+        if not m or m.group(1) not in letter["parts"]:
+            continue
+        lg, i, k = m.group(1), int(m.group(2)) - 1, int(m.group(3)) - 1
+        slides = letter["parts"][lg][i]["slides"]
+        if not 0 <= k < len(slides):
+            continue
+        name = f"canva_{lg}{i + 1}_{k + 1:02d}_{(f.get('sha') or '')[:8]}.png"
+        if slides[k].get("image") == name:
+            continue
+        data = publish.read_file(f"{base}/art/{f['name']}")
+        if not data:
+            continue
+        img = Image.open(io.BytesIO(data)).convert("RGB")
+        img.save(_dir(letter["id"]) / "bilder" / name, "PNG")
+        slides[k]["image"] = name
+        letter["parts"][lg][i]["files"] = []
+        got += 1
+    done = 0
+    raw = publish.read_file(f"{base}/scheduled.json")
+    if raw:
+        try:
+            for r in json.loads(raw.decode("utf-8")):
+                lg, i = r.get("lang"), int(r.get("part", 0)) - 1
+                if lg in letter["parts"] and 0 <= i < 3:
+                    letter["parts"][lg][i]["scheduled"] = {
+                        "ok": bool(r.get("ok")), "planner": r.get("plannerUrl") or r.get("planner"),
+                        "error": r.get("error"), "at": time.time()}
+                    done += bool(r.get("ok"))
+        except (ValueError, TypeError, AttributeError):
+            pass
+    return {"pictures": got, "scheduled": done}

@@ -62,31 +62,24 @@ export function LetterStudio() {
     }
   };
 
-  const scheduleAll = () =>
-    act("schedule", async () => {
+  const [sentence, setSentence] = useState<string | null>(null);
+
+  const askClaude = (label: string, fn: () => Promise<{ letter: Letter; sentence: string }>) =>
+    act(label, async () => {
+      const r = await fn();
+      setLetter(r.letter);
+      setSentence(r.sentence);
+      await navigator.clipboard.writeText(r.sentence).catch(() => {});
+    });
+
+  const sync = () =>
+    act("sync", async () => {
       if (!letter) return;
-      const todo = letter.langs.flatMap((lg) => [0, 1, 2].map((i) => [lg, i] as const))
-        .filter(([lg, i]) => letter.parts[lg][i].slides.length && !letter.parts[lg][i].scheduled?.ok);
-      const summary = todo.map(([lg, i]) => `${lg.toUpperCase()} ${PART_NAMES[lg][i]} – ${letter.parts[lg][i].time.replace("T", " ").slice(0, 16)}`).join("\n");
-      if (!todo.length) {
-        setMsg("Everything is already scheduled ✓");
-        return;
-      }
-      if (!confirm(`Schedule these posts in Metricool?\n\n${summary}`)) return;
-      let l = await api.letterRender(letter.id);
-      setLetter(l);
-      const failed: string[] = [];
-      for (const [lg, i] of todo) {
-        try {
-          l = await api.letterSchedule(letter.id, lg, i);
-        } catch (e) {
-          failed.push(`${lg.toUpperCase()} part ${i + 1}: ${(e as Error).message}`);
-          l = await api.letter(letter.id);
-        }
-        setLetter(l);
-      }
-      if (failed.length) setErr(failed.join("\n"));
-      else setMsg("All parts are scheduled in Metricool ✓");
+      const r = await api.letterSync(letter.id);
+      setLetter(r.letter);
+      setMsg(r.pictures || r.scheduled
+        ? `${r.pictures} new picture${r.pictures === 1 ? "" : "s"} from Canva · ${r.scheduled} part${r.scheduled === 1 ? "" : "s"} scheduled ✓`
+        : "Nothing new yet – Claude may still be working. Try again in a minute.");
     });
 
   if (!letter) {
@@ -161,8 +154,13 @@ export function LetterStudio() {
             setLetter(await api.letterRender(letter.id));
             setMsg("All slides rendered ✓ – PNG + JPG are ready.");
           })}>{busy === "render" ? "Rendering …" : "Render all slides"}</button>
+          <button className="btn ghost" disabled={!!busy} onClick={() => askClaude("pictures", () => api.letterPictures(letter.id))}>
+            {busy === "pictures" ? "Preparing …" : "🎨 Pictures with Canva (via Claude)"}
+          </button>
+          <button className="btn ghost" disabled={!!busy} onClick={sync}>{busy === "sync" ? "Checking …" : "⟳ Get pictures & status"}</button>
           {allRendered && <a className="btn ghost" href={api.letterZip(letter.id)} download>⬇ ZIP (your folder layout)</a>}
         </div>
+        {sentence && <ClaudeSentence text={sentence} onClose={() => setSentence(null)} />}
         {err && <div className="banner error small pre">{err}</div>}
         {msg && <div className="banner small">{msg}</div>}
       </section>
@@ -178,8 +176,9 @@ export function LetterStudio() {
       <section className="card">
         <h3>Approve &amp; schedule</h3>
         <p className="small muted">
-          Nothing is posted before you click here. The JPGs go to <code>carinado93/app/media/letters/</code> (public links for Metricool),
-          then one Instagram carousel per part is scheduled (Europe/Berlin).
+          Nothing is posted before you click here. The slides (JPG, last one Coming soon / Demnächst) and a job file go to
+          <code> carinado93/app</code> (branch <code>carousel-media</code>). Then you send Claude one sentence (already copied for you) and
+          Claude schedules everything with your Metricool connection. Afterwards press “⟳ Get pictures &amp; status”.
         </p>
         <div className="schedule-list small">
           {letter.langs.flatMap((lg) => letter.parts[lg].map((p, i) => (
@@ -187,23 +186,23 @@ export function LetterStudio() {
               <span>{lg.toUpperCase()} · {PART_NAMES[lg][i]} · {p.time.replace("T", " ").slice(0, 16)}</span>
               {p.scheduled?.ok ? (
                 <span className="status ok">✓ scheduled {p.scheduled.planner && <a href={p.scheduled.planner} target="_blank" rel="noreferrer">planner</a>}</span>
+              ) : p.scheduled?.waiting ? (
+                <span className="muted">sent to Claude – waiting</span>
               ) : p.scheduled && !p.scheduled.ok ? (
-                <span className="error-text">⚠ {p.scheduled.error}{" "}
-                  <button className="link" disabled={!!busy} onClick={() => act("retry", async () => {
-                    try {
-                      setLetter(await api.letterSchedule(letter.id, lg, i));
-                    } finally {
-                      setLetter(await api.letter(letter.id));
-                    }
-                  })}>retry this part</button>
-                </span>
+                <span className="error-text">⚠ {p.scheduled.error} – press “Approve” again to retry this part</span>
               ) : (
                 <span className="muted">{p.slides.length ? "not scheduled yet" : "no text"}</span>
               )}
             </div>
           )))}
         </div>
-        <button className="btn" disabled={!!busy} onClick={scheduleAll}>{busy === "schedule" ? "Scheduling …" : "Approve & schedule"}</button>
+        <button className="btn" disabled={!!busy} onClick={() => {
+          const lines = letter.langs.flatMap((lg) => letter.parts[lg].map((p, i) => [lg, i, p] as const))
+            .filter(([, , p]) => p.slides.length && !p.scheduled?.ok)
+            .map(([lg, i, p]) => `${lg.toUpperCase()} ${PART_NAMES[lg][i]} – ${p.time.replace("T", " ").slice(0, 16)}`).join("\n");
+          if (lines && confirm(`Approve and send these posts to Claude for scheduling?\n\n${lines}`)) askClaude("send", () => api.letterSend(letter.id));
+          else if (!lines) setMsg("Everything is already scheduled ✓");
+        }}>{busy === "send" ? "Uploading slides …" : "Approve & schedule"}</button>
         <button className="link danger" style={{ marginLeft: 16 }} onClick={() => confirm("Delete this letter from the app?") &&
           act("del", async () => { setList((await api.letterDelete(letter.id)).letters); setLetter(null); })}>delete letter</button>
       </section>
@@ -286,17 +285,6 @@ function SlideEditor({ letter, lang, idx, k, part, onSave, onLetter, onErr }: {
   const setSlides = (fn: (sl: LetterSlide[]) => LetterSlide[]) => onSave({ slides: fn(part.slides.map((x) => ({ ...x, lines: [...x.lines] }))) });
   const patch = (p: Partial<LetterSlide>) => setSlides((sl) => sl.map((x, j) => (j === k ? { ...x, ...p } : x)));
 
-  const canva = async () => {
-    try {
-      if (motif !== s.motif) await patch({ motif });
-      const { prompt } = await api.letterPrompt(letter.id, lang, idx, k);
-      await navigator.clipboard.writeText(prompt).catch(() => {});
-      window.open(`https://www.canva.com/ai?prompt=${encodeURIComponent(prompt)}`, "_blank", "noopener");
-    } catch (e) {
-      onErr((e as Error).message);
-    }
-  };
-
   return (
     <div className="slide-editor small">
       <strong>Slide {k + 1}{k === 0 ? " (cover)" : ""}</strong>
@@ -326,7 +314,6 @@ function SlideEditor({ letter, lang, idx, k, part, onSave, onLetter, onErr }: {
             onChange={(e) => setMotif(e.target.value)} onBlur={() => motif !== s.motif && patch({ motif })} />
         </label>
         <div className="row-buttons">
-          <button className="btn ghost small-btn" onClick={canva} title="Copies the full prompt and opens Canva AI">🎨 Generate in Canva</button>
           <label className="btn ghost small-btn">
             {s.image ? "Replace image" : "Upload image"}
             <input type="file" accept="image/*" hidden onChange={async (e) => {
@@ -342,7 +329,7 @@ function SlideEditor({ letter, lang, idx, k, part, onSave, onLetter, onErr }: {
           </label>
           {s.image && <button className="link danger" onClick={async () => onLetter(await api.letterImageDelete(letter.id, lang, idx, k))}>remove image</button>}
         </div>
-        <span className="muted">Canva opens with the prompt already copied (paste with Ctrl+V if it is not filled in). Download the image there, then “Upload image” here. For a new version: generate again in Canva and replace.</span>
+        <span className="muted">Pictures come from Canva through Claude (button “🎨 Pictures with Canva” at the top). For a new version: remove the image, change the picture idea, and ask again.</span>
         {painted && s.image && (
           <div className="crop-sliders">
             <label>Zoom {s.zoom.toFixed(2)}<input type="range" min={1} max={2} step={0.05} defaultValue={s.zoom} onMouseUp={(e) => patch({ zoom: Number((e.target as HTMLInputElement).value) })} /></label>
@@ -350,6 +337,22 @@ function SlideEditor({ letter, lang, idx, k, part, onSave, onLetter, onErr }: {
             <label>Up ↕ down<input type="range" min={0} max={1} step={0.05} defaultValue={s.fy} onMouseUp={(e) => patch({ fy: Number((e.target as HTMLInputElement).value) })} /></label>
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+/** Der Satz für Claude – schon kopiert, mit Knopf zum erneuten Kopieren und zum Öffnen von claude.ai. */
+function ClaudeSentence({ text, onClose }: { text: string; onClose: () => void }) {
+  const [copied, setCopied] = useState(true);
+  return (
+    <div className="claude-sentence small">
+      <strong>✓ Ready. Send this to Claude (it is already copied):</strong>
+      <code>{text}</code>
+      <div className="row-buttons">
+        <button className="btn small-btn" onClick={() => navigator.clipboard.writeText(text).then(() => setCopied(true))}>{copied ? "Copied ✓" : "Copy"}</button>
+        <a className="btn ghost small-btn" href="https://claude.ai/new" target="_blank" rel="noreferrer">Open Claude</a>
+        <button className="link" onClick={onClose}>close</button>
       </div>
     </div>
   );

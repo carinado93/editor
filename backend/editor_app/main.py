@@ -1164,20 +1164,35 @@ def letter_zip(lid: str):
                     headers={"Content-Disposition": f'attachment; filename="{safe}.zip"'})
 
 
-@app.post("/api/letter/{lid}/schedule/{lang}/{idx}")
-def letter_schedule(lid: str, lang: str, idx: int):
-    """Ein Teil planen (nur nach "Approve & schedule" in der Oberfläche; bei Fehler einzeln wiederholbar)."""
+@app.post("/api/letter/{lid}/send")
+def letter_send(lid: str):
+    """Nach "Approve": Folien + Auftrag für Claude nach carinado93/app (carousel-media)."""
     from . import letters
 
     b = letters.load(lid)
-    part = _letter_part(b, lang, idx)
-    try:
-        letters.schedule_part(b, lang, idx)
-    except UserError as exc:
-        part["scheduled"] = {"ok": False, "error": str(exc), "at": time.time()}
-        letters.save(b)
-        raise
-    return letters.save(b)
+    sentence = letters.send_for_scheduling(b)
+    letters.save(b)
+    return {"letter": b, "sentence": sentence}
+
+
+@app.post("/api/letter/{lid}/pictures")
+def letter_pictures(lid: str):
+    from . import letters
+
+    b = letters.load(lid)
+    sentence = letters.request_pictures(b)
+    letters.save(b)
+    return {"letter": b, "sentence": sentence}
+
+
+@app.post("/api/letter/{lid}/sync")
+def letter_sync(lid: str):
+    from . import letters
+
+    b = letters.load(lid)
+    res = letters.sync(b)
+    letters.save(b)
+    return {"letter": b, **res}
 
 
 class PublishSettingsBody(BaseModel):

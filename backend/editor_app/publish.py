@@ -1,12 +1,11 @@
-"""Veröffentlichen der Brief-Karussells: Bilder öffentlich machen (GitHub-Repo carinado93/app, Ordner media/)
-und in Metricool planen.
+"""Brief-Karussells an Claude übergeben: Bilder + Auftrags-Datei ins GitHub-Repo carinado93/app
+(Branch carousel-media, Ordner media/letters/…). Claude plant dann mit Carinas Metricool-Verbindung und erstellt
+Bilder mit ihrer Canva-Verbindung – die App selbst braucht dafür keine Metricool-API und keinen Canva-Zugang.
 
-Alle Zugangsdaten stehen nur in der Datei `.env` auf Carinas PC (nie im Code, nicht im Git):
+Zugangsdaten nur in der Datei `.env` auf Carinas PC (nie im Code, nicht im Git):
   GITHUB_TOKEN          Fine-grained Token mit "Contents: Read and write" für carinado93/app
   GITHUB_MEDIA_REPO     (optional) Standard carinado93/app
-  GITHUB_MEDIA_BRANCH   (optional) Standard main
-  METRICOOL_USER_TOKEN  Metricool → Account settings → API
-  METRICOOL_USER_ID     Metricool userId
+  GITHUB_MEDIA_BRANCH   (optional) Standard carousel-media
 """
 from __future__ import annotations
 
@@ -23,8 +22,9 @@ from .config import ROOT
 from .errors import UserError
 
 ENV_FILE = ROOT / ".env"
-KEYS = ("GITHUB_TOKEN", "GITHUB_MEDIA_REPO", "GITHUB_MEDIA_BRANCH", "METRICOOL_USER_TOKEN", "METRICOOL_USER_ID")
-SECRET = {"GITHUB_TOKEN", "METRICOOL_USER_TOKEN"}
+KEYS = ("GITHUB_TOKEN", "GITHUB_MEDIA_REPO", "GITHUB_MEDIA_BRANCH")
+SECRET = {"GITHUB_TOKEN"}
+REPO_DEFAULT, BRANCH_DEFAULT = "carinado93/app", "carousel-media"
 
 
 # ---------------------------------------------------------------- .env
@@ -87,55 +87,64 @@ def _http(method: str, url: str, headers: dict, body: dict | bytes | None = None
         raise UserError(f"Could not reach {urllib.parse.urlparse(url).netloc}: {exc.reason}") from exc
 
 
-# ---------------------------------------------------------------- GitHub: Bilder öffentlich machen
+# ---------------------------------------------------------------- GitHub (carinado93/app, Branch carousel-media)
 
-def upload_media(files: list[tuple[Path, str]], message: str) -> list[str]:
-    """Alle JPGs in EINEM Commit nach carinado93/app (media/…) und die öffentlichen Links zurückgeben.
-    files: (lokale Datei, Pfad im Repo). Die Links zeigen auf den Commit, bleiben also für immer gleich."""
+def _gh():
     token = env("GITHUB_TOKEN")
     if not token:
-        raise UserError("To schedule, the slides must be online first. Please add your GitHub token in "
-                        "Settings → Publishing (it stays only on your PC).")
-    repo = env("GITHUB_MEDIA_REPO", "carinado93/app")
-    branch = env("GITHUB_MEDIA_BRANCH", "main")
-    api = f"https://api.github.com/repos/{repo}"
+        raise UserError("Please add your GitHub token once in Settings → Publishing (it stays only on your PC). "
+                        "The app needs it to put the slides into carinado93/app for Claude.")
+    repo = env("GITHUB_MEDIA_REPO", REPO_DEFAULT)
+    branch = env("GITHUB_MEDIA_BRANCH", BRANCH_DEFAULT)
     h = {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json",
          "X-GitHub-Api-Version": "2022-11-28"}
+    return f"https://api.github.com/repos/{repo}", repo, branch, h
+
+
+def upload(files: list[tuple[bytes, str]], message: str) -> tuple[str, list[str]]:
+    """Mehrere Dateien in EINEM Commit hochladen. Gibt (commit, öffentliche Links) zurück –
+    die Links zeigen auf den Commit und bleiben dadurch für immer gleich."""
+    api, repo, branch, h = _gh()
     ref = _http("GET", f"{api}/git/ref/heads/{branch}", h)
     base_commit = ref["object"]["sha"]
     base_tree = _http("GET", f"{api}/git/commits/{base_commit}", h)["tree"]["sha"]
     tree = []
-    for local, path in files:
-        blob = _http("POST", f"{api}/git/blobs", h,
-                     {"content": base64.b64encode(local.read_bytes()).decode(), "encoding": "base64"})
+    for data, path in files:
+        blob = _http("POST", f"{api}/git/blobs", h, {"content": base64.b64encode(data).decode(), "encoding": "base64"})
         tree.append({"path": path, "mode": "100644", "type": "blob", "sha": blob["sha"]})
     new_tree = _http("POST", f"{api}/git/trees", h, {"base_tree": base_tree, "tree": tree})["sha"]
     commit = _http("POST", f"{api}/git/commits", h, {"message": message, "tree": new_tree, "parents": [base_commit]})
     _http("PATCH", f"{api}/git/refs/heads/{branch}", h, {"sha": commit["sha"], "force": False})
-    return [f"https://raw.githubusercontent.com/{repo}/{commit['sha']}/{path}" for _, path in files]
+    return commit["sha"], [f"https://raw.githubusercontent.com/{repo}/{commit['sha']}/{path}" for _, path in files]
 
 
-# ---------------------------------------------------------------- Metricool
+def list_dir(path: str) -> list[dict]:
+    """Dateien in einem Ordner des Branches (leer, wenn es ihn noch nicht gibt)."""
+    api, _, branch, h = _gh()
+    try:
+        res = _http("GET", f"{api}/contents/{urllib.parse.quote(path)}?ref={branch}", h)
+    except UserError as exc:
+        if " 404" in str(exc):
+            return []
+        raise
+    return res if isinstance(res, list) else []
 
-def schedule_instagram(blog_id: int, media: list[str], text: str, when: str) -> dict:
-    """Ein Instagram-Karussell in Metricool planen (genau die info-Struktur aus Carinas Vorgabe)."""
-    token, user = env("METRICOOL_USER_TOKEN"), env("METRICOOL_USER_ID")
-    if not token or not user:
-        raise UserError("Please add your Metricool user token and userId in Settings → Publishing.")
-    info = {
-        "autoPublish": True, "draft": False, "descendants": [], "firstCommentText": "",
-        "hasNotReadNotes": False,
-        "media": media,
-        "mediaAltText": [],
-        "providers": [{"network": "instagram"}],
-        "publicationDate": {"dateTime": when[:19], "timezone": "Europe/Berlin"},
-        "shortener": False, "smartLinkData": {"ids": []},
-        "text": text,
-        "instagramData": {"type": "POST", "collaborators": [], "carouselTags": {}, "showReelOnFeed": True,
-                          "isAiGenerated": False},
-    }
-    q = urllib.parse.urlencode({"blogId": blog_id, "userId": user})
-    res = _http("POST", f"https://app.metricool.com/api/v2/scheduler/posts?{q}", {"X-Mc-Auth": token}, info)
-    data = res.get("data", res) if isinstance(res, dict) else {}
-    return {"id": data.get("id") if isinstance(data, dict) else None,
-            "planner": f"https://app.metricool.com/planner?blogId={blog_id}"}
+
+def read_file(path: str) -> bytes | None:
+    api, _, branch, h = _gh()
+    try:
+        res = _http("GET", f"{api}/contents/{urllib.parse.quote(path)}?ref={branch}", h)
+    except UserError as exc:
+        if " 404" in str(exc):
+            return None
+        raise
+    if isinstance(res, dict) and res.get("content"):
+        return base64.b64decode(res["content"])
+    if isinstance(res, dict) and res.get("download_url"):  # große Dateien (> 1 MB)
+        with urllib.request.urlopen(res["download_url"], timeout=60) as r:
+            return r.read()
+    return None
+
+
+def repo_branch() -> tuple[str, str]:
+    return env("GITHUB_MEDIA_REPO", REPO_DEFAULT), env("GITHUB_MEDIA_BRANCH", BRANCH_DEFAULT)

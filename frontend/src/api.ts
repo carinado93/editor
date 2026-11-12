@@ -227,7 +227,7 @@ export interface LetterPart {
   slides: LetterSlide[];
   auto_split: boolean;
   files: string[];
-  scheduled: { ok: boolean; error?: string; planner?: string; id?: string | number | null } | null;
+  scheduled: { ok: boolean; waiting?: boolean; error?: string | null; planner?: string | null } | null;
 }
 
 export interface Letter {
@@ -335,7 +335,9 @@ export const api = {
   letterSuggest: (lid: string, lang: string, engine: string) => call<Letter>(`/api/letter/${lid}/suggest/${engine}?lang=${lang}`, { method: "POST" }),
   letterRender: (lid: string) => call<Letter>(`/api/letter/${lid}/render`, { method: "POST" }),
   letterZip: (lid: string) => `/api/letter/${lid}/zip`,
-  letterSchedule: (lid: string, lang: string, idx: number) => call<Letter>(`/api/letter/${lid}/schedule/${lang}/${idx}`, { method: "POST" }),
+  letterSend: (lid: string) => call<{ letter: Letter; sentence: string }>(`/api/letter/${lid}/send`, { method: "POST" }),
+  letterPictures: (lid: string) => call<{ letter: Letter; sentence: string }>(`/api/letter/${lid}/pictures`, { method: "POST" }),
+  letterSync: (lid: string) => call<{ letter: Letter; pictures: number; scheduled: number }>(`/api/letter/${lid}/sync`, { method: "POST" }),
   publishSettings: () => call<Record<string, string>>("/api/einstellungen/publish"),
   publishSettingsSave: (values: Record<string, string>) => call<Record<string, string>>("/api/einstellungen/publish", { ...json({ values }), method: "PUT" }),
   carousels: () => call<{ carousels: CarouselSummary[] }>("/api/carousels"),
