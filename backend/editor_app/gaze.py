@@ -120,6 +120,28 @@ def analyze(video: Path, progress: Callable[[float], None] | None = None) -> dic
     return {"version": VERSION, "sample_fps": SAMPLE_FPS, "samples": samples}
 
 
+def photo_face(img) -> list[float] | None:
+    """Gesicht auf einem eigenen Foto finden (für Thumbnails): [x0, y0, x1, y1] von 0 bis 1, sonst None."""
+    try:
+        import mediapipe as mp
+        from mediapipe.tasks.python import BaseOptions, vision
+
+        opts = vision.FaceLandmarkerOptions(base_options=BaseOptions(model_asset_path=str(model_path())),
+                                            running_mode=vision.RunningMode.IMAGE, num_faces=1)
+        small = img.convert("RGB")
+        small.thumbnail((1280, 1280))
+        with vision.FaceLandmarker.create_from_options(opts) as lm:
+            res = lm.detect(mp.Image(image_format=mp.ImageFormat.SRGB, data=np.asarray(small)))
+        if not res.face_landmarks:
+            return None
+        pts = np.array([(p.x, p.y) for p in res.face_landmarks[0]])
+        x0, y0 = pts.min(axis=0)
+        x1, y1 = pts.max(axis=0)
+        return [round(float(v), 4) for v in (max(0, x0), max(0, y0), min(1, x1), min(1, y1))]
+    except Exception:  # noqa: BLE001 – ohne Gesicht geht es auch (Bild wird mittig gesetzt)
+        return None
+
+
 def baseline(samples: list[dict]) -> dict:
     faces = [s for s in samples if s["face"]]
     if not faces:

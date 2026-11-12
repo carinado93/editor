@@ -778,13 +778,68 @@ def reel_scenes_apply(pid: str):
 # ---------- Thumbnails & Cover (M4b) ----------
 
 class CoverBody(BaseModel):
-    kind: str  # youtube | meditation | reel
+    kind: str  # youtube | meditation | center | reel
     text: str = ""
     pill: str = ""
     subtitle: str = ""
     top_pill: str = ""
     top_label: str = ""
     color: str = "auto"
+    photos: list[str] = []  # eigene Fotos statt Standbildern aus dem Video
+    theme: str = "rosa"  # Thumbnail-Farbe: rosa | lila | gruen
+
+
+def _own_dir(pid: str) -> Path:
+    d = projects.path(pid, "export") / "eigene_fotos"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+@app.get("/api/projects/{pid}/cover-photos")
+def list_cover_photos(pid: str):
+    return {"photos": projects.load(pid).get("cover_photos") or []}
+
+
+@app.put("/api/projects/{pid}/cover-photos")
+async def add_cover_photo(pid: str, request: Request):
+    """Eigenes Foto für Thumbnails/Cover hochladen (JPG, PNG, HEIC-Export …). Das Original bleibt unverändert."""
+    import io
+
+    from PIL import Image, ImageOps
+
+    from . import gaze
+
+    data = await request.body()
+    if len(data) > 40 * 1024 * 1024:
+        raise UserError("This image is too big (max. 40 MB).")
+    try:
+        img = ImageOps.exif_transpose(Image.open(io.BytesIO(data))).convert("RGB")
+    except Exception:
+        raise UserError("This file is not an image the app can read (please use JPG or PNG).")
+    img.thumbnail((3840, 3840))
+    name = f"foto_{int(time.time() * 1000)}.jpg"
+    img.save(_own_dir(pid) / name, "JPEG", quality=93)
+    photos = (projects.load(pid).get("cover_photos") or []) + [{"file": name, "face": gaze.photo_face(img)}]
+    projects.update(pid, cover_photos=photos)
+    return {"photos": photos}
+
+
+@app.delete("/api/projects/{pid}/cover-photos/{name}")
+def delete_cover_photo(pid: str, name: str):
+    photos = [f for f in (projects.load(pid).get("cover_photos") or []) if f["file"] != name]
+    f = _own_dir(pid) / name
+    if "/" not in name and "\\" not in name and f.is_file():
+        f.unlink()
+    projects.update(pid, cover_photos=photos)
+    return {"photos": photos}
+
+
+@app.get("/api/projects/{pid}/cover-photos/{name}")
+def get_cover_photo(pid: str, name: str):
+    f = _own_dir(pid) / name
+    if "/" in name or "\\" in name or not f.is_file():
+        raise HTTPException(404)
+    return FileResponse(f, media_type="image/jpeg")
 
 
 def _ensure_thumbs(pid: str) -> list[dict]:
@@ -825,6 +880,7 @@ def cover_defaults(pid: str):
     return {
         "youtube": {"text": covers.default_thumb_text(title or short_hook, buzz.THEMEN), "pill": ""},
         "meditation": {"text": title or short_hook, "subtitle": "", "top_pill": "", "top_label": ""},
+        "center": {"text": covers.default_thumb_text(title or short_hook, buzz.THEMEN)},
         "reel": {"text": reel_text, "color": covers.next_cover_color()},
         "next_color": covers.next_cover_color(),
     }
@@ -836,11 +892,13 @@ def make_covers(pid: str, body: CoverBody):
 
     from . import covers
 
-    if body.kind not in ("youtube", "meditation", "reel"):
+    if body.kind not in ("youtube", "meditation", "center", "reel"):
         raise UserError("Unknown type.")
     if not body.text.strip():
         raise UserError("Please enter a text.")
-    shots = _ensure_thumbs(pid)[:3]
+    own = {f["file"]: f for f in (projects.load(pid).get("cover_photos") or [])}
+    chosen = [own[n] for n in body.photos if n in own]
+    shots = [] if chosen else _ensure_thumbs(pid)[:3]
     gf = projects.path(pid, "blick.json")
     samples = json.loads(gf.read_text(encoding="utf-8")).get("samples", []) if gf.exists() else []
     color = covers.next_cover_color() if body.color == "auto" else body.color
@@ -849,19 +907,34 @@ def make_covers(pid: str, body: CoverBody):
     for old in out_dir.glob(f"{body.kind}_*"):
         old.unlink()
     files = []
-    for n, shot in enumerate(shots, 1):
-        img = Image.open(projects.path(pid, "export") / "thumbnails" / shot["file"]).convert("RGB")
+    sources = [(_own_dir(pid) / c["file"], c.get("face")) for c in chosen]
+    for shot in shots:
         faces = [s for s in samples if s.get("face")]
-        face = min(faces, key=lambda s: abs(s["t"] - shot["t"]))["box"] if faces else None
+        sources.append((projects.path(pid, "export") / "thumbnails" / shot["file"],
+                        min(faces, key=lambda s: abs(s["t"] - shot["t"]))["box"] if faces else None))
+    seg = None
+    if body.kind == "center":  # Carina freistellen (läuft lokal)
+        from . import fx
+        try:
+            seg = fx.Segmenter()
+        except Exception:  # noqa: BLE001 – ohne Freistellung: weiches Oval
+            seg = None
+    for n, (src, face) in enumerate(sources, 1):
+        img = Image.open(src).convert("RGB")
         if body.kind == "youtube":
-            im = covers.youtube_talking(img, face, body.text, body.pill)
+            im = covers.youtube_talking(img, face, body.text, body.pill, body.theme)
+        elif body.kind == "center":
+            im = covers.youtube_center(img, face, body.text, body.theme, seg.mask(img) if seg else None)
         elif body.kind == "meditation":
-            im = covers.youtube_meditation(img, face, body.text, body.subtitle, body.top_pill, body.top_label)
+            im = covers.youtube_meditation(img, face, body.text, body.subtitle, body.top_pill, body.top_label,
+                                          body.theme)
         else:
             im = covers.reel_cover(img, face, body.text, color)
         name = f"{body.kind}_{n}_{int(time.time())}.jpg"
         im.save(out_dir / name, "JPEG", quality=92)  # YouTube erlaubt max. 2 MB
         files.append(name)
+    if seg:
+        seg.close()
     return {"files": files, "color": color if body.kind == "reel" else None}
 
 

@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
-import { api } from "./api";
+import { api, type CoverPhoto } from "./api";
 
-type Kind = "youtube" | "meditation" | "reel";
+type Kind = "youtube" | "center" | "meditation" | "reel";
 
 const KIND_LABEL: Record<Kind, string> = {
   youtube: "YouTube: statement",
+  center: "YouTube: you in the middle",
   meditation: "YouTube: Meditation",
   reel: "Reel cover",
 };
@@ -14,7 +15,7 @@ const COLOR_LABEL: Record<string, string> = { lila: "Purple", hell: "Light", oli
 /** Thumbnails & Reel-Cover im Stil von Carinas bisherigen Designs (3 Varianten aus verschiedenen Standbildern). */
 export function CoverStudio({ id, kinds }: { id: string; kinds: Kind[] }) {
   const [kind, setKind] = useState<Kind>(kinds[0]);
-  const [form, setForm] = useState({ text: "", pill: "", subtitle: "", top_pill: "", top_label: "", color: "auto" });
+  const [form, setForm] = useState({ text: "", pill: "", subtitle: "", top_pill: "", top_label: "", color: "auto", theme: "rosa" });
   const [defaults, setDefaults] = useState<Record<string, Record<string, string>> | null>(null);
   const [nextColor, setNextColor] = useState("hell");
   const [files, setFiles] = useState<string[]>([]);
@@ -22,6 +23,31 @@ export function CoverStudio({ id, kinds }: { id: string; kinds: Kind[] }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+  const [photos, setPhotos] = useState<CoverPhoto[]>([]);
+  const [picked, setPicked] = useState<string[]>([]);
+  const [uploading, setUploading] = useState(false);
+
+  useEffect(() => {
+    api.coverPhotos(id).then((r) => setPhotos(r.photos)).catch(() => {});
+  }, [id]);
+
+  const upload = async (list: FileList | null) => {
+    if (!list?.length) return;
+    setUploading(true);
+    setErr(null);
+    try {
+      let last: CoverPhoto[] = photos;
+      for (const f of Array.from(list)) last = (await api.addCoverPhoto(id, f)).photos;
+      setPhotos(last);
+      // neue Fotos gleich auswählen
+      const fresh = last.slice(-list.length).map((p) => p.file);
+      setPicked((p) => [...p, ...fresh]);
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setUploading(false);
+    }
+  };
 
   useEffect(() => {
     api
@@ -45,7 +71,7 @@ export function CoverStudio({ id, kinds }: { id: string; kinds: Kind[] }) {
     setErr(null);
     setInfo(null);
     try {
-      const r = await api.covers(id, { kind, ...form });
+      const r = await api.covers(id, { kind, ...form, photos: picked });
       setFiles(r.files);
       setUsedColor(r.color);
     } catch (e) {
@@ -80,6 +106,9 @@ export function CoverStudio({ id, kinds }: { id: string; kinds: Kind[] }) {
           {kind === "meditation" ? "Title" : "Text"}
           <input value={form.text} onChange={(e) => setForm({ ...form, text: e.target.value })} />
         </label>
+        {kind === "center" && (
+          <span className="muted">Up to 3 slanted bars: left, middle (big, in front of you), right. Put the big word in *asterisks*, e.g. "I can't *anymore*".</span>
+        )}
         {kind === "youtube" && (
           <>
             <span className="muted">A word in *asterisks* becomes pink and bigger, e.g. "Rest didn't fix my *burnout*".</span>
@@ -104,6 +133,18 @@ export function CoverStudio({ id, kinds }: { id: string; kinds: Kind[] }) {
             </label>
           </>
         )}
+        {kind !== "reel" && (
+          <label>
+            Colour
+            <span className="theme-pick">
+              {([["rosa", "Pink", "#c9506a"], ["lila", "Lilac", "#6444a5"], ["gruen", "Green", "#8b9a6b"]] as const).map(([k, l, c]) => (
+                <button key={k} type="button" className={`btn ghost ${form.theme === k ? "on" : ""}`}
+                  style={{ borderColor: c, color: form.theme === k ? "#fff" : c, background: form.theme === k ? c : undefined }}
+                  onClick={() => setForm({ ...form, theme: k })}>{l}</button>
+              ))}
+            </span>
+          </label>
+        )}
         {kind === "reel" && (
           <label>
             Colour
@@ -116,8 +157,34 @@ export function CoverStudio({ id, kinds }: { id: string; kinds: Kind[] }) {
           </label>
         )}
       </div>
-      <button className="btn" disabled={busy || !form.text.trim()} onClick={generate}>
-        {busy ? "Designing …" : "Create 3 variants"}
+      <div className="small" style={{ margin: "12px 0" }}>
+        <strong>Your own photos</strong> (optional) – tick the ones to use. Without a tick, 3 stills from the video are used.
+        <div className="cover-own">
+          {photos.map((p) => (
+            <label key={p.file} className={`cover-own-item ${picked.includes(p.file) ? "on" : ""}`}>
+              <img src={api.coverPhotoUrl(id, p.file)} alt="Your photo" />
+              <span>
+                <input type="checkbox" checked={picked.includes(p.file)}
+                  onChange={(e) => setPicked(e.target.checked ? [...picked, p.file] : picked.filter((x) => x !== p.file))} />
+                {p.face ? " use" : " use (no face found – centred)"}
+              </span>
+              <button className="link danger" onClick={async (e) => {
+                e.preventDefault();
+                if (!confirm("Remove this photo from the app? (The file on your PC stays.)")) return;
+                setPhotos((await api.deleteCoverPhoto(id, p.file)).photos);
+                setPicked(picked.filter((x) => x !== p.file));
+              }}>remove</button>
+            </label>
+          ))}
+          <label className="btn ghost cover-own-add">
+            {uploading ? "Uploading …" : "+ Add photos"}
+            <input type="file" accept="image/*" multiple hidden disabled={uploading}
+              onChange={(e) => { void upload(e.target.files); e.target.value = ""; }} />
+          </label>
+        </div>
+      </div>
+      <button className="btn" disabled={busy || uploading || !form.text.trim()} onClick={generate}>
+        {busy ? "Designing …" : picked.length ? `Create ${picked.length} variant${picked.length > 1 ? "s" : ""} from your photos` : "Create 3 variants"}
       </button>
       {!!files.length && (
         <>

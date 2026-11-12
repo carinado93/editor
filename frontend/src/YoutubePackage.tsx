@@ -102,7 +102,7 @@ export function YoutubePackage({ id }: { id: string }) {
           </div>
           <h3 style={{ marginTop: 24 }}>Design a thumbnail</h3>
           <p className="small muted">In the style of your previous thumbnails, from the best frames above.</p>
-          <CoverStudio id={id} kinds={["youtube", "meditation", "reel"]} />
+          <CoverStudio id={id} kinds={["youtube", "center", "meditation", "reel"]} />
 
           <p className="small muted" style={{ marginTop: 16 }}>
             For CapCut: use the rendered MP4 and the subtitle file (.srt) from the export folder.

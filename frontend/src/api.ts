@@ -202,6 +202,11 @@ export interface SystemInfo {
   disk_free_gb: number;
 }
 
+export interface CoverPhoto {
+  file: string;
+  face: number[] | null;
+}
+
 async function call<T>(url: string, init?: RequestInit): Promise<T> {
   let res: Response;
   try {
@@ -312,7 +317,13 @@ export const api = {
     call<{ youtube: { text: string; pill: string }; meditation: Record<string, string>; reel: { text: string; color: string }; next_color: string }>(
       `/api/projects/${id}/cover-vorschlag`,
     ),
-  covers: (id: string, body: Record<string, string>) => call<{ files: string[]; color: string | null }>(`/api/projects/${id}/covers`, json(body)),
+  coverPhotos: (id: string) => call<{ photos: CoverPhoto[] }>(`/api/projects/${id}/cover-photos`),
+  addCoverPhoto: (id: string, file: File) =>
+    call<{ photos: CoverPhoto[] }>(`/api/projects/${id}/cover-photos`, { method: "PUT", body: file }),
+  deleteCoverPhoto: (id: string, name: string) =>
+    call<{ photos: CoverPhoto[] }>(`/api/projects/${id}/cover-photos/${encodeURIComponent(name)}`, { method: "DELETE" }),
+  coverPhotoUrl: (id: string, name: string) => `/api/projects/${id}/cover-photos/${encodeURIComponent(name)}`,
+  covers: (id: string, body: Record<string, string | string[]>) => call<{ files: string[]; color: string | null }>(`/api/projects/${id}/covers`, json(body)),
   coverUrl: (id: string, file: string) => `/api/projects/${id}/cover/${encodeURIComponent(file)}`,
   coverColorUsed: (used: string) => call<{ next: string }>(`/api/cover-farbe/verwendet`, json({ used })),
   setOverlays: (id: string, overlays: Overlay[]) =>
