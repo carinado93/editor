@@ -80,6 +80,57 @@ export function Settings() {
           Cost: about $0.05–0.10 per reel text, roughly $3–8 per month. You can see your usage on console.anthropic.com.
         </p>
       </section>
+      <PublishSettings />
     </div>
+  );
+}
+
+/** Zugangsdaten zum Veröffentlichen der Brief-Karussells (GitHub für die Bild-Links, Metricool zum Planen). */
+function PublishSettings() {
+  const [st, setSt] = useState<Record<string, string>>({});
+  const [vals, setVals] = useState<Record<string, string>>({});
+  const [msg, setMsg] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  useEffect(() => {
+    api.publishSettings().then(setSt).catch(() => {});
+  }, []);
+  const field = (k: string, label: string, secret: boolean, placeholder: string) => (
+    <label className="small" key={k}>
+      {label} {st[k] ? <span className="status ok">✓ {secret ? st[k] : "set"}</span> : null}
+      <input type={secret ? "password" : "text"} value={vals[k] ?? (secret ? "" : st[k] ?? "")} placeholder={placeholder}
+        autoComplete="off" onChange={(e) => setVals({ ...vals, [k]: e.target.value })} />
+    </label>
+  );
+  return (
+    <section className="card settings-card">
+      <h3>Publishing (letter carousels → Metricool)</h3>
+      <p className="small muted">
+        Metricool needs public links to your slides. The app puts the JPGs into your GitHub repo <code>carinado93/app</code> (folder
+        <code> media/letters/</code>, like before) and then schedules the posts. Everything stays only on your PC in the <code>.env</code> file.
+      </p>
+      <ol className="small steps">
+        <li>GitHub → Settings → Developer settings → <strong>Fine-grained tokens</strong> → Generate: only repository <code>carinado93/app</code>,
+          permission <strong>Contents: Read and write</strong>. Copy the token.</li>
+        <li>Metricool → <strong>Account settings → API</strong>: copy the <strong>user token</strong> and your <strong>userId</strong>.</li>
+      </ol>
+      <div className="publish-fields">
+        {field("GITHUB_TOKEN", "GitHub token", true, "github_pat_…")}
+        {field("METRICOOL_USER_TOKEN", "Metricool user token", true, "")}
+        {field("METRICOOL_USER_ID", "Metricool userId", false, "e.g. 1234567")}
+        {field("GITHUB_MEDIA_BRANCH", "Branch in carinado93/app (optional)", false, "main")}
+      </div>
+      <button className="btn" onClick={async () => {
+        setErr(null);
+        try {
+          setSt(await api.publishSettingsSave(vals));
+          setVals({});
+          setMsg("Saved ✓");
+        } catch (e) {
+          setErr((e as Error).message);
+        }
+      }}>Save</button>
+      {msg && <div className="banner small">{msg}</div>}
+      {err && <div className="banner error small">⚠ {err}</div>}
+    </section>
   );
 }

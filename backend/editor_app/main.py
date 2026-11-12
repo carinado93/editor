@@ -961,6 +961,243 @@ def cover_color_used(body: ColorBody):
     return {"next": covers.advance_cover_color(body.used)}
 
 
+# ---------- Letter Carousel Studio (Briefe → 3 Karussells, Metricool) ----------
+
+class LetterNewBody(BaseModel):
+    title: str = ""
+    number: str = "01"
+    langs: list[str] = ["en"]
+
+
+class LetterMetaBody(BaseModel):
+    title: str | None = None
+    number: str | None = None
+
+
+class LetterPartBody(BaseModel):
+    text: str | None = None
+    style: str | None = None
+    acrylic: int | None = None
+    time: str | None = None
+    caption: str | None = None
+    slides: list[dict] | None = None
+
+
+def _letter_part(b: dict, lang: str, idx: int) -> dict:
+    if lang not in b.get("parts", {}) or not 0 <= idx < 3:
+        raise UserError("Unknown part.")
+    return b["parts"][lang][idx]
+
+
+@app.get("/api/letters")
+def letters_list():
+    from . import letters
+
+    return {"letters": letters.list_all()}
+
+
+@app.post("/api/letters")
+def letters_new(body: LetterNewBody):
+    from . import letters
+
+    return letters.new_letter(body.title, body.number, body.langs)
+
+
+@app.get("/api/letter/{lid}")
+def letter_get(lid: str):
+    from . import letters
+
+    return letters.load(lid)
+
+
+@app.put("/api/letter/{lid}")
+def letter_meta(lid: str, body: LetterMetaBody):
+    from . import letters
+
+    b = letters.load(lid)
+    if body.title is not None:
+        b["title"] = body.title.strip()
+    if body.number is not None:
+        b["number"] = body.number.strip()
+    return letters.save(b)
+
+
+@app.delete("/api/letter/{lid}")
+def letter_delete(lid: str):
+    from . import letters
+
+    letters.delete(lid)
+    return {"letters": letters.list_all()}
+
+
+@app.put("/api/letter/{lid}/{lang}/{idx}")
+def letter_part(lid: str, lang: str, idx: int, body: LetterPartBody):
+    from . import letters
+
+    b = letters.load(lid)
+    part = _letter_part(b, lang, idx)
+    if body.text is not None and body.text != part.get("text"):
+        letters.set_text(b, lang, idx, body.text)
+    if body.style in ("storyteller", "painted"):
+        part["style"] = body.style
+    if body.acrylic is not None:
+        part["acrylic"] = max(0, min(3, int(body.acrylic)))
+    if body.time:
+        part["time"] = body.time[:19]
+    if body.caption is not None:
+        part["caption"] = body.caption
+    if body.slides is not None:  # Folien direkt bearbeitet (Zeilen verschieben, Hintergrund, Ausschnitt, Motiv)
+        keys = ("lines", "bg", "image", "motif", "zoom", "fx", "fy", "wants_art")
+        part["slides"] = [{k: sl.get(k) for k in keys if k in sl} for sl in body.slides if sl.get("lines")]
+        part["text"] = "\n\n".join("\n".join(sl["lines"]) for sl in part["slides"])
+    part["files"] = []  # neu rendern nötig
+    return letters.save(b)
+
+
+@app.get("/api/letter/{lid}/{lang}/{idx}/preview/{k}")
+def letter_preview(lid: str, lang: str, idx: int, k: int, v: str = ""):
+    from fastapi.responses import Response
+
+    from . import letters
+
+    b = letters.load(lid)
+    part = _letter_part(b, lang, idx)
+    if k == len(part["slides"]):  # letzte Folie: Coming soon / Demnächst
+        import io as _io
+        buf = _io.BytesIO()
+        letters.soon_image(lang).resize((540, 675)).save(buf, "JPEG", quality=88)
+        return Response(buf.getvalue(), media_type="image/jpeg")
+    if not 0 <= k < len(part["slides"]):
+        raise HTTPException(404)
+    return Response(letters.preview_png(b, lang, idx, k), media_type="image/jpeg",
+                    headers={"Cache-Control": "no-store"})
+
+
+@app.put("/api/letter/{lid}/{lang}/{idx}/image/{k}")
+async def letter_image(lid: str, lang: str, idx: int, k: int, request: Request):
+    import io as _io
+
+    from PIL import Image, ImageOps
+
+    from . import letters
+
+    b = letters.load(lid)
+    part = _letter_part(b, lang, idx)
+    if not 0 <= k < len(part["slides"]):
+        raise UserError("Unknown slide.")
+    data = await request.body()
+    try:
+        img = ImageOps.exif_transpose(Image.open(_io.BytesIO(data))).convert("RGB")
+    except Exception:
+        raise UserError("This file is not an image the app can read (please use JPG or PNG).")
+    img.thumbnail((3000, 3000))
+    name = f"{lang}{idx + 1}_{k + 1:02d}_{int(time.time())}.png"
+    img.save(letters._dir(lid) / "bilder" / name, "PNG")
+    part["slides"][k]["image"] = name
+    part["files"] = []
+    return letters.save(b)
+
+
+@app.delete("/api/letter/{lid}/{lang}/{idx}/image/{k}")
+def letter_image_delete(lid: str, lang: str, idx: int, k: int):
+    from . import letters
+
+    b = letters.load(lid)
+    part = _letter_part(b, lang, idx)
+    if 0 <= k < len(part["slides"]):
+        part["slides"][k]["image"] = None
+        part["files"] = []
+    return letters.save(b)
+
+
+@app.get("/api/letter/{lid}/{lang}/{idx}/prompt/{k}")
+def letter_prompt(lid: str, lang: str, idx: int, k: int):
+    from . import letters
+
+    b = letters.load(lid)
+    part = _letter_part(b, lang, idx)
+    if not 0 <= k < len(part["slides"]):
+        raise UserError("Unknown slide.")
+    return {"prompt": letters.image_prompt(part, part["slides"][k])}
+
+
+@app.post("/api/letter/{lid}/suggest/{engine}")
+def letter_suggest(lid: str, engine: str, lang: str = "en"):
+    from . import letters
+
+    if engine not in ("claude", "ollama"):
+        raise UserError("Unknown AI.")
+    b = letters.load(lid)
+    _letter_part(b, lang, 0)
+    return letters.save(letters.suggest(b, lang, engine))
+
+
+@app.post("/api/letter/{lid}/render")
+def letter_render(lid: str):
+    from . import letters
+
+    b = letters.load(lid)
+    for lang in b["langs"]:
+        for idx in range(3):
+            if b["parts"][lang][idx]["slides"]:
+                letters.render_part(b, lang, idx)
+    return letters.save(b)
+
+
+@app.get("/api/letter/{lid}/{lang}/{idx}/file/{name}")
+def letter_file(lid: str, lang: str, idx: int, name: str):
+    from . import letters
+
+    f = letters.out_file(lid, lang, idx, name)
+    return FileResponse(f, media_type="image/png" if name.endswith(".png") else "image/jpeg", filename=name)
+
+
+@app.get("/api/letter/{lid}/zip")
+def letter_zip(lid: str):
+    from fastapi.responses import Response
+
+    from . import letters
+
+    b = letters.load(lid)
+    safe = re.sub(r"[^\w -]", "", f"{b.get('number', '')} - {b.get('title', '')}").strip() or "letter"
+    return Response(letters.zip_bytes(b), media_type="application/zip",
+                    headers={"Content-Disposition": f'attachment; filename="{safe}.zip"'})
+
+
+@app.post("/api/letter/{lid}/schedule/{lang}/{idx}")
+def letter_schedule(lid: str, lang: str, idx: int):
+    """Ein Teil planen (nur nach "Approve & schedule" in der Oberfläche; bei Fehler einzeln wiederholbar)."""
+    from . import letters
+
+    b = letters.load(lid)
+    part = _letter_part(b, lang, idx)
+    try:
+        letters.schedule_part(b, lang, idx)
+    except UserError as exc:
+        part["scheduled"] = {"ok": False, "error": str(exc), "at": time.time()}
+        letters.save(b)
+        raise
+    return letters.save(b)
+
+
+class PublishSettingsBody(BaseModel):
+    values: dict
+
+
+@app.get("/api/einstellungen/publish")
+def publish_settings():
+    from . import publish
+
+    return publish.settings()
+
+
+@app.put("/api/einstellungen/publish")
+def publish_settings_save(body: PublishSettingsBody):
+    from . import publish
+
+    return publish.save_settings(body.values)
+
+
 # ---------- Karussell-Generator ----------
 
 class CarouselDraftBody(BaseModel):

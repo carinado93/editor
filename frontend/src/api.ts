@@ -207,6 +207,44 @@ export interface SystemInfo {
   disk_free_gb: number;
 }
 
+export interface LetterSlide {
+  lines: string[];
+  bg: "cream" | "sage";
+  image: string | null;
+  motif: string;
+  zoom: number;
+  fx: number;
+  fy: number;
+  wants_art?: boolean;
+}
+
+export interface LetterPart {
+  text: string;
+  style: "storyteller" | "painted";
+  acrylic: number;
+  time: string;
+  caption: string;
+  slides: LetterSlide[];
+  auto_split: boolean;
+  files: string[];
+  scheduled: { ok: boolean; error?: string; planner?: string; id?: string | number | null } | null;
+}
+
+export interface Letter {
+  id: string;
+  title: string;
+  number: string;
+  langs: string[];
+  parts: Record<string, LetterPart[]>;
+}
+
+export interface LetterSummary {
+  id: string;
+  title: string;
+  number: string;
+  langs: string[];
+}
+
 export interface CarouselSlide {
   title: string;
   lines: string[];
@@ -281,6 +319,25 @@ export const api = {
   updateNow: () => call<{ ok: boolean; version: string }>("/api/update", { method: "POST" }),
   version: () => call<{ version: string }>("/api/version"),
   projects: () => call<Project[]>("/api/projects"),
+  letters: () => call<{ letters: LetterSummary[] }>("/api/letters"),
+  letterNew: (title: string, number: string, langs: string[]) => call<Letter>("/api/letters", json({ title, number, langs })),
+  letter: (lid: string) => call<Letter>(`/api/letter/${lid}`),
+  letterMeta: (lid: string, patch: { title?: string; number?: string }) => call<Letter>(`/api/letter/${lid}`, { ...json(patch), method: "PUT" }),
+  letterDelete: (lid: string) => call<{ letters: LetterSummary[] }>(`/api/letter/${lid}`, { method: "DELETE" }),
+  letterPart: (lid: string, lang: string, idx: number, patch: Partial<LetterPart>) =>
+    call<Letter>(`/api/letter/${lid}/${lang}/${idx}`, { ...json(patch), method: "PUT" }),
+  letterPreviewUrl: (lid: string, lang: string, idx: number, k: number, v: string) => `/api/letter/${lid}/${lang}/${idx}/preview/${k}?v=${encodeURIComponent(v)}`,
+  letterImage: (lid: string, lang: string, idx: number, k: number, file: File) =>
+    call<Letter>(`/api/letter/${lid}/${lang}/${idx}/image/${k}`, { method: "PUT", body: file }),
+  letterImageDelete: (lid: string, lang: string, idx: number, k: number) =>
+    call<Letter>(`/api/letter/${lid}/${lang}/${idx}/image/${k}`, { method: "DELETE" }),
+  letterPrompt: (lid: string, lang: string, idx: number, k: number) => call<{ prompt: string }>(`/api/letter/${lid}/${lang}/${idx}/prompt/${k}`),
+  letterSuggest: (lid: string, lang: string, engine: string) => call<Letter>(`/api/letter/${lid}/suggest/${engine}?lang=${lang}`, { method: "POST" }),
+  letterRender: (lid: string) => call<Letter>(`/api/letter/${lid}/render`, { method: "POST" }),
+  letterZip: (lid: string) => `/api/letter/${lid}/zip`,
+  letterSchedule: (lid: string, lang: string, idx: number) => call<Letter>(`/api/letter/${lid}/schedule/${lang}/${idx}`, { method: "POST" }),
+  publishSettings: () => call<Record<string, string>>("/api/einstellungen/publish"),
+  publishSettingsSave: (values: Record<string, string>) => call<Record<string, string>>("/api/einstellungen/publish", { ...json({ values }), method: "PUT" }),
   carousels: () => call<{ carousels: CarouselSummary[] }>("/api/carousels"),
   carouselDraft: (engine: string, body: { topic: string; points: number; language: string; project: string }) =>
     call<Carousel>(`/api/carousels/${engine}`, json(body)),
