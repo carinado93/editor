@@ -42,6 +42,13 @@ function findAt<T>(list: T[], t: number, start: (x: T) => number): number {
   return found;
 }
 
+/** Zu einem Schritt scrollen (ohne die #/p/…-Adresse der App zu ändern). */
+function jump(e: React.MouseEvent<HTMLAnchorElement>) {
+  e.preventDefault();
+  const id = e.currentTarget.getAttribute("href")?.slice(1);
+  if (id) document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
 export function ProjectView({ id }: { id: string }) {
   const [project, setProject] = useState<Project | null>(null);
   const [transcript, setTranscript] = useState<Transcript | null>(null);
@@ -357,6 +364,16 @@ export function ProjectView({ id }: { id: string }) {
           </span>
         )}
       </div>
+      {editMode && cuts && (
+        <nav className="step-nav" aria-label="Steps">
+          <a href="#step-cut" onClick={jump}>{cutMode ? "1 · Cut" : "1 · Texts"}</a>
+          <a href="#step-effects" onClick={jump}>2 · Effects</a>
+          <a href="#step-render" onClick={jump}>3 · Render</a>
+          {cutMode && <a href="#step-reels" onClick={jump}>4 · Reels</a>}
+          {cutMode && <a href="#step-texts" onClick={jump}>5 · Title &amp; texts</a>}
+          {cutMode && <a href="#step-thumb" onClick={jump}>6 · Thumbnail</a>}
+        </nav>
+      )}
 
       {error && <div className="banner error">{error}</div>}
 
@@ -455,30 +472,15 @@ export function ProjectView({ id }: { id: string }) {
           )}
 
           {transcript && (
-            <dl className="facts small">
-              <div>
-                <dt>Language</dt>
-                <dd>{transcript.language === "de" ? "German" : transcript.language === "en" ? "English" : transcript.language}</dd>
-              </div>
-              <div>
-                <dt>Words</dt>
-                <dd>{words.length}</dd>
-              </div>
-              <div>
-                <dt>Model</dt>
-                <dd>
-                  {transcript.model} ({transcript.device})
-                </dd>
-              </div>
-              <div>
-                <dt>Unsure words</dt>
-                <dd>{words.filter((w) => w.p < 0.5).length}</dd>
-              </div>
-            </dl>
+            <p className="small muted facts-line">
+              {transcript.language === "de" ? "German" : transcript.language === "en" ? "English" : transcript.language}
+              {" · "}{words.length} words{" · "}{words.filter((w) => w.p < 0.5).length} unsure
+              {" · "}speech recognition: {transcript.model} ({transcript.device})
+            </p>
           )}
 
           {editMode && (
-            <div className="render-box">
+            <div className="render-box" id="step-render">
               <h3>{reelMode ? "Render reel" : "Final render"}</h3>
               <p className="small muted">
                 {reelMode
@@ -583,7 +585,7 @@ export function ProjectView({ id }: { id: string }) {
           )}
         </div>
 
-        <div className="card transcript-card">
+        <div className="card transcript-card" id="step-cut">
           <div className="transcript-toolbar">
             <h3>Transcript</h3>
             <label className="small">

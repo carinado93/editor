@@ -40,7 +40,9 @@ FORBIDDEN = [r"\bheil(en|ung|t)\b", r"nie wieder", r"besieg", r"\bbeat (your )?b
              r"emotionen im körper gespeichert", r"stored in (the|your) body", r"das eine geheimnis", r"the one secret"]
 
 SCHEMA = """{
-  "titles": ["Titel 1", "Titel 2", "Titel 3"],
+  "seo_keyword": "der Suchbegriff, den Leute bei YouTube eintippen (2–4 Wörter)",
+  "titles": ["Titel 1", "Titel 2", "Titel 3", "Titel 4", "Titel 5"],
+  "thumb_hooks": ["kurzer Thumbnail-Text mit *Schlüsselwort*", "…", "…", "…", "…"],
   "chapters": [{"time": "0:00", "title": "Einleitung"}, {"time": "1:23", "title": "…"}],
   "description": "Beschreibung (mehrere Absätze, ohne Kapitel – die fügt die App an)",
   "tags": ["tag1", "tag2", "…"],
@@ -132,7 +134,15 @@ Die Zeitangaben in eckigen Klammern sind die Zeiten im fertigen Video.
 {GUARDRAILS}
 
 Aufgabe (alles auf {lang}):
-1. Genau 3 Titelvorschläge (max. 70 Zeichen, konkret, neugierig machend, keine Clickbait-Lügen).
+0. SEO zuerst: Finde den EINEN Suchbegriff (seo_keyword, 2–4 Wörter), den Carinas Zielgruppe zu diesem Thema
+   wirklich bei YouTube eintippt (z. B. "burnout recovery", "burnout symptoms", "Burnout Anzeichen").
+1. Genau 5 Titelvorschläge. Jeder Titel: enthält den Suchbegriff (oder eine sehr nahe Variante) möglichst in den
+   ersten 40 Zeichen, max. 60 Zeichen (sonst schneidet YouTube ab), konkret, neugierig machend, keine
+   Clickbait-Lügen. 5 verschiedene Winkel: persönlich ("I …"), Zahl/Liste, Mythos/Widerspruch, Frage, Nutzen.
+   Prüfe jeden Titel vor der Antwort: Suchbegriff drin? ≤ 60 Zeichen? Würde man darauf klicken? Sonst verbessern.
+1b. Genau 5 Thumbnail-Hooks (thumb_hooks): max. 5 Wörter, GROSS lesbar, ergänzen den Titel statt ihn zu
+   wiederholen, emotional/konkret, genau ein *Schlüsselwort* in Sternchen (wird farbig), z. B.
+   "REST DIDN'T FIX MY *BURNOUT*". Ebenfalls vor der Antwort prüfen (kurz genug, Thema sofort klar).
 2. Etwa {n_chapters} Kapitel. Das erste MUSS bei 0:00 beginnen, mindestens 10 Sekunden Abstand, Zeiten aus dem
    Transkript, kurze Kapitelnamen.
 3. Beschreibung: 2–4 kurze Absätze in Carinas Stimme, erster Satz = Hook, am Ende ihr Angebot / Call-to-Action.
@@ -170,9 +180,11 @@ def parse(text_or_obj, duration: float, language: str = "en") -> dict:
     else:
         data = text_or_obj
     warnings = []
-    titles = [str(t).strip() for t in data.get("titles", []) if str(t).strip()][:3]
-    if len(titles) < 3:
-        warnings.append(f"Only {len(titles)} titles instead of 3.")
+    titles = [str(t).strip() for t in data.get("titles", []) if str(t).strip()][:5]
+    if len(titles) < 5:
+        warnings.append(f"Only {len(titles)} titles instead of 5.")
+    keyword = str(data.get("seo_keyword", "")).strip()
+    thumb_hooks = [str(t).strip() for t in data.get("thumb_hooks", []) if str(t).strip()][:5]
     chapters = []
     for c in data.get("chapters", []):
         t = _seconds(c.get("time", "")) if isinstance(c, dict) else None
@@ -197,7 +209,38 @@ def parse(text_or_obj, duration: float, language: str = "en") -> dict:
         if m:
             warnings.append(f"Careful, possibly a healing promise / risky claim: \"{m.group(0)}\" – please rephrase.")
     return {"titles": titles, "chapters": chapters, "description": description, "tags": tags,
-            "hashtags": hashtags, "warnings": warnings}
+            "hashtags": hashtags, "warnings": warnings, "seo_keyword": keyword, "thumb_hooks": thumb_hooks,
+            "title_seo": [seo_check(t, keyword) for t in titles],
+            "hook_seo": [hook_check(h) for h in thumb_hooks]}
+
+
+def _norm(s: str) -> str:
+    return re.sub(r"[^\w ]", " ", s.lower())
+
+
+def seo_check(title: str, keyword: str) -> list[str]:
+    """Kurze SEO-Hinweise zu einem Titel. Leere Liste = alles gut."""
+    notes = []
+    if len(title) > 60:
+        notes.append(f"{len(title)} characters – YouTube cuts after ~60")
+    if keyword:
+        kw = [w for w in _norm(keyword).split() if len(w) > 2]
+        tl = _norm(title)
+        if kw and not all(w in tl for w in kw):
+            notes.append(f'search term "{keyword}" missing')
+        elif kw and tl.find(kw[0]) > 40:
+            notes.append("search term comes late – move it to the front")
+    return notes
+
+
+def hook_check(hook: str) -> list[str]:
+    notes = []
+    n = len(hook.replace("*", "").split())
+    if n > 5:
+        notes.append(f"{n} words – thumbnails read best with ≤ 5")
+    if "*" not in hook:
+        notes.append("no *keyword* marked")
+    return notes
 
 
 def full_description(meta: dict) -> str:

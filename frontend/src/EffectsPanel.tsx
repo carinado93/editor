@@ -87,7 +87,7 @@ export function EffectsPanel({ id, cuts, onCuts, time, onSeek, keep }: {
     }
   };
   return (
-    <section className="card fx-card">
+    <section className="card fx-card" id="step-effects">
       <h3>Effects</h3>
       <EffectsEditor
         keep={keep}
@@ -181,7 +181,8 @@ export function EffectsEditor({ items: source, allowedInit, time, onSeek, previe
 
   useEffect(() => {
     api.effectTypes().then((r) => {
-      r.types = r.types.filter((t) => !(exclude ?? []).includes(t.key));
+      r.types = r.types.filter((t) => !(exclude ?? []).includes(t.key))
+        .sort((x, y) => x.label.localeCompare(y.label, "en", { sensitivity: "base" }));  // A–Z in allen Listen
       setTypes(r.types);
       setAllowed((a) => (a.length ? a : r.types.filter((t) => t.group !== "C").map((t) => t.key)));
     }).catch(() => {});
@@ -271,56 +272,68 @@ export function EffectsEditor({ items: source, allowedInit, time, onSeek, previe
   return (
     <div className={compact ? "fx-editor compact" : "fx-editor"}>
       <p className="small muted">
-        Big effects in the style of the reel you liked, in your purple, sage and gold. First tick which effects may be
-        used, then let Claude suggest moments – or add one yourself at the current video position.
+        Big effects in your purple, sage and gold. Let Claude suggest moments, or add one yourself at the current
+        video position. Every effect below can be changed: type, text, times and size.
       </p>
 
-      <div className="fx-palette">
-        {groups.map((g) => (
-          <div key={g} className="fx-group">
-            <strong className="small">{GROUP_LABEL[g]}</strong>
-            <div className="fx-chips">
-              {types.filter((t) => t.group === g).map((t) => (
-                <label key={t.key} className={`fx-chip ${allowed.includes(t.key) ? "on" : ""}`}>
-                  <input
-                    type="checkbox"
-                    checked={allowed.includes(t.key)}
-                    onChange={(e) => setAllowed(e.target.checked ? [...allowed, t.key] : allowed.filter((x) => x !== t.key))}
-                  />
-                  {t.label}
-                </label>
-              ))}
-            </div>
+      <div className="fx-tool">
+        <div className="fx-tool-title">✨ Let Claude suggest</div>
+        <textarea rows={2} value={wish} placeholder={'Wish (optional), e.g. "a checklist when I list the limits of a coach, BURNOUT behind me at the start"'}
+          onChange={(e) => setWish(e.target.value)} />
+        <div className="row-buttons">
+          <button className="btn" disabled={!!busy || !allowed.length} onClick={() => suggest("claude")}>
+            {busy === "claude" ? "Claude is planning … (about 30–90 s)" : "Suggest with Claude"}
+          </button>
+          <button className="btn ghost" disabled={!!busy || !allowed.length} onClick={() => suggest("ollama")}>
+            {busy === "ollama" ? "Local AI is planning … (several minutes)" : "Free with Ollama"}
+          </button>
+        </div>
+        <details className="fx-palette-box small">
+          <summary>Which effects Claude may use ({allowed.length} of {types.length} ticked)</summary>
+          <div className="fx-palette">
+            {groups.map((g) => (
+              <div key={g} className="fx-group">
+                <strong className="small">{GROUP_LABEL[g]}</strong>
+                <div className="fx-chips">
+                  {types.filter((t) => t.group === g).map((t) => (
+                    <label key={t.key} className={`fx-chip ${allowed.includes(t.key) ? "on" : ""}`}>
+                      <input
+                        type="checkbox"
+                        checked={allowed.includes(t.key)}
+                        onChange={(e) => setAllowed(e.target.checked ? [...allowed, t.key] : allowed.filter((x) => x !== t.key))}
+                      />
+                      {t.label}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
-        ))}
+        </details>
       </div>
 
-      <label className="small idea-box">
-        Wish (optional), e.g. "a checklist when I list the limits of a coach, BURNOUT behind me at the start"
-        <textarea rows={2} value={wish} onChange={(e) => setWish(e.target.value)} />
-      </label>
-      <div className="row-buttons">
-        <button className="btn" disabled={!!busy || !allowed.length} onClick={() => suggest("claude")}>
-          {busy === "claude" ? "Claude is planning … (about 30–90 s)" : "Suggest with Claude"}
-        </button>
-        <button className="btn ghost" disabled={!!busy || !allowed.length} onClick={() => suggest("ollama")}>
-          {busy === "ollama" ? "Local AI is planning … (several minutes)" : "Free with Ollama"}
-        </button>
-        <span className="fx-add">
-          <textarea className="fx-add-text" rows={1} value={addText} placeholder="Your text (optional) – a list: one point per line"
-            onChange={(e) => setAddText(e.target.value)} />
+      <div className="fx-tool">
+        <div className="fx-tool-title">＋ Add an effect yourself <span className="muted small">at {formatTime(time)} (pause the video where it should start)</span></div>
+        <div className="fx-add-row">
           <select value={addType} onChange={(e) => setAddType(e.target.value)}>
             {types.map((t) => (
               <option key={t.key} value={t.key}>{t.label}</option>
             ))}
           </select>
-          <button className="btn ghost" onClick={add}>+ Add at {formatTime(time)}</button>
-        </span>
+          <textarea className="fx-add-text" rows={1} value={addText}
+            placeholder={HINT[addType] ? `Your text (optional) – ${HINT[addType]}` : "Your text (optional)"}
+            onChange={(e) => setAddText(e.target.value)} />
+          <button className="btn" onClick={add}>+ Add at {formatTime(time)}</button>
+        </div>
         {endAt != null && (
           <button className="btn ghost" onClick={addOutro} title="'Thank you for watching' + Like & Subscribe buttons in the last 6 seconds">
             + Like &amp; Subscribe at the end
           </button>
         )}
+      </div>
+
+      <div className="fx-save-row">
+        <strong>{items.length ? `${items.length} effect${items.length > 1 ? "s" : ""}` : "No effects yet"}</strong>
         <button className={`btn ${dirty ? "" : "ghost"}`} disabled={!!busy || !dirty} onClick={() => save()}
           title={dirty ? "" : "Everything is saved"}>
           {dirty ? "Save effects" : "Saved ✓"}

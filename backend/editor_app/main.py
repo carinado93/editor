@@ -563,6 +563,8 @@ class MetaSaveBody(BaseModel):
     description: str
     tags: list[str]
     hashtags: list[str]
+    seo_keyword: str = ""
+    thumb_hooks: list[str] = []
 
 
 def _meta_file(pid: str):
@@ -882,6 +884,7 @@ def cover_defaults(pid: str):
         "youtube": {"text": covers.default_thumb_text(title or short_hook, buzz.THEMEN), "pill": ""},
         "meditation": {"text": title or short_hook, "subtitle": "", "top_pill": "", "top_label": ""},
         "center": {"text": covers.default_thumb_text(title or short_hook, buzz.THEMEN)},
+        "thumb_hooks": (meta_data or {}).get("thumb_hooks", []),
         "reel": {"text": reel_text, "color": covers.next_cover_color()},
         "next_color": covers.next_cover_color(),
     }

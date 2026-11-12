@@ -48,6 +48,7 @@ export function YoutubePackage({ id }: { id: string }) {
       const r = await api.saveYoutubeTexts(id, m);
       setMeta(r.meta);
       setFullDesc(r.full_description);
+      window.dispatchEvent(new Event("meta-updated"));  // Thumbnail-Hooks im Thumbnail-Bereich auffrischen
       setMsg("Saved ✓");
     });
 
@@ -56,9 +57,9 @@ export function YoutubePackage({ id }: { id: string }) {
       <h2>YouTube package</h2>
 
 
-      <ClipsPanel id={id} />
+      <div id="step-reels"><ClipsPanel id={id} /></div>
       <div className="package-grid">
-        <div className="card">
+        <div className="card" id="step-texts">
           <h3>Title, description, chapters, tags</h3>
           <p className="small muted">
             The chapter times match the <strong>edited</strong> video. Please finish the cuts first.
@@ -87,7 +88,7 @@ export function YoutubePackage({ id }: { id: string }) {
           )}
         </div>
 
-        <div className="card">
+        <div className="card" id="step-thumb">
           <h3>Thumbnail suggestions</h3>
           <p className="small muted">Frames where your eyes are open, you look into the camera and smile. Click = open full size.</p>
           <button className="btn" disabled={!!busy} onClick={() => act("thumbs", async () => setThumbs((await api.thumbnails(id)).thumbnails))}>
@@ -139,17 +140,52 @@ function MetaEditor({
           ))}
         </div>
       )}
+      {m.seo_keyword && (
+        <p className="small">
+          🔎 Search term people type on YouTube: <strong>{m.seo_keyword}</strong>
+        </p>
+      )}
       <h4>Titles (pick one)</h4>
-      {m.titles.map((t, i) => (
-        <div key={i} className="copy-row">
-          <input
-            value={t}
-            onChange={(e) => setM({ ...m, titles: m.titles.map((x, j) => (j === i ? e.target.value : x)) })}
-          />
-          <span className={`small ${t.length > 70 ? "error-text" : "muted"}`}>{t.length}</span>
-          <button className="link" onClick={() => onCopy(t)}>copy</button>
-        </div>
-      ))}
+      {m.titles.map((t, i) => {
+        const notes = (t === meta.titles[i] ? meta.title_seo?.[i] : undefined) ?? [];
+        return (
+          <div key={i}>
+            <div className="copy-row">
+              <input
+                value={t}
+                onChange={(e) => setM({ ...m, titles: m.titles.map((x, j) => (j === i ? e.target.value : x)) })}
+              />
+              <span className={`small ${t.length > 60 ? "error-text" : "muted"}`} title="YouTube shows about 60 characters">{t.length}</span>
+              <button className="link" onClick={() => onCopy(t)}>copy</button>
+            </div>
+            {meta.title_seo && t === meta.titles[i] && (
+              <div className={`small seo-note ${notes.length ? "warn" : "ok"}`}>
+                {notes.length ? `SEO: ${notes.join(" · ")}` : "✓ SEO ok – search term early, short enough"}
+              </div>
+            )}
+          </div>
+        );
+      })}
+      {!!m.thumb_hooks?.length && (
+        <>
+          <h4>Thumbnail hooks (text on the thumbnail)</h4>
+          <p className="small muted">They add to the title instead of repeating it. Click "use" and the text goes into the thumbnail designer.</p>
+          {m.thumb_hooks.map((h, i) => (
+            <div key={i}>
+              <div className="copy-row">
+                <input value={h} onChange={(e) => setM({ ...m, thumb_hooks: m.thumb_hooks!.map((x, j) => (j === i ? e.target.value : x)) })} />
+                <button className="link" onClick={() => {
+                  window.dispatchEvent(new CustomEvent("use-thumb-hook", { detail: h }));
+                  document.getElementById("step-thumb")?.scrollIntoView({ behavior: "smooth" });
+                }}>use</button>
+              </div>
+              {!!meta.hook_seo?.[i]?.length && h === meta.thumb_hooks?.[i] && (
+                <div className="small seo-note warn">{meta.hook_seo[i].join(" · ")}</div>
+              )}
+            </div>
+          ))}
+        </>
+      )}
       <h4>Description</h4>
       <textarea rows={6} value={m.description} onChange={(e) => setM({ ...m, description: e.target.value })} />
       <h4>Chapters</h4>

@@ -176,7 +176,7 @@ _STR = {"type": "string"}
 _STRS = {"type": "array", "items": {"type": "string"}}
 
 REEL_SCHEMA = _obj({"scenes": _STRS, "caption": _STR, "hashtags": _STRS, "cover_text": _STR, "shorts_title": _STR})
-YOUTUBE_SCHEMA = _obj({"titles": _STRS, "chapters": {"type": "array", "items": _obj({"time": _STR, "title": _STR})},
+YOUTUBE_SCHEMA = _obj({"seo_keyword": _STR, "titles": _STRS, "thumb_hooks": _STRS, "chapters": {"type": "array", "items": _obj({"time": _STR, "title": _STR})},
                        "description": _STR, "tags": _STRS, "hashtags": _STRS})
 
 

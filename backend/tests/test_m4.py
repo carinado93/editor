@@ -26,7 +26,7 @@ def test_meta_parse_rejects_garbage():
 
 def test_prompt_contains_guardrails_and_times():
     p = meta.build_prompt([(0.0, "Hallo."), (75.0, "Stress ist ein Signal.")], "de", 120)
-    assert "keine Heilversprechen" in p and "[1:15] Stress ist ein Signal." in p and "Genau 3 Titel" in p
+    assert "keine Heilversprechen" in p and "[1:15] Stress ist ein Signal." in p and "Genau 5 Titel" in p
     assert "GENAU 5 Hashtags" in p and "#burnoutprävention" in p
 
 

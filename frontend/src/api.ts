@@ -60,6 +60,10 @@ export interface YoutubeMeta {
   hashtags: string[];
   warnings?: string[];
   source?: string;
+  seo_keyword?: string;
+  thumb_hooks?: string[];
+  title_seo?: string[][];
+  hook_seo?: string[][];
 }
 
 export interface Overlay {
@@ -309,7 +313,8 @@ export const api = {
     call<{ meta: YoutubeMeta; full_description: string }>(`/api/projects/${id}/youtube-texte/import`, json({ text })),
   saveYoutubeTexts: (id: string, m: YoutubeMeta) =>
     call<{ meta: YoutubeMeta; full_description: string }>(`/api/projects/${id}/youtube-texte`, {
-      ...json({ titles: m.titles, chapters: m.chapters, description: m.description, tags: m.tags, hashtags: m.hashtags }),
+      ...json({ titles: m.titles, chapters: m.chapters, description: m.description, tags: m.tags, hashtags: m.hashtags,
+        seo_keyword: m.seo_keyword ?? "", thumb_hooks: m.thumb_hooks ?? [] }),
       method: "PUT",
     }),
   thumbnails: (id: string) => call<{ thumbnails: { file: string; t: number }[] }>(`/api/projects/${id}/thumbnails`, { method: "POST" }),

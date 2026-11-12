@@ -4,9 +4,9 @@ import { api, type CoverPhoto } from "./api";
 type Kind = "youtube" | "center" | "meditation" | "reel";
 
 const KIND_LABEL: Record<Kind, string> = {
-  youtube: "YouTube: statement",
-  center: "YouTube: you in the middle",
-  meditation: "YouTube: Meditation",
+  youtube: "Statement",
+  center: "You in the middle",
+  meditation: "Meditation",
   reel: "Reel cover",
 };
 
@@ -24,6 +24,24 @@ export function CoverStudio({ id, kinds }: { id: string; kinds: Kind[] }) {
   const [err, setErr] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [photos, setPhotos] = useState<CoverPhoto[]>([]);
+  const [hooks, setHooks] = useState<string[]>([]);
+
+  // Thumbnail-Hooks von Claude (aus "Title, description …") – Klick übernimmt den Text
+  useEffect(() => {
+    const load = () => api.coverDefaults(id).then((d) => setHooks((d as unknown as { thumb_hooks?: string[] }).thumb_hooks ?? [])).catch(() => {});
+    void load();
+    const use = (e: Event) => {
+      const t = (e as CustomEvent<string>).detail;
+      setKind((k) => (k === "reel" || k === "meditation" ? "youtube" : k));
+      setTimeout(() => setForm((f) => ({ ...f, text: t })), 0);
+    };
+    window.addEventListener("meta-updated", load);
+    window.addEventListener("use-thumb-hook", use);
+    return () => {
+      window.removeEventListener("meta-updated", load);
+      window.removeEventListener("use-thumb-hook", use);
+    };
+  }, [id]);
   const [picked, setPicked] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
 
@@ -106,6 +124,16 @@ export function CoverStudio({ id, kinds }: { id: string; kinds: Kind[] }) {
           {kind === "meditation" ? "Title" : "Text"}
           <input value={form.text} onChange={(e) => setForm({ ...form, text: e.target.value })} />
         </label>
+        {kind !== "reel" && kind !== "meditation" && !!hooks.length && (
+          <span className="hook-chips">
+            <span className="muted">Ideas from Claude:</span>
+            {hooks.map((h) => (
+              <button key={h} type="button" className={`chip ${form.text === h ? "on" : ""}`} onClick={() => setForm({ ...form, text: h })}>
+                {h.replace(/\*/g, "")}
+              </button>
+            ))}
+          </span>
+        )}
         {kind === "center" && (
           <span className="muted">Up to 3 slanted bars: left, middle (big, in front of you), right. Put the big word in *asterisks*, e.g. "I can't *anymore*".</span>
         )}
