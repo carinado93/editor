@@ -30,12 +30,17 @@ export function ClipsPanel({ id }: { id: string }) {
     return () => clearInterval(t);
   }, [clips, id]);
 
-  // Fertig gerenderte Reels gleich herunterladen (landen im Download-Ordner)
+  // Fertig gerenderte Reels gleich herunterladen (landen im Download-Ordner) – abschaltbar
+  const [autoDl, setAutoDl] = useState(() => {
+    try { return localStorage.getItem("reel-auto-download") !== "0"; } catch { return true; }
+  });
   const lastStatus = useRef<Record<string, string>>({});
   useEffect(() => {
     for (const c of clips) {
       const before = lastStatus.current[c.id];
-      if ((before === "warteschlange" || before === "arbeitet") && c.status === "fertig" && c.file) {
+      if ((before === "warteschlange" || before === "arbeitet") && c.status === "fertig" && c.file && !autoDl) {
+        setMsg(`"${c.title}" is ready ✓ – press "Download this reel" below it.`);
+      } else if ((before === "warteschlange" || before === "arbeitet") && c.status === "fertig" && c.file) {
         const a = document.createElement("a");
         a.href = api.exportUrl(id, c.file);
         a.download = c.file;
@@ -46,7 +51,7 @@ export function ClipsPanel({ id }: { id: string }) {
       }
       lastStatus.current[c.id] = c.status;
     }
-  }, [clips, id]);
+  }, [clips, id, autoDl]);
 
   const suggest = async (eng: "claude" | "ollama", withFeedback: boolean) => {
     setEngine(eng);
@@ -95,6 +100,13 @@ export function ClipsPanel({ id }: { id: string }) {
       )}
       <Status busy={busy} err={err} msg={msg} />
       {err?.includes("Settings") && <a className="small" href="#/einstellungen">→ go to Settings</a>}
+      <label className="small" style={{ display: "block", margin: "8px 0" }}>
+        <input type="checkbox" checked={autoDl} onChange={(e) => {
+          setAutoDl(e.target.checked);
+          try { localStorage.setItem("reel-auto-download", e.target.checked ? "1" : "0"); } catch { /* egal */ }
+        }} />{" "}
+        Download each reel automatically when it is ready (off = only when you press its download button)
+      </label>
       <div className="clip-list">
         {clips.map((c) => (
           <ClipCard key={c.id} id={id} clip={c} onChange={setClips} onMsg={setMsg} onErr={setErr} />
@@ -261,8 +273,8 @@ function ClipCard({ id, clip, onChange, onMsg, onErr }: {
         )}
         {clip.file && (
           <div className="small">
-            <a href={api.exportUrl(id, clip.file)} download>
-              ⬇ Download reel
+            <a className="btn" href={api.exportUrl(id, clip.file)} download={clip.file} style={{ display: "inline-block", margin: "8px 8px 4px 0" }}>
+              ⬇ Download this reel
             </a>
             {clip.size ? <span className="muted"> · {formatSize(clip.size)}</span> : null}
             {clip.srt && (
