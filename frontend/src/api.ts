@@ -134,6 +134,7 @@ export interface Clip {
   file?: string;
   size?: number;
   srt?: string;
+  subs?: boolean;
 }
 
 export interface RenderOptions {
@@ -346,6 +347,11 @@ export const api = {
     call<{ clips: Clip[]; feedback: string[] }>(`/api/projects/${id}/clips/vorschlagen`, json({ engine, feedback })),
   editClip: (id: string, cid: string, patch: Partial<Clip>) =>
     call<{ clips: Clip[] }>(`/api/projects/${id}/clips/${cid}`, { ...json(patch), method: "PUT" }),
+  clipSentences: (id: string) => call<{ sentences: { id: number; text: string; dur: number; t: number }[] }>(`/api/projects/${id}/clip-sentences`),
+  setClipParts: (id: string, cid: string, parts: number[][]) =>
+    call<{ clips: Clip[] }>(`/api/projects/${id}/clips/${cid}/parts`, { ...json({ parts }), method: "PUT" }),
+  refineClip: (id: string, cid: string, engine: string, wish: string) =>
+    call<{ clips: Clip[] }>(`/api/projects/${id}/clips/${cid}/refine/${engine}`, json({ wish })),
   deleteClip: (id: string, cid: string) => call<{ clips: Clip[] }>(`/api/projects/${id}/clips/${cid}`, { method: "DELETE" }),
   renderClip: (id: string, cid: string) => call<{ clips: Clip[] }>(`/api/projects/${id}/clips/${cid}/render`, { method: "POST" }),
   cancelRender: (id: string) => call<Project>(`/api/projects/${id}/render/cancel`, { method: "POST" }),

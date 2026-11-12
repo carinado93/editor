@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { api, formatSize, formatTime, type Clip } from "./api";
 import { Status } from "./ReelPackage";
 import { EffectsEditor } from "./EffectsPanel";
+import { ReelParts, ReelWish } from "./ReelEdit";
 
 function copy(text: string, done: (m: string) => void) {
   navigator.clipboard.writeText(text).then(
@@ -120,6 +121,9 @@ function ClipCard({ id, clip, onChange, onMsg, onErr }: {
   id: string; clip: Clip; onChange: (c: Clip[]) => void; onMsg: (m: string) => void; onErr: (m: string) => void;
 }) {
   const [hook, setHook] = useState(clip.hook_text);
+  const [texts, setTexts] = useState((clip.texts ?? []).join("\n"));
+  useEffect(() => setHook(clip.hook_text), [clip.hook_text]);
+  useEffect(() => setTexts((clip.texts ?? []).join("\n")), [JSON.stringify(clip.texts)]);
   const [playing, setPlaying] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const video = useRef<HTMLVideoElement>(null);
@@ -214,10 +218,22 @@ function ClipCard({ id, clip, onChange, onMsg, onErr }: {
             onBlur={() => hook !== clip.hook_text && run(() => api.editClip(id, clip.id, { hook_text: hook }))}
           />
         </label>
+        <label className="small field">
+          Extra texts on screen (one per line, shown one after another)
+          <textarea rows={2} value={texts} onChange={(e) => setTexts(e.target.value)}
+            onBlur={() => texts !== (clip.texts ?? []).join("\n") &&
+              run(() => api.editClip(id, clip.id, { texts: texts.split("\n").map((x) => x.trim()).filter(Boolean) }))} />
+        </label>
+        <label className="small check">
+          <input type="checkbox" checked={clip.subs ?? true} disabled={rendering}
+            onChange={(e) => run(() => api.editClip(id, clip.id, { subs: e.target.checked }))} />{" "}
+          Subtitles in the reel (word by word, burned in)
+        </label>
         <details className="small">
-          <summary>What is said</summary>
-          <p>{clip.text}</p>
+          <summary>What is said – cut sentences or add more ({formatTime(clip.duration)})</summary>
+          <ReelParts id={id} clip={clip} run={run} busy={rendering} />
         </details>
+        <ReelWish id={id} clip={clip} run={run} />
         <details className="small">
           <summary>Caption, 5 hashtags, Shorts title</summary>
           <p className="pre">{clip.caption}</p>
@@ -269,7 +285,7 @@ function ClipCard({ id, clip, onChange, onMsg, onErr }: {
         {clip.status === "fehler" && <div className="small error-text">⚠ {clip.error}</div>}
         {clip.file && (
           <video className="watch-video" src={api.exportWatchUrl(id, clip.file)} controls preload="metadata" playsInline
-            style={{ maxWidth: 240 }} />
+            style={{ maxWidth: 220, maxHeight: 390 }} />
         )}
         {clip.file && (
           <div className="small">

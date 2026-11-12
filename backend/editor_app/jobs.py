@@ -115,7 +115,8 @@ def _render_clip(pid: str, cid: str) -> None:
     res = render.render_clip(projects.path(pid, p["original_file"]), p["info"], c["segments"], out,
                              projects.path(pid, "cache"), cuts.flat_words(t), v["evaluation"]["flags"],
                              c.get("hook_text", ""), face, str(config.ROOT / "assets" / "fonts"), rep,
-                             c.get("texts", []), [o for o in c.get("fx", []) if o.get("on", True)])
+                             c.get("texts", []), [o for o in c.get("fx", []) if o.get("on", True)],
+                             subs=c.get("subs", True))
     clips.update_clip(pid, cid, status="fertig", progress=1.0, message="Done", file=res["file"],
                       size=res["size"], srt=res["srt"])
 

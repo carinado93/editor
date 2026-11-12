@@ -1038,6 +1038,59 @@ class ClipEditBody(BaseModel):
     caption: str | None = None
     shorts_title: str | None = None
     hashtags: list[str] | None = None
+    texts: list[str] | None = None
+    subs: bool | None = None  # Untertitel ins Reel einbrennen
+
+
+class PartsBody(BaseModel):
+    parts: list[list[int]]
+
+
+class RefineBody(BaseModel):
+    wish: str
+
+
+@app.get("/api/projects/{pid}/clip-sentences")
+def clip_sentences(pid: str):
+    """Alle Sätze des Videos (für "mehr dazunehmen / kürzen" bei einem Reel)."""
+    from . import clips
+
+    v = cutstore.view(pid)
+    _, sent, _, _ = clips.context(cutstore._transcript(pid), v["cutlist"], v["evaluation"]["flags"])
+    return {"sentences": [{"id": s["id"], "text": s["text"], "dur": round(s["dur"], 1), "t": round(s["t"], 1)}
+                          for s in sent]}
+
+
+@app.put("/api/projects/{pid}/clips/{cid}/parts")
+def set_clip_parts(pid: str, cid: str, body: PartsBody):
+    from . import clips
+
+    v = cutstore.view(pid)
+    words, sent, duration, tempo = clips.context(cutstore._transcript(pid), v["cutlist"], v["evaluation"]["flags"])
+    with clips._lock:
+        data = clips.load(pid)
+        for k, c in enumerate(data["clips"]):
+            if c["id"] == cid:
+                data["clips"][k] = clips.apply_parts(c, body.parts, words, v["evaluation"]["flags"], sent,
+                                                     duration, tempo)
+        return clips.save(pid, data)
+
+
+@app.post("/api/projects/{pid}/clips/{cid}/refine/{engine}")
+def refine_clip(pid: str, cid: str, engine: str, body: RefineBody):
+    from . import clips
+
+    if engine not in ("claude", "ollama"):
+        raise UserError("Unknown AI.")
+    if not body.wish.strip():
+        raise UserError("Please write what Claude should change.")
+    v = cutstore.view(pid)
+    c = clips.get_clip(pid, cid)
+    new = clips.refine_one(engine, cutstore._transcript(pid), v["cutlist"], v["evaluation"]["flags"], c, body.wish)
+    with clips._lock:
+        data = clips.load(pid)
+        data["clips"] = [new if x["id"] == cid else x for x in data["clips"]]
+        return clips.save(pid, data)
 
 
 @app.get("/api/projects/{pid}/clips")

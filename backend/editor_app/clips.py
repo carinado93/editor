@@ -206,6 +206,51 @@ def suggest(engine: str, transcript: dict, cutlist: dict, flags: list, feedback:
                     cutlist["settings"].get("tempo", "normal"))
 
 
+def context(transcript: dict, cutlist: dict, flags: list) -> tuple[list[dict], list[dict], float, str]:
+    """Wörter, Sätze (mit echten Längen), Videolänge und Tempo – für das Bearbeiten eines einzelnen Reels."""
+    words = cuts.flat_words(transcript)
+    sent = sentences(words, flags)
+    tempo = cutlist["settings"].get("tempo", "normal")
+    exact_durations(words, flags, sent, transcript.get("duration", 0), tempo)
+    return words, sent, transcript.get("duration", 0), tempo
+
+
+def apply_parts(clip: dict, parts: list[list[int]], words: list[dict], flags: list, sent: list[dict],
+                duration: float, tempo: str) -> dict:
+    """Andere Sätze für ein Reel: Zeitbereiche, Länge und Text neu berechnen."""
+    known = {s["id"] for s in sent}
+    parts = [sorted({int(x) for x in p if int(x) in known}) for p in parts]
+    parts = [p for p in parts if p]
+    if not parts:
+        raise UserError("A reel needs at least one sentence.")
+    segs: list = []
+    for ids in parts:
+        segs.extend(part_segments(words, flags, sent, ids, duration, tempo))
+    segs = no_overlap(segs)
+    dur = round(sum(e - s for s, e in segs), 2)
+    warnings = [] if MIN_SEC - 1 <= dur <= MAX_SEC + 1 else [f"Length {dur:.1f} s (target 15–20 s)."]
+    return {**clip, "parts": parts, "segments": [[round(s, 3), round(e, 3)] for s, e in segs], "duration": dur,
+            "text": " … ".join(" ".join(s["text"] for s in sent if s["id"] in ids) for ids in parts),
+            "warnings": warnings}
+
+
+def refine_one(engine: str, transcript: dict, cutlist: dict, flags: list, clip: dict, wish: str) -> dict:
+    """Ein einzelnes Reel nach Carinas Wunsch überarbeiten (Hook, Texte, Stücke, Caption). Effekte bleiben."""
+    words, sent, duration, tempo = context(transcript, cutlist, flags)
+    lang = transcript.get("language", "en")
+    prompt = build_prompt(sent, lang, "Überarbeite NUR dieses EINE Reel (genau 1 Reel in der Antwort) nach "
+                          f"Carinas Wunsch: {wish.strip()}", [clip])
+    if engine == "claude":
+        from . import claude
+        raw = claude.ask_json(prompt, CLIP_SCHEMA, effort="medium")
+    else:
+        from . import llm
+        raw = llm.ask_json(prompt, "Du antwortest ausschließlich mit gültigem JSON.", timeout=900)
+    new = validate(raw, words, flags, sent, duration, lang, tempo)[0]
+    keep = {k: clip[k] for k in ("id", "fx", "subs") if k in clip}
+    return {**new, **keep, "status": "vorschlag", "file": None}
+
+
 def parts_text(parts: list[list[int]], sent: list[dict]) -> str:
     return json.dumps(parts)
 

@@ -397,7 +397,7 @@ def _render_chunked(src, info, frames, fps, fps_str, out_w, out_h, opts, gaze_da
 def render_clip(src: Path, info: dict, segments: list[list[float]], out: Path, work: Path, words: list[dict],
                 flags: list, hook_text: str, face_box: list[float] | None, fonts_dir: str | None,
                 progress: Callable[[float, str], None] | None = None, texts: list[str] | None = None,
-                fx: list[dict] | None = None) -> dict:
+                fx: list[dict] | None = None, subs: bool = True) -> dict:
     """Reel aus Stücken eines langen Videos (Reihenfolge frei). 1080×1920; Querformat ohne Zoom mittig mit
     schwarzen Balken (Hook-Text im oberen Balken), Untertitel mit Karaoke, Ton auf -14 LUFS, < 30 MB."""
     from . import subtitles
@@ -445,7 +445,7 @@ def render_clip(src: Path, info: dict, segments: list[list[float]], out: Path, w
     from .clips import overlay_plan
     hooks = overlay_plan(hook_text, texts or [], total)
     ass_path = work / "clip.ass"
-    ass_path.write_text(subtitles.ass(W, H, groups, [], fb, True, hooks, sub_y_override=sub_y,
+    ass_path.write_text(subtitles.ass(W, H, groups if subs else None, [], fb, True, hooks, sub_y_override=sub_y,
                                       hook_y_override=hook_y), encoding="utf-8")
     ass_f = f",ass={_filter_path(ass_path)}" + (f":fontsdir={_filter_path(Path(fonts_dir))}" if fonts_dir else "")
     n = len(frames)
