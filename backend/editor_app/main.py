@@ -181,6 +181,7 @@ class RenderOptionsBody(BaseModel):
     denoise: bool | None = None
     subtitles: str | None = None
     karaoke: bool | None = None
+    declick: bool | None = None
 
 
 class BuzzBody(BaseModel):
