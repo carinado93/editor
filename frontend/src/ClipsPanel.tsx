@@ -248,7 +248,10 @@ function ClipCard({ id, clip, onChange, onMsg, onErr }: {
         </div>
         {rendering && (
           <div className="small">
-            <progress value={clip.progress ?? 0} max={1} /> {clip.message}
+            <progress value={clip.progress ?? 0} max={1} /> {clip.message}{" "}
+            <button className="link danger" onClick={() => confirm("Cancel rendering this reel?") && run(() => api.cancelClip(id, clip.id))}>
+              ✕ Cancel
+            </button>
           </div>
         )}
         {clip.status === "fehler" && <div className="small error-text">⚠ {clip.error}</div>}

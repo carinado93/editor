@@ -68,13 +68,30 @@ def enqueue_render(pid: str, quality: str) -> None:
         raise UserError("The video is already being rendered.")
     if quality not in render.QUALITIES:
         raise UserError("Unknown quality.")
+    job = f"{time.time():.6f}"
+    media.CANCEL.discard(f"{pid}:rendern")
     projects.update(pid, render={"status": "warteschlange", "progress": 0.0, "message": "Waiting …",
-                                 "error": None, "quality": quality})
-    _queue.put((pid, "rendern", {"quality": quality}))
+                                 "error": None, "quality": quality, "job": job})
+    _queue.put((pid, "rendern", {"quality": quality, "job": job}))
 
 
 def enqueue_clip(pid: str, cid: str) -> None:
-    _queue.put((pid, "clip", {"cid": cid}))
+    job = f"{time.time():.6f}"
+    media.CANCEL.discard(f"{pid}:{cid}")
+    clips.update_clip(pid, cid, job=job)
+    _queue.put((pid, "clip", {"cid": cid, "job": job}))
+
+
+def _outdated(pid: str, kind: str, opts: dict) -> bool:
+    """Wurde dieser Auftrag abgebrochen und inzwischen neu gestartet? Dann den alten nicht mehr ausführen."""
+    try:
+        if kind == "rendern":
+            return (projects.load(pid).get("render") or {}).get("job") != opts.get("job")
+        if kind == "clip":
+            return clips.get_clip(pid, opts["cid"]).get("job") != opts.get("job")
+    except Exception:
+        return False
+    return False
 
 
 def _render_clip(pid: str, cid: str) -> None:
@@ -84,6 +101,7 @@ def _render_clip(pid: str, cid: str) -> None:
     c = clips.get_clip(pid, cid)
 
     def rep(f: float, msg: str):
+        media.check_cancel()
         clips.update_clip(pid, cid, status="arbeitet", progress=round(f, 3), message=msg)
 
     rep(0.0, "Starting …")
@@ -93,6 +111,7 @@ def _render_clip(pid: str, cid: str) -> None:
     face = gaze.face_box(json.loads(gf.read_text(encoding="utf-8"))) if gf.exists() else None
     name = render.safe_name(c.get("title") or p["name"])
     out = projects.path(pid, "export") / f"reel_{name}_{time.strftime('%H%M%S')}.mp4"
+    _CURRENT_OUT[pid + ":" + cid] = out
     res = render.render_clip(projects.path(pid, p["original_file"]), p["info"], c["segments"], out,
                              projects.path(pid, "cache"), cuts.flat_words(t), v["evaluation"]["flags"],
                              c.get("hook_text", ""), face, str(config.ROOT / "assets" / "fonts"), rep,
@@ -105,6 +124,7 @@ def _render(pid: str, quality: str) -> None:
     p = projects.load(pid)
 
     def rep(f: float, msg: str):
+        media.check_cancel()
         projects.update(pid, render={**(projects.load(pid).get("render") or {}), "status": "arbeitet",
                                      "progress": round(f, 4), "message": msg})
 
@@ -114,6 +134,7 @@ def _render(pid: str, quality: str) -> None:
     name = render.safe_name(p["name"])
     suffix = "reel" if p["mode"] == "reel" else "schnitt"
     out = projects.path(pid, "export") / f"{name}_{suffix}_{time.strftime('%Y%m%d-%H%M%S')}.mp4"
+    _CURRENT_OUT[pid + ":rendern"] = out
     tf = projects.path(pid, "transkript.json")
     gf = projects.path(pid, "blick.json")
     from . import config, cuts
@@ -332,13 +353,52 @@ def running() -> list[dict]:
     return out
 
 
+_CURRENT_OUT: dict[str, Path] = {}  # halbfertige Datei des laufenden Auftrags (wird beim Abbrechen gelöscht)
+
+
+def job_key(pid: str, kind: str, opts: dict | None = None) -> str:
+    return f"{pid}:{opts['cid']}" if kind == "clip" and opts else f"{pid}:{kind}"
+
+
+def cancel(pid: str, cid: str | None = None) -> None:
+    """Final render (oder Reel) abbrechen – egal ob er wartet oder schon läuft."""
+    from . import clips
+    media.CANCEL.add(f"{pid}:{cid}" if cid else f"{pid}:rendern")
+    # wartet er noch? Dann gleich als abgebrochen zeigen (der Arbeiter überspringt ihn später)
+    if cid:
+        c = clips.get_clip(pid, cid)
+        if c.get("status") == "warteschlange":
+            clips.update_clip(pid, cid, status="vorschlag", progress=0.0, message="Cancelled", error=None)
+    else:
+        r = projects.load(pid).get("render") or {}
+        if r.get("status") == "warteschlange":
+            projects.update(pid, render={**r, "status": "abgebrochen", "message": "Cancelled", "error": None})
+
+
+def _cleanup(key: str) -> None:
+    out = _CURRENT_OUT.pop(key, None)
+    if out is None:
+        return
+    for f in out.parent.glob(out.stem + "*"):  # halbfertiges Video + Zwischendateien (.tmp, .fx, .srt …)
+        try:
+            f.unlink()
+        except OSError:
+            pass
+
+
 def _worker(q: "_JobQueue | None" = None) -> None:
     q = q or _queue
     lane = "main" if q is _queue else "background"
     while True:
         pid, kind, opts = q.get()
         RUNNING[lane] = {"pid": pid, "kind": kind, "started": time.time()}
+        key = job_key(pid, kind, opts)
+        media.set_job(key)
         try:
+            if kind in ("rendern", "clip") and _outdated(pid, kind, opts):
+                continue  # finally räumt auf
+            if key in media.CANCEL:
+                raise media.Cancelled()
             if kind == "rendern":
                 _render(pid, opts["quality"])
             elif kind == "clip":
@@ -352,6 +412,18 @@ def _worker(q: "_JobQueue | None" = None) -> None:
                 _relisten(pid)
             else:
                 _process(pid)
+        except media.Cancelled:
+            _cleanup(key)
+            try:
+                if kind == "clip":
+                    from . import clips
+                    clips.update_clip(pid, opts["cid"], status="vorschlag", progress=0.0, message="Cancelled",
+                                      error=None)
+                elif kind == "rendern":
+                    r = projects.load(pid).get("render") or {}
+                    projects.update(pid, render={**r, "status": "abgebrochen", "message": "Cancelled", "error": None})
+            except Exception:
+                pass
         except Exception as exc:  # noqa: BLE001 – alles abfangen und verständlich anzeigen
             traceback.print_exc()
             try:
@@ -367,6 +439,9 @@ def _worker(q: "_JobQueue | None" = None) -> None:
             except Exception:
                 pass
         finally:
+            media.set_job(None)
+            media.CANCEL.discard(key)
+            _CURRENT_OUT.pop(key, None)
             RUNNING.pop(lane, None)
             q.task_done()
 

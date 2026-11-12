@@ -91,6 +91,31 @@ def probe(path: Path) -> dict:
 _TIME = re.compile(r"out_time_us=(\d+)")
 
 
+# ---------------------------------------------------------------- Abbrechen
+import threading as _threading
+
+_job = _threading.local()       # welcher Auftrag läuft in diesem Arbeits-Thread
+CANCEL: set[str] = set()        # Aufträge, die abgebrochen werden sollen
+
+
+class Cancelled(Exception):
+    """Carina hat auf "Cancel" gedrückt."""
+
+
+def set_job(key: str | None) -> None:
+    _job.key = key
+
+
+def cancelled() -> bool:
+    key = getattr(_job, "key", None)
+    return key is not None and key in CANCEL
+
+
+def check_cancel() -> None:
+    if cancelled():
+        raise Cancelled()
+
+
 def _run_with_progress(args: list[str], duration: float, progress: Progress | None) -> None:
     """Startet ffmpeg und meldet den Fortschritt."""
     import collections
@@ -111,10 +136,17 @@ def _run_with_progress(args: list[str], duration: float, progress: Progress | No
 
     t = threading.Thread(target=drain, daemon=True)
     t.start()
-    for line in proc.stdout:
-        m = _TIME.match(line.strip())
-        if m and progress and duration > 0:
-            progress(min(1.0, int(m.group(1)) / 1e6 / duration))
+    try:
+        for line in proc.stdout:
+            if cancelled():
+                raise Cancelled()
+            m = _TIME.match(line.strip())
+            if m and progress and duration > 0:
+                progress(min(1.0, int(m.group(1)) / 1e6 / duration))
+    except BaseException:
+        proc.kill()  # abgebrochen oder Fehler: ffmpeg sofort beenden, nicht weiterlaufen lassen
+        proc.wait()
+        raise
     t.join(timeout=10)
     err = "".join(tail)
     if proc.wait() != 0:

@@ -486,6 +486,20 @@ def start_render(pid: str, body: RenderBody):
     return projects.load(pid)
 
 
+@app.post("/api/projects/{pid}/render/cancel")
+def cancel_render(pid: str):
+    jobs.cancel(pid)
+    return projects.load(pid)
+
+
+@app.post("/api/projects/{pid}/clips/{cid}/cancel")
+def cancel_clip(pid: str, cid: str):
+    from . import clips
+
+    jobs.cancel(pid, cid)
+    return clips.load(pid)
+
+
 @app.get("/api/projects/{pid}/export/{name}")
 def get_export(pid: str, name: str, inline: int = 0):
     f = projects.path(pid, "export") / name

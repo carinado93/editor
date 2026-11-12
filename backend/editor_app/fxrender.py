@@ -186,6 +186,10 @@ def render_window(video: Path, it: dict, w: int, h: int, fps_str: str, face_box,
     size = w * h * 3
     try:
         for k in range(n):
+            if media.cancelled():
+                dec.kill()
+                enc.kill()
+                raise media.Cancelled()
             raw = dec.stdout.read(size)
             if len(raw) < size:
                 break
@@ -196,7 +200,10 @@ def render_window(video: Path, it: dict, w: int, h: int, fps_str: str, face_box,
             enc.stdin.write(np.asarray(img, dtype=np.uint8).tobytes())
             on_frame()
     finally:
-        enc.stdin.close()
+        try:
+            enc.stdin.close()
+        except OSError:
+            pass
         dec.stdout.close()
         dec.wait()
         enc.wait()

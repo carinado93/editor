@@ -28,7 +28,7 @@ export interface Project {
   info: VideoInfo | null;
   settings: { model: string; language: string };
   transcript: { language: string; model: string; device: string; words: number } | null;
-  render?: { status: "warteschlange" | "arbeitet" | "fertig" | "fehler"; progress: number; message: string; error: string | null; quality: string; file?: string };
+  render?: { status: "warteschlange" | "arbeitet" | "fertig" | "fehler" | "abgebrochen"; progress: number; message: string; error: string | null; quality: string; file?: string };
   thumbnails?: { file: string; t: number }[];
   exports?: { file: string; duration: number; segments: number; size: number; quality: string; created: number }[];
 }
@@ -337,6 +337,8 @@ export const api = {
     call<{ clips: Clip[] }>(`/api/projects/${id}/clips/${cid}`, { ...json(patch), method: "PUT" }),
   deleteClip: (id: string, cid: string) => call<{ clips: Clip[] }>(`/api/projects/${id}/clips/${cid}`, { method: "DELETE" }),
   renderClip: (id: string, cid: string) => call<{ clips: Clip[] }>(`/api/projects/${id}/clips/${cid}/render`, { method: "POST" }),
+  cancelRender: (id: string) => call<Project>(`/api/projects/${id}/render/cancel`, { method: "POST" }),
+  cancelClip: (id: string, cid: string) => call<{ clips: Clip[] }>(`/api/projects/${id}/clips/${cid}/cancel`, { method: "POST" }),
   render: (id: string, quality: string) => call<Project>(`/api/projects/${id}/render`, json({ quality })),
   openFolder: (id: string) => call<{ ok: boolean }>(`/api/projects/${id}/open-folder`, { method: "POST" }),
   exportUrl: (id: string, file: string) => `/api/projects/${id}/export/${encodeURIComponent(file)}`,

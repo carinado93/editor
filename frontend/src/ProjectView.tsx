@@ -539,9 +539,14 @@ export function ProjectView({ id }: { id: string }) {
               </div>
               {rendering && r && (
                 <div className="small">
-                  <progress value={r.progress} max={1} /> {r.message}
+                  <progress value={r.progress} max={1} /> {r.message}{" "}
+                  <button className="link danger" onClick={async () => {
+                    if (!confirm("Cancel this render? The half-finished video is deleted.")) return;
+                    try { setProject(await api.cancelRender(id)); } catch (e) { setError((e as Error).message); }
+                  }}>✕ Cancel</button>
                 </div>
               )}
+              {r?.status === "abgebrochen" && <div className="small muted">Render cancelled.</div>}
               {r?.status === "fehler" && <div className="small error-text">⚠ {r.error}</div>}
               {!!project.exports?.length && !rendering && (() => {
                 const shown = watch ?? project.exports[project.exports.length - 1].file;
