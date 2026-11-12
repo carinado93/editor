@@ -36,6 +36,7 @@ DESCRIBE = {
     "name": "Bauchbinde mit Name und Titel (title = 'Carina Dorca|Stress- & Burnout-Coach') – nur einmal, wenn sie sich vorstellt",
     "stickers": "Handschrift-Zettel erscheinen nacheinander (items = Punkte, je 1–4 Wörter) – Aufzählungen",
     "buzzword": "ein Schlüsselwort poppt neben ihrem Gesicht auf (title = 1–2 Wörter) – wichtige Begriffe, oft",
+    "outro": "Schluss eines YouTube-Videos: 'Thank you for watching' + Like- und Abo-Knopf (title leer lassen, items leer) – genau einmal, die letzten 5–7 Sekunden",
     "statement": "Statement-Karte: ganzer Bildschirm weicher Lila-Verlauf, eine kurze Zeile in kleinen fetten Großbuchstaben (title, max. 6 Wörter, z. B. 'ABER DU HAST ES NICHT GETAN.') – im Wechsel mit Clips, 1,5–2 s",
     "quote": "Zitat auf dem Clip in kursiver Serifenschrift (title, max. 12 Wörter, in Anführungszeichen) – Gedanke, innere Stimme",
     "repeat": "Satz oben, darunter wiederholt sich eine Wendung Zeile für Zeile (title = Satz, items = [Wendung, z. B. '& nochmal']) – Durchhalten, Wiederholung",

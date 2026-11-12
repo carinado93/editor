@@ -268,9 +268,7 @@ export function ProjectView({ id }: { id: string }) {
       setSel([Math.min(sel[0], w.i), Math.max(sel[1], w.i)]);
       return;
     }
-    const d = detOf.get(w.i);
-    if (d && cutMode) setSel([d.start, d.end - 1]);
-    else setSel([w.i, w.i]);
+    setSel([w.i, w.i]);  // immer nur dieses eine Wort; ganze Vorschläge über den Link in der Leiste
     seek(w.s, false);
   };
 
@@ -502,6 +500,10 @@ export function ProjectView({ id }: { id: string }) {
                     <input type="checkbox" checked={cuts.cutlist.render_options.denoise} disabled={busy} onChange={(e) => run(() => api.renderOptions(id, { denoise: e.target.checked }))} />{" "}
                     Reduce noise
                   </label>
+                  <label>
+                    <input type="checkbox" checked={!!cuts.cutlist.render_options.declick} disabled={busy} onChange={(e) => run(() => api.renderOptions(id, { declick: e.target.checked }))} />{" "}
+                    Remove mouth clicks (lip smacks, "Schmatzen")
+                  </label>
                   </>
                   )}
                   <label>
@@ -603,6 +605,12 @@ export function ProjectView({ id }: { id: string }) {
               <div className="small">
                 <strong>"{selWords.slice(0, 12).map((k) => words[k]?.w).join(" ")}{selWords.length > 12 ? " …" : ""}"</strong>
                 {selDetExact && <div className="muted">{selDetExact.active ? selDetExact.reason : `Suggestion: ${selDetExact.reason}`}</div>}
+                {!selDetExact && selDet && cutMode && selDet.end - selDet.start > 1 && (
+                  <div className="muted">
+                    Part of a {selDet.active ? "cut" : "suggestion"} ({selDet.end - selDet.start} words).{" "}
+                    <button className="link" onClick={() => setSel([selDet.start, selDet.end - 1])}>select the whole part</button>
+                  </div>
+                )}
               </div>
               <div className="action-buttons">
                 {!cutMode ? null : selDetExact && !selDetExact.active ? (
@@ -722,7 +730,8 @@ export function ProjectView({ id }: { id: string }) {
           )}
         </div>
       </div>
-      {editMode && cuts && <EffectsPanel id={id} cuts={cuts} onCuts={setCuts} time={time} onSeek={(t) => seek(t, false)} />}
+      {editMode && cuts && <EffectsPanel id={id} cuts={cuts} onCuts={setCuts} time={time} onSeek={(t) => seek(t, false)}
+        keep={cutMode ? cuts.evaluation.keep : undefined} />}
       {cutMode && <YoutubePackage id={id} />}
       {reelMode && cuts && <ReelPackage id={id} cuts={cuts} onCuts={setCuts} time={time} duration={duration} />}
     </div>

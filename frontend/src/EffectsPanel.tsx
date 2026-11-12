@@ -25,6 +25,7 @@ const HINT: Record<string, string> = {
   wordswap: "the changing words, one per line (heavy, slow, uncertain …)",
   switch: "small line in the pill below (optional, your words)",
   stickers: "one sticker per line",
+  outro: "optional, one per line: Like | Subscribe | Subscribed (empty = these words)",
 };
 
 /** Vorschau-Bild, das sich bei jeder Änderung selbst neu zeichnet (kurz warten, dann neu laden). */
@@ -70,8 +71,9 @@ function FxPreview({ preview, item }: { preview: PreviewFn; item: Overlay }) {
 const SPEED_LABEL: Record<number, string> = { 0.25: "¼× slow", 0.5: "½× slow", 2: "2× fast", 4: "4× fast", 8: "8× fast" };
 
 /** Große Effekte im ganzen Video (YouTube / Reel veredeln) plus Zeitraffer/Zeitlupe. */
-export function EffectsPanel({ id, cuts, onCuts, time, onSeek }: {
+export function EffectsPanel({ id, cuts, onCuts, time, onSeek, keep }: {
   id: string; cuts: CutView; onCuts: (c: CutView) => void; time: number; onSeek: (t: number) => void;
+  keep?: [number, number][];
 }) {
   const [busy, setBusy] = useState(false);
   const fxItems = (cuts.cutlist.overlays ?? []).filter((o) => o.kind === "fx");
@@ -88,6 +90,8 @@ export function EffectsPanel({ id, cuts, onCuts, time, onSeek }: {
     <section className="card fx-card">
       <h3>Effects</h3>
       <EffectsEditor
+        keep={keep}
+        endAt={keep?.length ? keep[keep.length - 1][1] : cuts.evaluation.old_duration}
         items={fxItems}
         allowedInit={cuts.cutlist.fx_allowed}
         time={time}
@@ -123,7 +127,33 @@ export function EffectsPanel({ id, cuts, onCuts, time, onSeek }: {
 }
 
 /** Die Effekt-Liste selbst (für das ganze Video und für jedes Reel). Du wählst, Claude schlägt vor. */
-export function EffectsEditor({ items: source, allowedInit, time, onSeek, preview, onSave, onSuggest, children, compact, exclude }: {
+/** Zeit im Original ↔ Zeit im geschnittenen Video (so wie der Player mit "Play preview with cuts" zählt). */
+function toCut(keep: [number, number][] | undefined, t: number): number {
+  if (!keep?.length) return t;
+  let acc = 0;
+  for (const [a, b] of keep) {
+    if (t >= b) acc += b - a;
+    else {
+      if (t > a) acc += t - a;
+      break;
+    }
+  }
+  return acc;
+}
+function toOrig(keep: [number, number][] | undefined, n: number): number {
+  if (!keep?.length) return n;
+  let acc = 0;
+  for (const [a, b] of keep) {
+    if (n <= acc + (b - a)) return a + Math.max(0, n - acc);
+    acc += b - a;
+  }
+  return keep[keep.length - 1][1];
+}
+function inCutPart(keep: [number, number][] | undefined, t: number): boolean {
+  return !!keep?.length && !keep.some(([a, b]) => t >= a - 0.05 && t <= b + 0.05);
+}
+
+export function EffectsEditor({ items: source, allowedInit, time, onSeek, preview, onSave, onSuggest, children, compact, exclude, keep, endAt }: {
   items: Overlay[];
   allowedInit?: string[];
   time: number;
@@ -134,6 +164,9 @@ export function EffectsEditor({ items: source, allowedInit, time, onSeek, previe
   children?: ReactNode;
   compact?: boolean;
   exclude?: string[];
+  keep?: [number, number][];
+  /** Ende des Videos (Original-Zeit) – für "Like & Subscribe am Ende" */
+  endAt?: number;
 }) {
   const [types, setTypes] = useState<EffectType[]>([]);
   const [allowed, setAllowed] = useState<string[]>(allowedInit ?? []);
@@ -208,6 +241,20 @@ export function EffectsEditor({ items: source, allowedInit, time, onSeek, previe
     setAddText("");
   };
 
+  // Schluss: "Thank you for watching" + Like & Subscribe in den letzten 6 Sekunden (des geschnittenen Videos)
+  const addOutro = () => {
+    if (endAt == null) return;
+    const endCut = toCut(keep, endAt);
+    const start = Math.round(toOrig(keep, Math.max(0, endCut - 6)) * 100) / 100;
+    setDirty(true);
+    setItems([...items.filter((o) => o.type !== "outro"), {
+      id: `fx-${Date.now()}`, kind: "fx", type: "outro", place: "side" as const, on: true,
+      title: "Thank you for watching", text: "Thank you for watching", items: [], item_t: [],
+      start, end: Math.round((start + 6) * 100) / 100, bg_t: null, pose_t: [], mode: "vanish" as const,
+    }].sort((a, b) => a.start - b.start));
+    onSeek(start);
+  };
+
 
   const groups = ["A", "B", "C", "D"];
   const typeOf = (k?: string) => types.find((t) => t.key === k);
@@ -260,6 +307,11 @@ export function EffectsEditor({ items: source, allowedInit, time, onSeek, previe
           </select>
           <button className="btn ghost" onClick={add}>+ Add at {formatTime(time)}</button>
         </span>
+        {endAt != null && (
+          <button className="btn ghost" onClick={addOutro} title="'Thank you for watching' + Like & Subscribe buttons in the last 6 seconds">
+            + Like &amp; Subscribe at the end
+          </button>
+        )}
         <button className={`btn ${dirty ? "" : "ghost"}`} disabled={!!busy || !dirty} onClick={() => save()}
           title={dirty ? "" : "Everything is saved"}>
           {dirty ? "Save effects" : "Saved ✓"}
@@ -293,11 +345,16 @@ export function EffectsEditor({ items: source, allowedInit, time, onSeek, previe
                     ))}
                   </select>
                 )}
-                <TimeRange start={o.start} end={o.end} now={time} onSeek={onSeek}
+                <TimeRange start={toCut(keep, o.start)} end={toCut(keep, o.start) + (o.end - o.start)} now={toCut(keep, time)}
+                  onSeek={() => onSeek(o.start)}
                   onChange={(st, en) => {
-                    const d = st - o.start;  // Listenpunkte wandern mit
-                    upd(i, { start: st, end: en, item_t: (o.item_t ?? []).map((x) => Math.round((x + d) * 10) / 10) });
+                    // eingegeben wird in der Zeit des geschnittenen Videos, gespeichert in Original-Zeit
+                    const so = Math.round(toOrig(keep, st) * 100) / 100;
+                    const d = so - o.start;  // Listenpunkte wandern mit
+                    upd(i, { start: so, end: Math.round((so + (en - st)) * 100) / 100,
+                             item_t: (o.item_t ?? []).map((x) => Math.round((x + d) * 10) / 10) });
                   }} />
+                {inCutPart(keep, o.start) && <span className="small error-text">starts in a cut part – shown at the next kept spot</span>}
                 <button className="link danger" onClick={() => { setDirty(true); setItems(items.filter((_, j) => j !== i)); }}>
                   remove
                 </button>

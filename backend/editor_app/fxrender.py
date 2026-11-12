@@ -24,6 +24,8 @@ def prepare(overlays: list[dict], tmap, words_new: list[dict], total: float) -> 
         if o.get("kind") != "fx" or not o.get("on", True) or o.get("type") not in fx.TYPES:
             continue
         s, e = tmap.clamp(o["start"]), tmap.clamp(o["end"])
+        # liegt der Effekt (teilweise) in einem weggeschnittenen Stück: an der nächsten Stelle mit voller Länge zeigen
+        e = max(e, s + min(o["end"] - o["start"], 8.0))
         e = min(e, total - 0.05)
         if e - s < 0.6:
             continue

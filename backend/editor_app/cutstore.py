@@ -312,7 +312,8 @@ def refresh(pid: str) -> None:
         _save(pid, cl)
 
 
-RENDER_DEFAULTS = {"zoom": True, "loudness": True, "denoise": False, "subtitles": "srt", "karaoke": False}
+RENDER_DEFAULTS = {"zoom": True, "loudness": True, "denoise": False, "subtitles": "srt", "karaoke": False,
+                   "declick": False}
 # Reel veredeln: Format, Länge, Tempo, Ton bleiben exakt – kein Zoom, keine Lautstärke-Änderung
 REEL_RENDER_DEFAULTS = {"zoom": False, "loudness": False, "denoise": False, "subtitles": "aus", "karaoke": False,
                         "audio_copy": True, "reel": True}
@@ -323,7 +324,7 @@ def set_render_options(pid: str, options: dict) -> dict:
         base = REEL_RENDER_DEFAULTS if cl["settings"].get("no_cuts") else RENDER_DEFAULTS
         cur = {**base, **cl.get("render_options", {})}
         for k, v in options.items():
-            if k in ("zoom", "loudness", "denoise", "karaoke"):
+            if k in ("zoom", "loudness", "denoise", "karaoke", "declick"):
                 cur[k] = bool(v)
             elif k == "subtitles":
                 if v not in ("aus", "srt", "einbrennen"):

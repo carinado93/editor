@@ -149,11 +149,15 @@ def _zoom_filters(frames: list[tuple[int, int]], fps: Fraction, out_w: int, out_
             f"zoompan=z='{z_expr}':x='{x_expr}':y='{y_expr}':d=1:s={out_w}x{out_h}:fps={fps_str}")
 
 
-def process_audio(raw: Path, out: Path, loudness: bool, denoise: bool) -> Path:
-    """Ton veredeln: optional Rauschen mindern, sanft komprimieren, auf -14 LUFS (YouTube) bringen (2 Durchgänge)."""
-    if not loudness and not denoise:
+def process_audio(raw: Path, out: Path, loudness: bool, denoise: bool, declick: bool = False) -> Path:
+    """Ton veredeln: optional Schmatzer/Mundgeräusche entfernen, Rauschen mindern, sanft komprimieren,
+    auf -14 LUFS (YouTube) bringen (2 Durchgänge)."""
+    if not loudness and not denoise and not declick:
         return raw
     chain = []
+    if declick:
+        # kurze Klick-Geräusche (Schmatzen, Lippen, Zunge) erkennen und glätten, Sprache bleibt unberührt
+        chain.append("adeclick=w=20:o=75:a=2:t=3:b=2")
     if denoise:
         chain.append("afftdn=nr=10:nf=-45")
     if loudness:
@@ -213,9 +217,9 @@ def render(src: Path, info: dict, segments: list[list[float]], out: Path, work: 
         opts["audio_copy"] = False
         report(0.02, "Cutting audio …")
         audio = build_audio(src, info, frames, fps, work)
-    if audio is not None and (opts["loudness"] or opts["denoise"]):
-        report(0.04, "Polishing audio (loudness −14 LUFS) …")
-        audio = process_audio(audio, work / "ton_fertig.pcm", opts["loudness"], opts["denoise"])
+    if audio is not None and (opts["loudness"] or opts["denoise"] or opts.get("declick")):
+        report(0.04, "Polishing audio (mouth clicks, loudness −14 LUFS) …")
+        audio = process_audio(audio, work / "ton_fertig.pcm", opts["loudness"], opts["denoise"], bool(opts.get("declick")))
 
     # Untertitel / Buzzwords
     extra_files = []

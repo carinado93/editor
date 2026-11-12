@@ -83,6 +83,7 @@ TYPES = {
     "name": ("B", "Name + title", ("side",)),
     "stickers": ("B", "Sticker list", ("side",)),
     "buzzword": ("B", "Buzzword pop", ("side",)),
+    "outro": ("B", "Outro: Like & Subscribe + Thank you", ("side",)),
 }
 NO_AUTO_FILL = {"switch"}  # Carina schreibt den Text selbst – Claude füllt ihn nie aus
 NEEDS_MASK = {"behind", "glow", "background", "lighttrail", "clothesline", "vanish", "sticker", "counter", "ghost",
@@ -1363,13 +1364,116 @@ def draw_buzzword(layer, ctx, it, t, d, place):
     paste_scaled(layer, sp, (x + (sp.width / 2 if right else -sp.width / 2), y), s_, a)
 
 
+def _heart(size: int, color) -> Image.Image:
+    im = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    r = size * 0.27
+    d.ellipse((size * 0.06, size * 0.12, size * 0.06 + 2 * r, size * 0.12 + 2 * r), fill=color)
+    d.ellipse((size * 0.94 - 2 * r, size * 0.12, size * 0.94, size * 0.12 + 2 * r), fill=color)
+    d.polygon([(size * 0.08, size * 0.42), (size * 0.92, size * 0.42), (size * 0.5, size * 0.9)], fill=color)
+    return im
+
+
+def _outro_button(text, f, fg, bg, u, icon=None):
+    pad_x, pad_y = int(30 * u), int(14 * u)
+    ic = int(f.size * 0.9) if icon else 0
+    gap = int(12 * u) if icon else 0
+    w = int(f.getlength(text)) + ic + gap + 2 * pad_x
+    hgt = int(f.size * 1.3) + 2 * pad_y
+    im = Image.new("RGBA", (w, hgt), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    d.rounded_rectangle((0, 0, w - 1, hgt - 1), radius=hgt // 2, fill=bg)
+    if icon:
+        im.alpha_composite(_heart(ic, icon), (pad_x, (hgt - ic) // 2))
+    d.text((pad_x + ic + gap, hgt / 2), text, font=f, fill=fg, anchor="lm")
+    return _with_shadow(im, u)
+
+
+def _with_shadow(sprite: Image.Image, u: float) -> Image.Image:
+    sh = _shadow(sprite, int(10 * u), int(6 * u), 70).filter(ImageFilter.GaussianBlur(int(10 * u)))
+    pad = (sh.width - sprite.width) // 2
+    sh.alpha_composite(sprite, (pad, pad - int(6 * u) if pad - int(6 * u) >= 0 else pad))
+    return sh
+
+
+def draw_outro(layer, ctx, it, t, d, place):
+    """Schluss fürs YouTube-Video: "Thank you for watching" oben, unten Like- und Abo-Knopf,
+    ein Mauszeiger klickt beide an (Herz wird gold, Abo wird zu "Subscribed")."""
+    w, h, u = ctx.w, ctx.h, ctx.u
+    title = (it.get("title") or "Thank you for watching").replace("|", " ").replace("*", "")
+    items = [x for x in (it.get("items") or []) if str(x).strip()]
+    like = (items[0] if items else "Like").upper()
+    sub = (items[1] if len(items) > 1 else "Subscribe").upper()
+    subbed = (items[2] if len(items) > 2 else "Subscribed").upper()
+
+    # oben: cremefarbene Karte mit Serif-Kursiv
+    f_t = font("serif_i", int(84 * u))
+    lines = wrap(title, f_t, int(w * 0.8))
+    key = ("outro_t", title, f_t.size)
+    if key not in ctx.cache:
+        lw = max(int(f_t.getlength(ln)) for ln in lines)
+        lh = int(f_t.size * 1.1)
+        im = Image.new("RGBA", (lw + int(70 * u), lh * len(lines) + int(40 * u)), (0, 0, 0, 0))
+        dr = ImageDraw.Draw(im)
+        dr.rounded_rectangle((0, 0, im.width - 1, im.height - 1), radius=int(26 * u), fill=PAPIER + (235,))
+        for k, ln in enumerate(lines):
+            dr.text((im.width / 2, int(20 * u) + lh * k + lh / 2), ln, font=f_t, fill=LILA, anchor="mm")
+        ctx.cache[key] = _with_shadow(im, u)
+    s_, a = appear(t, 0.1, 0, d)
+    paste_scaled(layer, ctx.cache[key], (w / 2, h * 0.16 + ctx.cache[key].height / 2), s_, a)
+
+    # unten: zwei Knöpfe, Zeiger klickt erst Like (t≈1.2), dann Subscribe (t≈2.3)
+    f_b = font("head", int(44 * u))
+    t_like, t_sub = min(1.2, d * 0.3), min(2.3, d * 0.55)
+    liked, subbed_now = t >= t_like, t >= t_sub
+    b_like = ctx.cache.setdefault(("ob", like, liked, f_b.size),
+                                  _outro_button(like, f_b, LILA if not liked else WEISS,
+                                                WEISS if not liked else GOLD, u, icon=LILA if not liked else WEISS))
+    b_sub = ctx.cache.setdefault(("ob", sub, subbed, subbed_now, f_b.size),
+                                 _outro_button(subbed if subbed_now else sub, f_b, WEISS,
+                                               SALBEI if subbed_now else LILA, u))
+    gap = int(36 * u)
+    tot = b_like.width + b_sub.width + gap
+    y = h * 0.80
+    x_like = w / 2 - tot / 2 + b_like.width / 2
+    x_sub = w / 2 + tot / 2 - b_sub.width / 2
+
+    def pulse(tc):  # kurzes Eindrücken beim Klick
+        k = (t - tc) / 0.25
+        return 1 - 0.12 * math.sin(math.pi * k) if 0 <= k <= 1 else 1.0
+    s1, a1 = appear(t, 0.35, 0, d)
+    s2, a2 = appear(t, 0.5, 0, d)
+    paste_scaled(layer, b_like, (x_like, y), s1 * pulse(t_like), a1)
+    paste_scaled(layer, b_sub, (x_sub, y), s2 * pulse(t_sub), a2)
+
+    # Mauszeiger
+    if 0.6 < t < t_sub + 0.7 and t < d - 0.3:
+        p0 = (w * 0.62, h * 0.98)
+        p1 = (x_like + b_like.width * 0.15, y + 10 * u)
+        p2 = (x_sub + b_sub.width * 0.15, y + 10 * u)
+        if t < t_like:
+            k = ease_out((t - 0.6) / max(0.1, t_like - 0.6))
+            cx, cy = p0[0] + (p1[0] - p0[0]) * k, p0[1] + (p1[1] - p0[1]) * k
+        elif t < t_like + 0.3:
+            cx, cy = p1
+        else:
+            k = ease_out((t - t_like - 0.3) / max(0.1, t_sub - t_like - 0.3))
+            cx, cy = p1[0] + (p2[0] - p1[0]) * k, p1[1] + (p2[1] - p1[1]) * k
+        sz = 46 * u
+        pts = [(0, 0), (0, 1.0), (0.27, 0.76), (0.45, 1.12), (0.6, 1.05), (0.42, 0.7), (0.75, 0.7)]
+        poly = [(cx + x * sz, cy + y_ * sz) for x, y_ in pts]
+        dr = ImageDraw.Draw(layer)
+        dr.polygon(poly, fill=WEISS, outline=TINTE, width=max(2, int(3 * u)))
+
+
 # Zeichner, die nur eine Ebene über dem Bild brauchen
 LAYER_DRAWERS = {"steps": draw_steps, "cards": draw_cards, "tags": draw_tags, "scores": draw_scores,
                  "headline": draw_headline, "checklist": draw_checklist, "endcard": draw_endcard,
                  "bigwords": draw_bigwords, "pill": draw_pill, "poof": draw_poof,
                  "clothesline": draw_clothesline, "typewriter": draw_typewriter, "quote": draw_quote,
                  "repeat": draw_repeat, "wordswap": draw_wordswap, "label": draw_label, "quotepill": draw_quotepill,
-                 "number": draw_number, "name": draw_name, "stickers": draw_stickers, "buzzword": draw_buzzword}
+                 "number": draw_number, "name": draw_name, "stickers": draw_stickers, "buzzword": draw_buzzword,
+                 "outro": draw_outro}
 
 
 def render_frame(frame: Image.Image, it: dict, t: float, d: float, ctx: Ctx, mask: Image.Image | None) -> Image.Image:
@@ -1530,7 +1634,8 @@ def with_placeholders(it: dict) -> dict:
     """Für die Vorschau: leere Texte mit Beispieltext füllen, damit man den Stil sieht."""
     it = dict(it)
     if not (it.get("title") or "").strip() and it.get("type") not in ("poof", "glow", "lighttrail", "ghost", "whip",
-                                                                       "vanish", "flash", "sticker", "bigwords"):
+                                                                       "vanish", "flash", "sticker", "bigwords",
+                                                                       "outro"):
         it["title"] = {"counter": "120|Tage", "behind": "TEXT", "switch": "YOUR HEADLINE", "number": "Burnout|×3",
                        "name": "Carina Dorca|Stress- & Burnout-Coach", "buzzword": "Burnout",
                        "statement": "YOUR SHORT LINE.", "quote": "\u201eyour quote\u201c",

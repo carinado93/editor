@@ -226,6 +226,7 @@ function ClipCard({ id, clip, onChange, onMsg, onErr }: {
             compact
             exclude={["vanish", "flash", "speed"]}
             items={clip.fx ?? []}
+            endAt={clip.duration}
             time={elapsed}
             onSeek={() => preview()}
             preview={(item, signal) => api.clipEffectPreview(id, clip.id, item, signal)}

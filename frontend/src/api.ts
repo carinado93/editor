@@ -142,6 +142,7 @@ export interface RenderOptions {
   denoise: boolean;
   subtitles: "aus" | "srt" | "einbrennen";
   karaoke: boolean;
+  declick?: boolean;
 }
 
 export interface Pause {
