@@ -37,3 +37,16 @@ def test_speed_ranges_and_atempo():
     assert r == [(11.0, 15.0, 4.0, True)]
     assert fxrender._atempo(8) == "atempo=2.0,atempo=2.0,atempo=2.0000"
     assert fxrender._atempo(0.25) == "atempo=0.5,atempo=0.5000"
+
+
+def test_statement_cards_win_over_side_effects():
+    from editor_app import fxrender, subtitles
+    tm = subtitles.TimeMap([(0.0, 200.0)])
+    ov = [{"kind": "fx", "type": "checklist", "place": "side", "start": 75.7, "end": 81.0},
+          {"kind": "fx", "type": "statement", "place": "scene", "start": 80.0, "end": 83.5},
+          {"kind": "fx", "type": "label", "place": "side", "start": 80.2, "end": 86.0},
+          {"kind": "fx", "type": "statement", "place": "scene", "start": 99.8, "end": 103.0},
+          {"kind": "fx", "type": "label", "place": "side", "start": 99.5, "end": 104.0}]
+    got = fxrender.prepare(ov, tm, [], 200)
+    assert [g["type"] for g in got].count("statement") == 2
+    assert all(a["e"] <= b["s"] for a, b in zip(got, got[1:]))  # nie zwei gleichzeitig

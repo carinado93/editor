@@ -33,16 +33,37 @@ def prepare(overlays: list[dict], tmap, words_new: list[dict], total: float) -> 
         it["times"] = [max(0.0, tmap.clamp(t) - s) for t in o.get("item_t") or []] or None
         it["_words"] = [{"w": w["w"], "s": w["s"] - s, "e": w["e"] - s} for w in words_new if s - 0.3 <= w["s"] <= e]
         out.append(it)
-    out.sort(key=lambda x: x["s"])
-    # nie zwei gleichzeitig
+    out.sort(key=lambda x: (x["s"], -_priority(x)))
+    # nie zwei gleichzeitig – aber nie still einen wichtigen Effekt weglassen:
+    # Vollbild-Karten (Statement, End card, Szenen) gewinnen; der andere Effekt wird gekürzt oder verschoben.
     clean: list[dict] = []
     for it in out:
-        if clean and it["s"] < clean[-1]["e"]:
-            if it["s"] - clean[-1]["s"] < 1.0:
-                continue
-            clean[-1]["e"] = it["s"]
-        clean.append(it)
+        while clean and it["s"] < clean[-1]["e"]:
+            prev = clean[-1]
+            if _priority(it) >= _priority(prev):
+                prev["e"] = it["s"]  # der vorige endet, wo der neue beginnt
+                if prev["e"] - prev["s"] < 0.6:
+                    clean.pop()
+                    continue
+                break
+            # der neue ist weniger wichtig: erst nach dem vorigen zeigen (wenn noch genug Zeit bleibt)
+            it["s"] = prev["e"]
+            if it["e"] - it["s"] < 0.6:
+                it = None
+            break
+        if it is not None:
+            clean.append(it)
     return [c for c in clean if c["e"] - c["s"] >= 0.6]
+
+
+_FULLSCREEN = {"statement", "endcard", "card", "flash", "sticker", "switch", "outro"}
+
+
+def _priority(it: dict) -> int:
+    """2 = Vollbild-Karte, 1 = Szene, 0 = Text/Element neben Carina."""
+    if it.get("type") in _FULLSCREEN:
+        return 2
+    return 1 if it.get("place") == "scene" else 0
 
 
 def _fps_float(fps_str: str) -> float:
