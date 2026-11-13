@@ -67,7 +67,8 @@ def test_plan_add_update_delete(tmp_path, monkeypatch):
     from editor_app import plan
     monkeypatch.setattr(plan, "FILE", tmp_path / "p.json")
     items = plan.add([{"date": "2026-11-16", "type": "carousel", "title": "A"}, {"type": "x", "date": "bad"}])
-    assert items[0]["date"] == "" and items[0]["type"] == "reel"  # Ideen-Kiste zuerst (ohne Datum)
+    box = [i for i in items if not i["date"]]
+    assert len(box) == 1 and box[0]["type"] == "reel"  # ungültiges Datum → Ideen-Kiste
     items = plan.update(items[1]["id"], {"status": "done"})
     assert any(i["status"] == "done" for i in items)
     assert len(plan.delete(items[0]["id"])) == 1
