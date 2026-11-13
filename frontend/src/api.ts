@@ -340,6 +340,10 @@ export const api = {
   updateNow: () => call<{ ok: boolean; version: string }>("/api/update", { method: "POST" }),
   version: () => call<{ version: string }>("/api/version"),
   projects: () => call<Project[]>("/api/projects"),
+  ideaReelNew: () => call<{ draft: string }>("/api/idea-reel", { method: "POST" }),
+  ideaReelPhoto: (draft: string, k: number, file: File) => call<{ ok: boolean }>(`/api/idea-reel/${draft}/photo/${k}`, { method: "PUT", body: file }),
+  ideaReelBuild: (draft: string, body: { name: string; idea: string; seconds: number; language: string }) =>
+    call<Project>(`/api/idea-reel/${draft}/build`, json(body)),
   plan: () => call<{ items: PlanItem[] }>("/api/plan"),
   planAdd: (it: Partial<PlanItem>) => call<{ items: PlanItem[] }>("/api/plan", json(it)),
   planUpdate: (id: string, patch: Partial<PlanItem>) => call<{ items: PlanItem[] }>(`/api/plan/${id}`, { ...json(patch), method: "PUT" }),

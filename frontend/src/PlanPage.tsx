@@ -57,7 +57,10 @@ export function PlanPage() {
     if (it.status === "idea") void api.planUpdate(it.id, { status: "doing" }).then((r) => setItems(r.items));
     if (it.type === "carousel") window.location.hash = "#/karussell";
     else if (it.type === "letter") window.location.hash = "#/briefe";
-    else {
+    else if (it.type === "reel" || it.type === "story") {
+      try { localStorage.setItem("home-mode", "idee"); } catch { /* egal */ }
+      window.location.hash = "#/";
+    } else {
       setMsg(it.type === "youtube" || it.type === "reel"
         ? "Film it, then drop the video on the Projects page (YouTube for long videos, “Enhance a reel” for a reel). The idea is copied – paste it as your wish."
         : "The idea is copied.");

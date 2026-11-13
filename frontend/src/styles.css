@@ -1983,3 +1983,15 @@ kbd {
 .plan-card .btn { width: auto; }
 .plan-box { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
 @media (max-width: 1000px) { .plan-grid { grid-template-columns: 1fr 1fr; } }
+
+/* Reel aus einer Idee */
+.idea-reel { display: flex; flex-direction: column; gap: 12px; padding: 16px; border: 2px dashed rgba(100, 68, 165, 0.3); border-radius: 16px; background: #fbf8f2; }
+.idea-reel label { display: flex; flex-direction: column; gap: 4px; }
+.idea-reel textarea, .idea-reel input, .idea-reel select { font: inherit; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line, #e6dccd); background: #fff; box-sizing: border-box; }
+.idea-reel-row { display: flex; gap: 12px; flex-wrap: wrap; }
+.idea-reel-row label:first-child { flex: 1; min-width: 200px; }
+.idea-photos { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.idea-photo { display: flex; flex-direction: column; align-items: center; gap: 2px; width: 84px; }
+.idea-photo img { width: 84px; height: 150px; object-fit: cover; border-radius: 8px; box-shadow: 0 1px 5px rgba(60, 40, 30, 0.15); }
+.idea-add { cursor: pointer; width: auto; }
+.idea-reel > .btn { align-self: flex-start; width: auto; }

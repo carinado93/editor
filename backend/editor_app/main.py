@@ -86,6 +86,38 @@ def create_project(body: NewProject):
                            {"model": body.model, "language": body.language})
 
 
+class IdeaReelBody(BaseModel):
+    name: str = ""
+    idea: str = ""
+    seconds: float = 3.0
+    language: str = "en"
+
+
+@app.post("/api/idea-reel")
+def idea_reel_new():
+    """Reel aus einer Idee: Entwurf anlegen, dann Fotos hochladen, dann bauen."""
+    from . import idea_reel
+
+    return {"draft": idea_reel.new_draft()}
+
+
+@app.put("/api/idea-reel/{did}/photo/{k}")
+async def idea_reel_photo(did: str, k: int, request: Request):
+    from . import idea_reel
+
+    idea_reel.add_photo(did, k, await request.body())
+    return {"ok": True}
+
+
+@app.post("/api/idea-reel/{did}/build")
+def idea_reel_build(did: str, body: IdeaReelBody):
+    from . import idea_reel
+
+    if not body.idea.strip():
+        raise UserError("Please write your idea – Claude makes the texts from it.")
+    return idea_reel.build(did, body.name, body.idea, body.seconds, body.language)
+
+
 @app.get("/api/projects/{pid}")
 def get_project(pid: str):
     return projects.load(pid)
@@ -725,7 +757,9 @@ def get_reel_texts(pid: str):
     f = _reel_file(pid)
     data = json.loads(f.read_text(encoding="utf-8")) if f.exists() else None
     t = cutstore._transcript(pid)
-    return {"texts": data, "full_caption": captions.full_caption(data) if data else "",
+    idea_only = bool(data) and "hashtags" not in data  # nur die Idee gespeichert (Reel aus einer Idee), noch keine Texte
+    texts = None if idea_only else data
+    return {"texts": texts, "full_caption": captions.full_caption(texts) if texts else "",
             "silent": not any(s["words"] for s in t.get("segments", [])), "language": t.get("language", "en"),
             "idea": (data or {}).get("idea", "")}
 

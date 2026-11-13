@@ -5,7 +5,7 @@ import { dismiss, queueFiles, subscribe, type UploadState } from "./uploads";
 const MODE_CARDS: { mode: Mode; title: string; text: string; ready: boolean }[] = [
   { mode: "youtube", title: "YouTube", text: "Long raw video. Pauses, slips, retakes and filler words get marked.", ready: true },
   { mode: "reel", title: "Enhance a reel", text: "Your clip stays exactly as it is. Texts, highlights and animations get added.", ready: true },
-  { mode: "idee", title: "Reel from an idea", text: "Build a reel from a prompt or photos.", ready: false },
+  { mode: "idee", title: "Reel from an idea", text: "No filming: your photos (or your lavender background) + your idea → a reel.", ready: true },
 ];
 
 const STATUS: Record<Project["status"], string> = {
@@ -19,7 +19,13 @@ const STATUS: Record<Project["status"], string> = {
 export function ProjectList({ system }: { system: SystemInfo | null }) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [uploads, setUploads] = useState<UploadState[]>([]);
-  const [mode, setMode] = useState<Mode>("youtube");
+  const [mode, setMode] = useState<Mode>(() => {
+    try {  // aus dem Plan: "Reel from an idea" gleich offen (oder umschalten auf "Enhance a reel", wenn gefilmt)
+      const m = localStorage.getItem("home-mode");
+      if (m) { localStorage.removeItem("home-mode"); return m as Mode; }
+    } catch { /* egal */ }
+    return "youtube";
+  });
   const [model, setModel] = useState("auto");
   const [language, setLanguage] = useState("auto");
   const [drag, setDrag] = useState(false);
@@ -83,6 +89,7 @@ export function ProjectList({ system }: { system: SystemInfo | null }) {
           ))}
         </div>
 
+        {mode === "idee" ? <IdeaReelForm onError={setError} /> : (
         <div
           className={`drop ${drag ? "drag" : ""}`}
           onDragOver={(e) => {
@@ -104,6 +111,7 @@ export function ProjectList({ system }: { system: SystemInfo | null }) {
           </p>
           <p className="muted">Several videos at once work too. Your original is never changed.</p>
         </div>
+        )}
 
         <details className="settings">
           <summary>Speech recognition settings</summary>
@@ -202,6 +210,88 @@ export function ProjectList({ system }: { system: SystemInfo | null }) {
           ))}
         </ul>
       </section>
+    </div>
+  );
+}
+
+/** Reel aus einer Idee: Fotos (optional) + Idee → ruhiges 9:16-Video → weiter wie bei "Enhance a reel". */
+function IdeaReelForm({ onError }: { onError: (m: string | null) => void }) {
+  const [name, setName] = useState("");
+  const [idea, setIdea] = useState(() => {
+    try {  // aus dem Plan gestartet
+      const p = JSON.parse(localStorage.getItem("plan-start") || "null");
+      if (p) { localStorage.removeItem("plan-start"); return [p.title, p.idea].filter(Boolean).join("\n"); }
+    } catch { /* egal */ }
+    return "";
+  });
+  const [photos, setPhotos] = useState<File[]>([]);
+  const [seconds, setSeconds] = useState(3);
+  const [language, setLanguage] = useState("en");
+  const [busy, setBusy] = useState<string | null>(null);
+  const urls = photos.map((f) => URL.createObjectURL(f));
+  useEffect(() => () => urls.forEach((u) => URL.revokeObjectURL(u)));
+
+  const go = async () => {
+    onError(null);
+    try {
+      setBusy("Preparing …");
+      const { draft } = await api.ideaReelNew();
+      for (let k = 0; k < photos.length; k++) {
+        setBusy(`Uploading photo ${k + 1} of ${photos.length} …`);
+        await api.ideaReelPhoto(draft, k, photos[k]);
+      }
+      setBusy("Making the video (a few seconds per photo) …");
+      const p = await api.ideaReelBuild(draft, { name, idea, seconds, language });
+      window.location.hash = `#/p/${p.id}`;
+    } catch (e) {
+      onError((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <div className="idea-reel">
+      <label className="small">Your idea (Claude writes the texts on the reel from it)
+        <textarea rows={4} value={idea} onChange={(e) => setIdea(e.target.value)}
+          placeholder={'e.g. "3 signs your rest is not real rest – calm, soft, end with a question"'} />
+      </label>
+      <div className="idea-reel-row small">
+        <label>Name<input value={name} placeholder="Reel from an idea" onChange={(e) => setName(e.target.value)} /></label>
+        <label>Seconds per photo
+          <input type="number" min={1.5} max={8} step={0.5} value={seconds} onChange={(e) => setSeconds(Number(e.target.value))} />
+        </label>
+        <label>Language
+          <select value={language} onChange={(e) => setLanguage(e.target.value)}>
+            <option value="en">English</option>
+            <option value="de">German</option>
+          </select>
+        </label>
+      </div>
+      <div className="idea-photos">
+        {urls.map((u, k) => (
+          <div key={u} className="idea-photo">
+            <img src={u} alt={`Photo ${k + 1}`} />
+            <span className="small">{k + 1}</span>
+            <button className="link danger small" onClick={() => setPhotos(photos.filter((_, j) => j !== k))}>remove</button>
+          </div>
+        ))}
+        <label className="btn ghost idea-add">
+          + Add photos (optional)
+          <input type="file" accept="image/*" multiple hidden onChange={(e) => {
+            const fs = Array.from(e.target.files ?? []);
+            e.target.value = "";
+            setPhotos([...photos, ...fs].slice(0, 20));
+          }} />
+        </label>
+      </div>
+      <p className="small muted">
+        {photos.length
+          ? `${photos.length} photo${photos.length > 1 ? "s" : ""} → about ${Math.round(photos.length * seconds)} s, each with a slow calm zoom. The order is the order you added them.`
+          : "Without photos the reel uses your soft lavender background (12 s) – the texts are the star."}
+        {" "}Afterwards everything works like “Enhance a reel”: Claude writes the texts, you add effects, render, done.
+      </p>
+      <button className="btn" disabled={!!busy || !idea.trim()} onClick={go}>{busy ?? "✨ Make the reel"}</button>
     </div>
   );
 }
