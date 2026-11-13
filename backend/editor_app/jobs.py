@@ -117,6 +117,12 @@ def _render_clip(pid: str, cid: str) -> None:
                              c.get("hook_text", ""), face, str(config.ROOT / "assets" / "fonts"), rep,
                              c.get("texts", []), [o for o in c.get("fx", []) if o.get("on", True)],
                              subs=c.get("subs", True))
+    # auch auf den Desktop: SOCIAL MEDIA APP/Reels/<Projekt>/
+    from . import outbox
+    title = c.get("title") or "Reel"
+    outbox.save("reels", out, f"{title}.mp4", sub=p["name"])
+    if res.get("srt"):
+        outbox.save("reels", out.parent / res["srt"], f"{title}.srt", sub=p["name"])
     clips.update_clip(pid, cid, status="fertig", progress=1.0, message="Done", file=res["file"],
                       size=res["size"], srt=res["srt"])
 
@@ -155,6 +161,14 @@ def _render(pid: str, quality: str) -> None:
     (out.with_suffix(".schnitte.json")).write_text(
         json.dumps({"keep": segments, "settings": v["cutlist"]["settings"]}, ensure_ascii=False, indent=1),
         encoding="utf-8")
+    # auch auf den Desktop: SOCIAL MEDIA APP/YouTube videos (bzw. Reels beim "Reel veredeln")
+    from . import outbox
+    kind = "reels" if p["mode"] == "reel" else "youtube"
+    nice = f"{p['name']} {time.strftime('%Y-%m-%d %H-%M')}"
+    outbox.save(kind, out, f"{nice}.mp4")
+    for extra in [result.get("srt")] + list(result.get("extra") or []):
+        if isinstance(extra, str) and (out.parent / extra).exists() and extra.endswith(".srt"):
+            outbox.save(kind, out.parent / extra, f"{nice}.srt")
     exports = (projects.load(pid).get("exports") or []) + [{**result, "created": time.time()}]
     projects.update(pid, exports=exports,
                     render={"status": "fertig", "progress": 1.0, "message": "Done", "error": None,

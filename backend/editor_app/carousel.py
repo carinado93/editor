@@ -410,6 +410,16 @@ def render(cid: str) -> dict:
     (d / "caption.txt").write_text(car.get("caption", "") + "\n\n" + " ".join(car.get("hashtags", [])),
                                    encoding="utf-8")
     car["files"] = files
+    # auch auf den Desktop: SOCIAL MEDIA APP/Carousels/<Titel>/01.png … + caption.txt
+    from . import outbox
+    sub = (car.get("cover_title") or car.get("topic") or car["id"]).replace("*", "")
+    target = outbox.root() / outbox.KINDS["carousels"] / outbox.safe(sub)
+    if target.is_dir():
+        for old in target.glob("*.png"):
+            old.unlink()
+    for k, name in enumerate(files, 1):
+        outbox.save("carousels", d / name, f"{k:02d}.png", sub=sub)
+    outbox.save("carousels", d / "caption.txt", "caption.txt", sub=sub)
     return save(car)
 
 

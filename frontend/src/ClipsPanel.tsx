@@ -40,14 +40,14 @@ export function ClipsPanel({ id }: { id: string }) {
 
   // Fertig gerenderte Reels gleich herunterladen (landen im Download-Ordner) – abschaltbar
   const [autoDl, setAutoDl] = useState(() => {
-    try { return localStorage.getItem("reel-auto-download") !== "0"; } catch { return true; }
+    try { return localStorage.getItem("reel-browser-download") === "1"; } catch { return false; }
   });
   const lastStatus = useRef<Record<string, string>>({});
   useEffect(() => {
     for (const c of clips) {
       const before = lastStatus.current[c.id];
       if ((before === "warteschlange" || before === "arbeitet") && c.status === "fertig" && c.file && !autoDl) {
-        setMsg(`"${c.title}" is ready ✓ – press "Download this reel" below it.`);
+        setMsg(`"${c.title}" is ready ✓ – saved on your Desktop: SOCIAL MEDIA APP › Reels.`);
       } else if ((before === "warteschlange" || before === "arbeitet") && c.status === "fertig" && c.file) {
         const a = document.createElement("a");
         a.href = api.exportUrl(id, c.file);
@@ -55,7 +55,7 @@ export function ClipsPanel({ id }: { id: string }) {
         document.body.appendChild(a);
         a.click();
         a.remove();
-        setMsg(`"${c.title}" is ready ✓ – downloaded to your Downloads folder.`);
+        setMsg(`"${c.title}" is ready ✓ – saved on your Desktop (SOCIAL MEDIA APP › Reels) and downloaded.`);
       }
       lastStatus.current[c.id] = c.status;
     }
@@ -111,10 +111,11 @@ export function ClipsPanel({ id }: { id: string }) {
       <label className="small" style={{ display: "block", margin: "8px 0" }}>
         <input type="checkbox" checked={autoDl} onChange={(e) => {
           setAutoDl(e.target.checked);
-          try { localStorage.setItem("reel-auto-download", e.target.checked ? "1" : "0"); } catch { /* egal */ }
+          try { localStorage.setItem("reel-browser-download", e.target.checked ? "1" : "0"); } catch { /* egal */ }
         }} />{" "}
-        Download each reel automatically when it is ready (off = only when you press its download button)
+        Also download each reel in the browser (finished reels are always saved on your Desktop in “SOCIAL MEDIA APP › Reels”)
       </label>
+      <button className="link" onClick={() => api.openOutbox("reels").catch(() => {})}>📁 Open the Reels folder</button>
       <div className="clip-list">
         {clips.map((c) => (
           <ClipCard key={c.id} id={id} clip={c} onChange={setClips} onMsg={setMsg} onErr={setErr} />

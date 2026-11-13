@@ -159,6 +159,7 @@ export function LetterStudio() {
           </button>
           <button className="btn ghost" disabled={!!busy} onClick={sync}>{busy === "sync" ? "Checking …" : "⟳ Get pictures & status"}</button>
           {allRendered && <a className="btn ghost" href={api.letterZip(letter.id)} download>⬇ ZIP (your folder layout)</a>}
+          <button className="btn ghost" onClick={() => api.openOutbox("carousels").catch(() => {})} title="Rendered slides are saved on your Desktop: SOCIAL MEDIA APP › Carousels">📁 Open folder</button>
         </div>
         {sentence && <ClaudeSentence text={sentence} onClose={() => setSentence(null)} />}
         {err && <div className="banner error small pre">{err}</div>}

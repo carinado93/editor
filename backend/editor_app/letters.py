@@ -536,7 +536,36 @@ def render_part(letter: dict, lang: str, idx: int) -> list[str]:
         im.convert("RGB").save(out / f"{name}.jpg", "JPEG", quality=92)
         files.append(name)
     part["files"] = files
+    # auch auf den Desktop: SOCIAL MEDIA APP/Carousels/09 - Dear black dog/[EN/]Part 1 - Holding my breath/
+    from . import outbox
+    acc = ACCOUNTS[lang]
+    root_name = f"{letter.get('number', '01')} - {letter.get('title', 'Letter')}"
+    sub = root_name if len(letter["langs"]) == 1 else f"{root_name}/{lang.upper()}"
+    target = outbox.root() / outbox.KINDS["carousels"]
+    for piece in (sub.split("/") + [acc["parts"][idx][2]]):
+        target = target / outbox.safe(piece)
+    target.mkdir(parents=True, exist_ok=True)
+    for old in target.glob("*.png"):
+        old.unlink()
+    for k, name in enumerate(files, 1):
+        last = k == len(files)
+        dst = target / f"{k:02d}{'-' + acc['soon_name'] if last else ''}.png"
+        try:
+            os_link_or_copy(out / f"{name}.png", dst)
+        except OSError:
+            pass
+    (target / "caption.txt").write_text(part.get("caption", ""), encoding="utf-8")
     return files
+
+
+def os_link_or_copy(src: Path, dst: Path) -> None:
+    import os
+    if dst.exists():
+        dst.unlink()
+    try:
+        os.link(src, dst)
+    except OSError:
+        shutil.copy2(src, dst)
 
 
 def preview_png(letter: dict, lang: str, idx: int, slide_idx: int, scale: float = 0.5) -> bytes:

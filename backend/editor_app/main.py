@@ -510,6 +510,21 @@ def get_export(pid: str, name: str, inline: int = 0):
     return FileResponse(f, filename=name, content_disposition_type="inline" if inline else "attachment")
 
 
+@app.post("/api/outbox/open")
+def outbox_open(kind: str = ""):
+    """Öffnet Desktop/SOCIAL MEDIA APP (oder einen Unterordner) im Explorer."""
+    from . import outbox
+
+    return {"folder": str(outbox.open_folder(kind or None))}
+
+
+@app.get("/api/outbox")
+def outbox_where():
+    from . import outbox
+
+    return {"folder": str(outbox.root())}
+
+
 @app.post("/api/projects/{pid}/open-folder")
 def open_folder(pid: str):
     """Öffnet den Export-Ordner im Windows-Explorer."""
@@ -937,6 +952,12 @@ def make_covers(pid: str, body: CoverBody):
         name = f"{body.kind}_{n}_{int(time.time())}.jpg"
         im.save(out_dir / name, "JPEG", quality=92)  # YouTube erlaubt max. 2 MB
         files.append(name)
+        # auch auf den Desktop: SOCIAL MEDIA APP/Thumbnails/<Projekt>/
+        from . import outbox
+        label = {"youtube": "thumbnail", "center": "thumbnail middle", "meditation": "thumbnail meditation",
+                 "reel": "reel cover"}[body.kind]
+        outbox.save("thumbnails", out_dir / name, f"{label} {n} {time.strftime('%H-%M-%S')}.jpg",
+                    sub=projects.load(pid)["name"])
     if seg:
         seg.close()
     return {"files": files, "color": color if body.kind == "reel" else None}

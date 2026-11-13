@@ -65,7 +65,7 @@ export function ProjectView({ id }: { id: string }) {
   const [watch, setWatch] = useState<string | null>(null);
   // Fertiges Video gleich herunterladen (wie bei den Reels) – abschaltbar
   const [autoDl, setAutoDl] = useState(() => {
-    try { return localStorage.getItem("final-auto-download") !== "0"; } catch { return true; }
+    try { return localStorage.getItem("final-browser-download") === "1"; } catch { return false; }
   });
   const [doneMsg, setDoneMsg] = useState<string | null>(null);
   const [makingReel, setMakingReel] = useState(false);
@@ -82,9 +82,9 @@ export function ProjectView({ id }: { id: string }) {
         document.body.appendChild(a);
         a.click();
         a.remove();
-        setDoneMsg("Your video is ready ✓ – it was downloaded to your Downloads folder.");
+        setDoneMsg("Your video is ready ✓ – saved on your Desktop in SOCIAL MEDIA APP and downloaded in the browser.");
       } else {
-        setDoneMsg("Your video is ready ✓ – download it below.");
+        setDoneMsg(`Your video is ready ✓ – saved on your Desktop: SOCIAL MEDIA APP › ${project?.mode === "reel" ? "Reels" : "YouTube videos"}.`);
       }
       setWatch(r.file);
     }
@@ -579,10 +579,13 @@ export function ProjectView({ id }: { id: string }) {
               <label className="small check-line">
                 <input type="checkbox" checked={autoDl} onChange={(e) => {
                   setAutoDl(e.target.checked);
-                  try { localStorage.setItem("final-auto-download", e.target.checked ? "1" : "0"); } catch { /* egal */ }
+                  try { localStorage.setItem("final-browser-download", e.target.checked ? "1" : "0"); } catch { /* egal */ }
                 }} />{" "}
-                Download the finished video automatically
+                Also download it in the browser (it is always saved on your Desktop in “SOCIAL MEDIA APP”)
               </label>
+              <button className="link" onClick={() => api.openOutbox(reelMode ? "reels" : "youtube").catch(() => {})}>
+                📁 Open the {reelMode ? "Reels" : "YouTube videos"} folder
+              </button>
               {r?.status === "fehler" && <div className="small error-text">⚠ {r.error}</div>}
               {!!project.exports?.length && !rendering && (() => {
                 const shown = watch ?? project.exports[project.exports.length - 1].file;

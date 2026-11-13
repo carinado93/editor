@@ -223,7 +223,10 @@ export function CoverStudio({ id, kinds }: { id: string; kinds: Kind[] }) {
               </a>
             ))}
           </div>
-          <p className="small muted">Click an image to download it.</p>
+          <p className="small muted">
+            Saved on your Desktop: SOCIAL MEDIA APP › Thumbnails.{" "}
+            <button className="link" onClick={() => api.openOutbox("thumbnails").catch(() => {})}>📁 Open folder</button>
+          </p>
           {kind === "reel" && usedColor && (
             <button className="link" onClick={markUsed}>
               ✓ Used one of them → next cover in the next colour

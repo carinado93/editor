@@ -320,6 +320,7 @@ export const api = {
   updateNow: () => call<{ ok: boolean; version: string }>("/api/update", { method: "POST" }),
   version: () => call<{ version: string }>("/api/version"),
   projects: () => call<Project[]>("/api/projects"),
+  openOutbox: (kind = "") => call<{ folder: string }>(`/api/outbox/open?kind=${kind}`, { method: "POST" }),
   letters: () => call<{ letters: LetterSummary[] }>("/api/letters"),
   letterNew: (title: string, number: string, langs: string[]) => call<Letter>("/api/letters", json({ title, number, langs })),
   letter: (lid: string) => call<Letter>(`/api/letter/${lid}`),
