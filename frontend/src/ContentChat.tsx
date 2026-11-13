@@ -87,9 +87,22 @@ export function ContentChat() {
           <div key={i} className={`bubble ${m.role}`}>
             <div className="bubble-text">{m.content}</div>
             {m.role === "assistant" && (
-              <button className="link small" onClick={() => navigator.clipboard.writeText(m.content)}>
-                copy
-              </button>
+              <span className="row-buttons small">
+                <button className="link small" onClick={() => navigator.clipboard.writeText(m.content)}>
+                  copy
+                </button>
+                <button className="link small" disabled={busy} title="Put the ideas from this answer into your Plan (idea box)"
+                  onClick={async () => {
+                    setErr(null);
+                    try {
+                      const r = await api.planExtract("claude", m.content, lang);
+                      setErr(null);
+                      alert(`${r.items.filter((x) => !x.date).length} ideas are now in your Plan → Idea box.`);
+                    } catch (e) {
+                      setErr((e as Error).message);
+                    }
+                  }}>→ Plan</button>
+              </span>
             )}
           </div>
         ))}

@@ -16,7 +16,13 @@ function copy(text: string, done: (m: string) => void) {
 export function CarouselStudio() {
   const [list, setList] = useState<CarouselSummary[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
-  const [topic, setTopic] = useState("");
+  const [topic, setTopic] = useState(() => {
+    try {  // aus dem Plan gestartet ("Start")
+      const p = JSON.parse(localStorage.getItem("plan-start") || "null");
+      if (p) { localStorage.removeItem("plan-start"); return [p.title, p.idea].filter(Boolean).join(" – "); }
+    } catch { /* egal */ }
+    return "";
+  });
   const [points, setPoints] = useState(5);
   const [language, setLanguage] = useState("en");
   const [project, setProject] = useState("");

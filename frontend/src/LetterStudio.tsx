@@ -24,7 +24,13 @@ export function LetterStudio() {
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
-  const [form, setForm] = useState({ title: "", number: "", langs: "en" });
+  const [form, setForm] = useState(() => {
+    try {  // aus dem Plan gestartet ("Start")
+      const p = JSON.parse(localStorage.getItem("plan-start") || "null");
+      if (p) { localStorage.removeItem("plan-start"); return { title: p.title || "", number: "", langs: "en" }; }
+    } catch { /* egal */ }
+    return { title: "", number: "", langs: "en" };
+  });
   const [open, setOpen] = useState<{ idx: number; k: number } | null>(null);
 
   useEffect(() => {

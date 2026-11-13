@@ -61,3 +61,13 @@ def test_styles_save_clean_and_overwrite(tmp_path, monkeypatch):
     assert len(items) == 1 and items[0]["allowed"] == ["label"]
     st = styles.clean({"name": "x", "sizes": {"label": 9}, "render": {"subtitles": "srt"}})
     assert st["sizes"]["label"] == 2.5 and st["render"] == {"subtitles": "srt"}
+
+
+def test_plan_add_update_delete(tmp_path, monkeypatch):
+    from editor_app import plan
+    monkeypatch.setattr(plan, "FILE", tmp_path / "p.json")
+    items = plan.add([{"date": "2026-11-16", "type": "carousel", "title": "A"}, {"type": "x", "date": "bad"}])
+    assert items[0]["date"] == "" and items[0]["type"] == "reel"  # Ideen-Kiste zuerst (ohne Datum)
+    items = plan.update(items[1]["id"], {"status": "done"})
+    assert any(i["status"] == "done" for i in items)
+    assert len(plan.delete(items[0]["id"])) == 1

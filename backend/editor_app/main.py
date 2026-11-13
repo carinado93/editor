@@ -1234,6 +1234,66 @@ def publish_settings_save(body: PublishSettingsBody):
     return publish.save_settings(body.values)
 
 
+# ---------- Wochen-Plan ----------
+
+class PlanWeekBody(BaseModel):
+    start: str = ""
+    focus: str = ""
+    counts: dict = {}
+    language: str = "en"
+
+
+class PlanExtractBody(BaseModel):
+    text: str
+    language: str = "en"
+
+
+@app.get("/api/plan")
+def plan_list():
+    from . import plan
+
+    return {"items": plan.list_all()}
+
+
+@app.post("/api/plan")
+def plan_add(body: dict):
+    from . import plan
+
+    return {"items": plan.add([body])}
+
+
+@app.put("/api/plan/{item_id}")
+def plan_update(item_id: str, body: dict):
+    from . import plan
+
+    return {"items": plan.update(item_id, body)}
+
+
+@app.delete("/api/plan/{item_id}")
+def plan_delete(item_id: str):
+    from . import plan
+
+    return {"items": plan.delete(item_id)}
+
+
+@app.post("/api/plan/week/{engine}")
+def plan_week(engine: str, body: PlanWeekBody):
+    from . import plan
+
+    if engine not in ("claude", "ollama"):
+        raise UserError("Unknown AI.")
+    return {"items": plan.generate_week(body.start, body.focus, body.counts, body.language, engine)}
+
+
+@app.post("/api/plan/extract/{engine}")
+def plan_extract(engine: str, body: PlanExtractBody):
+    from . import plan
+
+    if engine not in ("claude", "ollama"):
+        raise UserError("Unknown AI.")
+    return {"items": plan.extract(body.text, body.language, engine)}
+
+
 # ---------- Gespeicherte Effekt-Stile ----------
 
 @app.get("/api/styles")

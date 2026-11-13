@@ -12,6 +12,7 @@ import { ProjectView } from "./ProjectView";
 import { ContentChat } from "./ContentChat";
 import { CarouselStudio } from "./CarouselStudio";
 import { LetterStudio } from "./LetterStudio";
+import { PlanPage } from "./PlanPage";
 import { Settings } from "./Settings";
 
 function useHash() {
@@ -108,8 +109,11 @@ function App() {
           </span>
         </a>
         <nav className="topnav">
-          <a href="#/" className={!hash.startsWith("#/content") && !hash.startsWith("#/einstellungen") && !hash.startsWith("#/karussell") && !hash.startsWith("#/briefe") ? "on" : ""}>
+          <a href="#/" className={!hash.startsWith("#/content") && !hash.startsWith("#/einstellungen") && !hash.startsWith("#/karussell") && !hash.startsWith("#/briefe") && !hash.startsWith("#/plan") ? "on" : ""}>
             Projects
+          </a>
+          <a href="#/plan" className={hash.startsWith("#/plan") ? "on" : ""}>
+            Plan
           </a>
           <a href="#/karussell" className={hash.startsWith("#/karussell") ? "on" : ""}>
             Carousel
@@ -134,7 +138,9 @@ function App() {
       <UpdateBanner />
       {offline && <div className="banner error page">No connection to the engine. Please start the app with start.bat.</div>}
       {system && !system.ffmpeg && <div className="banner error page">ffmpeg is missing. Please start the app with start.bat, it installs it.</div>}
-      {hash.startsWith("#/briefe") ? (
+      {hash.startsWith("#/plan") ? (
+        <PlanPage />
+      ) : hash.startsWith("#/briefe") ? (
         <LetterStudio />
       ) : hash.startsWith("#/karussell") ? (
         <CarouselStudio />

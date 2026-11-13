@@ -272,6 +272,16 @@ export interface CarouselSummary {
   files: string[];
 }
 
+export interface PlanItem {
+  id: string;
+  date: string;
+  type: "reel" | "carousel" | "youtube" | "letter" | "story";
+  title: string;
+  idea: string;
+  account: string;
+  status: "idea" | "doing" | "done";
+}
+
 export interface FxStyle {
   id: string;
   name: string;
@@ -330,6 +340,13 @@ export const api = {
   updateNow: () => call<{ ok: boolean; version: string }>("/api/update", { method: "POST" }),
   version: () => call<{ version: string }>("/api/version"),
   projects: () => call<Project[]>("/api/projects"),
+  plan: () => call<{ items: PlanItem[] }>("/api/plan"),
+  planAdd: (it: Partial<PlanItem>) => call<{ items: PlanItem[] }>("/api/plan", json(it)),
+  planUpdate: (id: string, patch: Partial<PlanItem>) => call<{ items: PlanItem[] }>(`/api/plan/${id}`, { ...json(patch), method: "PUT" }),
+  planDelete: (id: string) => call<{ items: PlanItem[] }>(`/api/plan/${id}`, { method: "DELETE" }),
+  planWeek: (engine: string, body: { start: string; focus: string; counts: Record<string, number>; language: string }) =>
+    call<{ items: PlanItem[] }>(`/api/plan/week/${engine}`, json(body)),
+  planExtract: (engine: string, text: string, language: string) => call<{ items: PlanItem[] }>(`/api/plan/extract/${engine}`, json({ text, language })),
   styles: () => call<{ styles: FxStyle[] }>("/api/styles"),
   styleSave: (st: Omit<FxStyle, "id">) => call<{ styles: FxStyle[] }>("/api/styles", json(st)),
   styleDelete: (sid: string) => call<{ styles: FxStyle[] }>(`/api/styles/${sid}`, { method: "DELETE" }),
