@@ -63,6 +63,31 @@ export function ProjectView({ id }: { id: string }) {
   const [quality, setQuality] = useState("1080");
   const [faceBox, setFaceBox] = useState<number[] | null>(null);
   const [watch, setWatch] = useState<string | null>(null);
+  // Fertiges Video gleich herunterladen (wie bei den Reels) – abschaltbar
+  const [autoDl, setAutoDl] = useState(() => {
+    try { return localStorage.getItem("final-auto-download") !== "0"; } catch { return true; }
+  });
+  const [doneMsg, setDoneMsg] = useState<string | null>(null);
+  const lastRender = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    const r = project?.render;
+    const before = lastRender.current;
+    lastRender.current = r?.status;
+    if ((before === "warteschlange" || before === "arbeitet") && r?.status === "fertig" && r.file) {
+      if (autoDl) {
+        const a = document.createElement("a");
+        a.href = api.exportUrl(id, r.file);
+        a.download = r.file;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setDoneMsg("Your video is ready ✓ – it was downloaded to your Downloads folder.");
+      } else {
+        setDoneMsg("Your video is ready ✓ – download it below.");
+      }
+      setWatch(r.file);
+    }
+  }, [project?.render?.status, project?.render?.file, autoDl, id]);
   const [busyWith, setBusyWith] = useState<string | null>(null);
   // Beim Warten zeigen, womit die App gerade beschäftigt ist
   useEffect(() => {
@@ -549,6 +574,14 @@ export function ProjectView({ id }: { id: string }) {
                 </div>
               )}
               {r?.status === "abgebrochen" && <div className="small muted">Render cancelled.</div>}
+              {doneMsg && !rendering && <div className="banner small">{doneMsg}</div>}
+              <label className="small check-line">
+                <input type="checkbox" checked={autoDl} onChange={(e) => {
+                  setAutoDl(e.target.checked);
+                  try { localStorage.setItem("final-auto-download", e.target.checked ? "1" : "0"); } catch { /* egal */ }
+                }} />{" "}
+                Download the finished video automatically
+              </label>
               {r?.status === "fehler" && <div className="small error-text">⚠ {r.error}</div>}
               {!!project.exports?.length && !rendering && (() => {
                 const shown = watch ?? project.exports[project.exports.length - 1].file;
