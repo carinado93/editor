@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api, type YoutubeMeta } from "./api";
 import { CoverStudio } from "./CoverStudio";
 import { Status } from "./ReelPackage";
@@ -204,9 +204,9 @@ function MetaEditor({
         }
       />
       <h4>Tags</h4>
-      <input value={m.tags.join(", ")} onChange={(e) => setM({ ...m, tags: e.target.value.split(",").map((x) => x.trim()) })} />
+      <AutoArea value={m.tags.join(", ")} onChange={(v) => setM({ ...m, tags: v.split(",").map((x) => x.trimStart()) })} />
       <h4>Hashtags</h4>
-      <input value={m.hashtags.join(" ")} onChange={(e) => setM({ ...m, hashtags: e.target.value.split(/\s+/).filter(Boolean) })} />
+      <AutoArea value={m.hashtags.join(" ")} onChange={(v) => setM({ ...m, hashtags: v.split(/\s+/).filter(Boolean) })} />
       <div className="row-buttons">
         <button className="btn" disabled={busy} onClick={() => onSave(m)}>
           Save changes
@@ -220,4 +220,17 @@ function MetaEditor({
       </div>
     </div>
   );
+}
+
+/** Textfeld, das so hoch wird wie sein Inhalt – alles sichtbar, nichts zum Scrollen. */
+function AutoArea({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (el) {
+      el.style.height = "auto";
+      el.style.height = `${el.scrollHeight + 2}px`;
+    }
+  }, [value]);
+  return <textarea ref={ref} className="auto-area" rows={1} value={value} onChange={(e) => onChange(e.target.value)} />;
 }
