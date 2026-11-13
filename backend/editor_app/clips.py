@@ -315,3 +315,73 @@ def overlay_plan(hook_text: str, texts: list[str], total: float) -> list[dict]:
             plan.append({"s": round(hook_end + i * slot + 0.15, 2), "e": round(hook_end + (i + 1) * slot - 0.1, 2),
                          "text": t, "anim": ["karte", "wort", "slide"][i % 3]})
     return plan
+
+
+# ---------- Reel aus einer Stelle, die Carina selbst markiert ----------
+
+TEXT_SCHEMA = {
+    "type": "object",
+    "properties": {"title": {"type": "string"}, "hook_text": {"type": "string"},
+                   "texts": {"type": "array", "items": {"type": "string"}}, "why": {"type": "string"},
+                   "caption": {"type": "string"}, "hashtags": {"type": "array", "items": {"type": "string"}},
+                   "shorts_title": {"type": "string"}},
+    "required": ["title", "hook_text", "texts", "why", "caption", "hashtags", "shorts_title"],
+    "additionalProperties": False,
+}
+
+
+def from_selection(transcript: dict, cutlist: dict, flags: list, i0: int, i1: int) -> dict:
+    """Reel genau aus der markierten Stelle (Wort i0 bis i1), auf ganze Sätze gerundet – nie mitten im Satz."""
+    words, sent, duration, tempo = context(transcript, cutlist, flags)
+    ids = [s["id"] for s in sent if s["words"] and s["words"][-1] >= i0 and s["words"][0] <= i1]
+    if not ids:
+        raise UserError("The selected words are all cut. Please select words that stay in the video.")
+    base = {"id": f"clip-{int(time.time() * 1000) % 10_000_000}-m", "title": "My reel", "hook_text": "",
+            "texts": [], "why": "Your own choice", "caption": "", "hashtags": meta.fix_hashtags([], transcript.get(
+                "language", "en"), []), "shorts_title": "", "status": "vorschlag", "own": True}
+    c = apply_parts(base, [ids], words, flags, sent, duration, tempo)
+    first = re.sub(r"[.!?…,;:]+$", "", " ".join(c["text"].split()[:7]))
+    c["hook_text"] = first[:1].upper() + first[1:]  # Platzhalter, bis Claude (oder Carina) den Hook schreibt
+    return c
+
+
+def write_texts(engine: str, transcript: dict, clip: dict) -> dict:
+    """Hook, Einblendungen, Caption, 5 Hashtags für ein Reel, dessen Inhalt Carina selbst gewählt hat
+    (das Gesagte bleibt genau so)."""
+    lang = transcript.get("language", "en")
+    prompt = f"""Du bist Short-Form-Editorin für Carina Dorca (Stress- und Burnout-Prävention, Instagram/YouTube Shorts).
+Carina hat diese Stelle aus ihrem Video selbst als Reel ausgewählt ({clip.get('duration', 0):.0f} Sekunden). Das Gesagte
+bleibt GENAU so – du schreibst nur die Texte dazu:
+
+„{clip.get('text', '')}“
+
+- title: kurzer Arbeitstitel.
+- hook_text: Einblendung ab Sekunde 0, max. 9 Wörter, nennt sofort das Thema (Burnout, Stress, Angst …),
+  *ein Wort in Sternchen* wird lila. Wer das lange Video nie gesehen hat, versteht sofort, worum es geht.
+- texts: 2–3 kurze Einblendungen (je max. 8 Wörter), die die Kernaussage verstärken.
+- why: ein Satz, warum die Stelle als Reel funktioniert.
+- caption: in Carinas Stimme (Hook + 🤍, 2 kurze Absätze, "📌 Save this…", "Follow …", letzte Zeile
+  "Educational and my own experience, not a diagnosis or therapy." – sinngemäß in der Sprache des Videos).
+- hashtags: GENAU 5 (bevorzugt aus: {", ".join(meta.hashtag_bank(lang)[:25])}).
+- shorts_title: YouTube-Shorts-Titel.
+
+{meta.GUARDRAILS}
+
+{meta.lang_rule(lang)}
+Antworte NUR mit JSON nach dem Schema."""
+    if engine == "claude":
+        from . import claude
+        raw = claude.ask_json(prompt, TEXT_SCHEMA, effort="low")
+    else:
+        from . import llm
+        raw = llm.ask_json(prompt, "Du antwortest ausschließlich mit gültigem JSON.", timeout=600)
+    if not isinstance(raw, dict):
+        return clip
+    return {**clip,
+            "title": str(raw.get("title") or clip["title"]).strip()[:80],
+            "hook_text": str(raw.get("hook_text", "")).strip(),
+            "texts": [str(x).strip() for x in raw.get("texts", []) if str(x).strip()][:3],
+            "why": str(raw.get("why") or clip.get("why", "")).strip(),
+            "caption": str(raw.get("caption", "")).strip(),
+            "hashtags": meta.fix_hashtags(list(raw.get("hashtags", [])), lang, []),
+            "shorts_title": str(raw.get("shorts_title", "")).strip()}

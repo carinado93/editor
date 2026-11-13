@@ -139,6 +139,7 @@ export interface Clip {
   size?: number;
   srt?: string;
   subs?: boolean;
+  own?: boolean;
 }
 
 export interface RenderOptions {
@@ -446,6 +447,8 @@ export const api = {
   editClip: (id: string, cid: string, patch: Partial<Clip>) =>
     call<{ clips: Clip[] }>(`/api/projects/${id}/clips/${cid}`, { ...json(patch), method: "PUT" }),
   clipSentences: (id: string) => call<{ sentences: { id: number; text: string; dur: number; t: number }[] }>(`/api/projects/${id}/clip-sentences`),
+  ownClip: (id: string, start: number, end: number, engine = "claude") =>
+    call<{ clips: Clip[]; new: string; note: string }>(`/api/projects/${id}/clips/own`, json({ start, end, engine })),
   setClipParts: (id: string, cid: string, parts: number[][]) =>
     call<{ clips: Clip[] }>(`/api/projects/${id}/clips/${cid}/parts`, { ...json({ parts }), method: "PUT" }),
   refineClip: (id: string, cid: string, engine: string, wish: string) =>

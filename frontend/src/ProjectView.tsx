@@ -68,6 +68,7 @@ export function ProjectView({ id }: { id: string }) {
     try { return localStorage.getItem("final-auto-download") !== "0"; } catch { return true; }
   });
   const [doneMsg, setDoneMsg] = useState<string | null>(null);
+  const [makingReel, setMakingReel] = useState(false);
   const lastRender = useRef<string | undefined>(undefined);
   useEffect(() => {
     const r = project?.render;
@@ -680,6 +681,25 @@ export function ProjectView({ id }: { id: string }) {
                 <button className="btn ghost" onClick={() => seek(words[sel[0]].s)}>
                   ▶ Listen
                 </button>
+                {cutMode && (
+                  <button className="btn ghost" disabled={busy || makingReel}
+                    title="A reel from exactly this part (rounded to whole sentences). Claude writes hook, texts and caption."
+                    onClick={async () => {
+                      setMakingReel(true);
+                      try {
+                        const r = await api.ownClip(id, sel[0], sel[1]);
+                        window.dispatchEvent(new CustomEvent("clips-updated", { detail: r.new }));
+                        setTimeout(() => document.getElementById(`clip-${r.new}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 400);
+                        if (r.note) setError(`The reel is made, but Claude could not write the texts: ${r.note}`);
+                      } catch (e) {
+                        setError((e as Error).message);
+                      } finally {
+                        setMakingReel(false);
+                      }
+                    }}>
+                    {makingReel ? "Making the reel …" : `🎬 Make a reel from this (${Math.round(words[sel[1]].e - words[sel[0]].s)} s)`}
+                  </button>
+                )}
                 <span className="speed-btns small" title="Time-lapse / slow motion for the selected words">
                   Speed:
                   {[0.25, 0.5, 2, 4, 8].map((f) => (

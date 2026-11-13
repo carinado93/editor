@@ -1397,6 +1397,34 @@ def clip_sentences(pid: str):
                           for s in sent]}
 
 
+class OwnClipBody(BaseModel):
+    start: int  # erstes markiertes Wort
+    end: int    # letztes markiertes Wort
+    engine: str = "claude"  # "claude" | "ollama" | "none" (Texte selbst schreiben)
+
+
+@app.post("/api/projects/{pid}/clips/own")
+def own_clip(pid: str, body: OwnClipBody):
+    """Reel aus einer selbst markierten Stelle; Claude schreibt Hook, Texte, Caption (Inhalt bleibt)."""
+    from . import claude, clips
+
+    t = cutstore._transcript(pid)
+    v = cutstore.view(pid)
+    c = clips.from_selection(t, v["cutlist"], v["evaluation"]["flags"], min(body.start, body.end),
+                             max(body.start, body.end))
+    note = ""
+    if body.engine == "claude" and claude.available() or body.engine == "ollama":
+        try:
+            c = clips.write_texts(body.engine, t, c)
+        except UserError as exc:  # Texte sind ein Zusatz – das Reel gibt es trotzdem
+            note = str(exc)
+    with clips._lock:
+        data = clips.load(pid)
+        data["clips"] = [c] + data["clips"]
+        clips.save(pid, data)
+    return {**data, "new": c["id"], "note": note}
+
+
 @app.put("/api/projects/{pid}/clips/{cid}/parts")
 def set_clip_parts(pid: str, cid: str, body: PartsBody):
     from . import clips

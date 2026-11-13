@@ -73,3 +73,12 @@ def test_animation_parse_and_render():
     assert any("YtNumber" in e and "×3" in e for e in ev)
     assert sum("YtSticker" in e for e in ev) == 3
     assert "[7]Erstens" in animations.numbered_sentences(words, flags)
+
+
+def test_own_reel_from_selection_rounds_to_sentences():
+    from editor_app import clips, cuts
+    t = _t("This is about burnout. Rest is not enough. Here are three things. First sleep.", lang="en")
+    cl = cuts.build(t, cuts.default_settings("en"))
+    flags = cuts.word_cut_flags(len(cuts.flat_words(t)), cl["detections"], cl["manual"])
+    c = clips.from_selection(t, cl, flags, 6, 7)  # mitten in "Rest is not enough."
+    assert c["own"] and c["parts"] == [[2]] and c["text"].startswith("Rest") and c["hook_text"]

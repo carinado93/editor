@@ -22,6 +22,13 @@ export function ClipsPanel({ id }: { id: string }) {
 
   useEffect(() => {
     api.clips(id).then((d) => setClips(d.clips)).catch((e) => setErr(e.message));
+    // Reel aus dem Transkript gemacht ("Make a reel from this") → Liste neu laden
+    const reload = () => api.clips(id).then((d) => {
+      setClips(d.clips);
+      setMsg("Your reel is added at the top ✓ – check the hook, then render it.");
+    }).catch(() => {});
+    window.addEventListener("clips-updated", reload);
+    return () => window.removeEventListener("clips-updated", reload);
   }, [id]);
 
   // Während gerendert wird, regelmäßig nachsehen
@@ -183,7 +190,7 @@ function ClipCard({ id, clip, onChange, onMsg, onErr }: {
 
   const rendering = clip.status === "warteschlange" || clip.status === "arbeitet";
   return (
-    <div className={`clip ${clip.status}`}>
+    <div className={`clip ${clip.status}`} id={`clip-${clip.id}`}>
       <div className="clip-video">
         <div className="clip-frame">
           <video ref={video} src={api.proxyUrl(id)} preload="metadata" playsInline disablePictureInPicture
@@ -205,6 +212,7 @@ function ClipCard({ id, clip, onChange, onMsg, onErr }: {
           <strong>{clip.title}</strong>
           <span className="pill">{formatTime(clip.duration)}</span>
           {clip.status === "fertig" && <span className="pill ok-pill">done</span>}
+          {clip.own && <span className="pill">your choice</span>}
         </div>
         {clip.why && <div className="small muted">{clip.why}</div>}
         {clip.warnings?.map((w) => (
