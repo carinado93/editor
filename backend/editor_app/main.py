@@ -1234,6 +1234,29 @@ def publish_settings_save(body: PublishSettingsBody):
     return publish.save_settings(body.values)
 
 
+# ---------- Gespeicherte Effekt-Stile ----------
+
+@app.get("/api/styles")
+def styles_list():
+    from . import styles
+
+    return {"styles": styles.list_all()}
+
+
+@app.post("/api/styles")
+def styles_save(body: dict):
+    from . import styles
+
+    return {"styles": styles.save(body)}
+
+
+@app.delete("/api/styles/{sid}")
+def styles_delete(sid: str):
+    from . import styles
+
+    return {"styles": styles.delete(sid)}
+
+
 # ---------- Karussell-Generator ----------
 
 class CarouselDraftBody(BaseModel):

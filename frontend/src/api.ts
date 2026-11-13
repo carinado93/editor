@@ -272,6 +272,16 @@ export interface CarouselSummary {
   files: string[];
 }
 
+export interface FxStyle {
+  id: string;
+  name: string;
+  allowed: string[];
+  wish: string;
+  sizes: Record<string, number>;
+  outro: boolean;
+  render: Partial<Record<"zoom" | "loudness" | "denoise" | "declick" | "karaoke", boolean> & { subtitles: string }>;
+}
+
 export interface CoverPhoto {
   file: string;
   face: number[] | null;
@@ -320,6 +330,9 @@ export const api = {
   updateNow: () => call<{ ok: boolean; version: string }>("/api/update", { method: "POST" }),
   version: () => call<{ version: string }>("/api/version"),
   projects: () => call<Project[]>("/api/projects"),
+  styles: () => call<{ styles: FxStyle[] }>("/api/styles"),
+  styleSave: (st: Omit<FxStyle, "id">) => call<{ styles: FxStyle[] }>("/api/styles", json(st)),
+  styleDelete: (sid: string) => call<{ styles: FxStyle[] }>(`/api/styles/${sid}`, { method: "DELETE" }),
   openOutbox: (kind = "") => call<{ folder: string }>(`/api/outbox/open?kind=${kind}`, { method: "POST" }),
   letters: () => call<{ letters: LetterSummary[] }>("/api/letters"),
   letterNew: (title: string, number: string, langs: string[]) => call<Letter>("/api/letters", json({ title, number, langs })),

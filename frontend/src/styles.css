@@ -1954,3 +1954,6 @@ kbd {
 .claude-sentence { margin-top: 12px; padding: 12px 14px; border-radius: 12px; background: #f1ecf8; border: 1px solid rgba(100, 68, 165, 0.25); display: flex; flex-direction: column; gap: 8px; }
 .claude-sentence code { white-space: pre-wrap; background: #fff; padding: 8px 10px; border-radius: 8px; }
 .auto-area { width: 100%; box-sizing: border-box; resize: none; overflow: hidden; font: inherit; line-height: 1.5; }
+.fx-style-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 14px; border-radius: 12px; background: #f1ecf8; margin: 8px 0; }
+.fx-style-row select { min-width: 220px; }
+.fx-style-row .btn { width: auto; }

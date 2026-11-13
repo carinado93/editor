@@ -50,3 +50,14 @@ def test_statement_cards_win_over_side_effects():
     got = fxrender.prepare(ov, tm, [], 200)
     assert [g["type"] for g in got].count("statement") == 2
     assert all(a["e"] <= b["s"] for a, b in zip(got, got[1:]))  # nie zwei gleichzeitig
+
+
+def test_styles_save_clean_and_overwrite(tmp_path, monkeypatch):
+    from editor_app import styles
+    monkeypatch.setattr(styles, "FILE", tmp_path / "s.json")
+    styles.save({"name": "My YouTube style", "allowed": ["statement", "nope"], "sizes": {"label": 1.3, "x": 2},
+                 "outro": True, "render": {"declick": True, "subtitles": "bad"}})
+    items = styles.save({"name": "my youtube style", "allowed": ["label"]})  # gleicher Name → überschreiben
+    assert len(items) == 1 and items[0]["allowed"] == ["label"]
+    st = styles.clean({"name": "x", "sizes": {"label": 9}, "render": {"subtitles": "srt"}})
+    assert st["sizes"]["label"] == 2.5 and st["render"] == {"subtitles": "srt"}

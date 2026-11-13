@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { api, formatTime, type CutView, type EffectType, type Overlay, type SpeedRange } from "./api";
+import { api, formatTime, type CutView, type EffectType, type FxStyle, type Overlay, type RenderOptions, type SpeedRange } from "./api";
 import { Status } from "./ReelPackage";
 import { TimeRange } from "./TimeRange";
 
@@ -90,6 +90,8 @@ export function EffectsPanel({ id, cuts, onCuts, time, onSeek, keep }: {
     <section className="card fx-card" id="step-effects">
       <h3>Effects</h3>
       <EffectsEditor
+        renderOptions={cuts.cutlist.render_options as unknown as Record<string, unknown>}
+        onRenderOptions={async (r) => onCuts(await api.renderOptions(id, r as Partial<RenderOptions>))}
         keep={keep}
         endAt={keep?.length ? keep[keep.length - 1][1] : cuts.evaluation.old_duration}
         items={fxItems}
@@ -153,7 +155,7 @@ function inCutPart(keep: [number, number][] | undefined, t: number): boolean {
   return !!keep?.length && !keep.some(([a, b]) => t >= a - 0.05 && t <= b + 0.05);
 }
 
-export function EffectsEditor({ items: source, allowedInit, time, onSeek, preview, onSave, onSuggest, children, compact, exclude, keep, endAt }: {
+export function EffectsEditor({ items: source, allowedInit, time, onSeek, preview, onSave, onSuggest, children, compact, exclude, keep, endAt, renderOptions, onRenderOptions }: {
   items: Overlay[];
   allowedInit?: string[];
   time: number;
@@ -167,6 +169,9 @@ export function EffectsEditor({ items: source, allowedInit, time, onSeek, previe
   keep?: [number, number][];
   /** Ende des Videos (Original-Zeit) – für "Like & Subscribe am Ende" */
   endAt?: number;
+  /** Render-Einstellungen des Projekts (nur beim ganzen Video, nicht bei Reels) – für gespeicherte Stile */
+  renderOptions?: Record<string, unknown>;
+  onRenderOptions?: (r: FxStyle["render"]) => Promise<void>;
 }) {
   const [types, setTypes] = useState<EffectType[]>([]);
   const [allowed, setAllowed] = useState<string[]>(allowedInit ?? []);
@@ -187,7 +192,27 @@ export function EffectsEditor({ items: source, allowedInit, time, onSeek, previe
       setAllowed((a) => (a.length ? a : r.types.filter((t) => t.group !== "C").map((t) => t.key)));
     }).catch(() => {});
   }, []);
+  // ---------- gespeicherte Stile ----------
+  const [styles, setStyles] = useState<FxStyle[]>([]);
+  const [styleId, setStyleId] = useState<string>(() => {
+    try { return localStorage.getItem("fx-style") ?? ""; } catch { return ""; }
+  });
+  const sizesAfterSuggest = useRef<Record<string, number> | null>(null);
   useEffect(() => {
+    api.styles().then((r) => setStyles(r.styles)).catch(() => {});
+  }, []);
+  const withSizes = (list: Overlay[], sizes: Record<string, number>) =>
+    list.map((o) => (o.type && sizes[o.type] ? { ...o, scale: sizes[o.type] } : o));
+
+  useEffect(() => {
+    if (sizesAfterSuggest.current) {  // neue Vorschläge von Claude gleich in den Größen des Stils
+      const sz = sizesAfterSuggest.current;
+      sizesAfterSuggest.current = null;
+      const list = withSizes(source, sz);
+      setItems(list);
+      if (JSON.stringify(list) !== JSON.stringify(source)) void onSave(list);
+      return;
+    }
     if (!dirty) setItems(source);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(source)]);
@@ -214,6 +239,8 @@ export function EffectsEditor({ items: source, allowedInit, time, onSeek, previe
 
   const suggest = (engine: "claude" | "ollama") =>
     act(engine, async () => {
+      const st = styles.find((x) => x.id === styleId);
+      if (st && Object.keys(st.sizes).length) sizesAfterSuggest.current = st.sizes;
       const n = await onSuggest(engine, allowed, wish);
       setDirty(false);
       setMsg(`${n} effects suggested ✓ – check them below, change the type or remove what doesn't fit.`);
@@ -266,6 +293,54 @@ export function EffectsEditor({ items: source, allowedInit, time, onSeek, previe
   };
 
 
+  const applyStyle = (st: FxStyle) =>
+    act("style", async () => {
+      if (st.allowed.length) setAllowed(st.allowed.filter((k) => types.some((t) => t.key === k)));
+      setWish(st.wish);
+      let list = withSizes(items, st.sizes);
+      if (st.outro && endAt != null && !list.some((o) => o.type === "outro")) {
+        const endCut = toCut(keep, endAt);
+        const start = Math.round(toOrig(keep, Math.max(0, endCut - 6)) * 100) / 100;
+        list = [...list, {
+          id: `fx-${Date.now()}`, kind: "fx", type: "outro", place: "side" as const, on: true,
+          title: "Thank you for watching", text: "Thank you for watching", items: [], item_t: [],
+          start, end: Math.round((start + 6) * 100) / 100, bg_t: null, pose_t: [], mode: "vanish" as const,
+        }].sort((a, b) => a.start - b.start);
+      }
+      setItems(list);
+      await onSave(list);
+      setDirty(false);
+      if (onRenderOptions && Object.keys(st.render).length) await onRenderOptions(st.render);
+      setStyleId(st.id);
+      try { localStorage.setItem("fx-style", st.id); } catch { /* egal */ }
+      setMsg(`Style “${st.name}” applied ✓ – effect choice, wish, sizes${st.outro ? ", outro" : ""}${onRenderOptions && Object.keys(st.render).length ? " and render settings" : ""}. Now let Claude suggest, or add effects yourself.`);
+    });
+
+  const saveStyle = () => {
+    const name = prompt("Name for this style (e.g. “My YouTube style”). The same name overwrites an existing style.",
+      styles.find((x) => x.id === styleId)?.name ?? "");
+    if (!name?.trim()) return;
+    // Größe pro Effekt-Typ: wie Carina sie in diesem Video eingestellt hat (Durchschnitt)
+    const acc: Record<string, number[]> = {};
+    items.forEach((o) => { if (o.type && o.scale && o.scale !== 1) (acc[o.type] ??= []).push(o.scale); });
+    const sizes = Object.fromEntries(Object.entries(acc).map(([k, v]) => [k, Math.round((v.reduce((a, b) => a + b, 0) / v.length) * 100) / 100]));
+    const render: FxStyle["render"] = {};
+    if (renderOptions) {
+      for (const k of ["zoom", "loudness", "denoise", "declick", "karaoke"] as const) if (k in renderOptions) render[k] = !!renderOptions[k];
+      if (typeof renderOptions.subtitles === "string") render.subtitles = renderOptions.subtitles;
+    }
+    act("style", async () => {
+      const r = await api.styleSave({ name: name.trim(), allowed, wish, sizes, outro: items.some((o) => o.type === "outro"), render });
+      setStyles(r.styles);
+      const st = r.styles.find((x) => x.name.toLowerCase() === name.trim().toLowerCase());
+      if (st) {
+        setStyleId(st.id);
+        try { localStorage.setItem("fx-style", st.id); } catch { /* egal */ }
+      }
+      setMsg(`Style “${name.trim()}” saved ✓ – use it on your next video with one click.`);
+    });
+  };
+
   const groups = ["A", "B", "C", "D"];
   const typeOf = (k?: string) => types.find((t) => t.key === k);
 
@@ -275,6 +350,28 @@ export function EffectsEditor({ items: source, allowedInit, time, onSeek, previe
         Big effects in your purple, sage and gold. Let Claude suggest moments, or add one yourself at the current
         video position. Every effect below can be changed: type, text, times and size.
       </p>
+
+      <div className="fx-style-row small">
+        <strong>Style</strong>
+        <select value={styleId} onChange={(e) => setStyleId(e.target.value)}>
+          <option value="">– choose a saved style –</option>
+          {styles.map((st) => <option key={st.id} value={st.id}>{st.name}</option>)}
+        </select>
+        <button className="btn small-btn" disabled={!!busy || !styleId} onClick={() => {
+          const st = styles.find((x) => x.id === styleId);
+          if (st) applyStyle(st);
+        }}>Apply</button>
+        <button className="btn ghost small-btn" disabled={!!busy} onClick={saveStyle}
+          title="Saves the ticked effects, your wish, the sizes you set, the outro and (for the whole video) the render settings">
+          Save current as style
+        </button>
+        {styleId && (
+          <button className="link danger" onClick={() => {
+            const st = styles.find((x) => x.id === styleId);
+            if (st && confirm(`Delete the style “${st.name}”?`)) act("style", async () => { setStyles((await api.styleDelete(st.id)).styles); setStyleId(""); });
+          }}>delete style</button>
+        )}
+      </div>
 
       <div className="fx-tool">
         <div className="fx-tool-title">✨ Let Claude suggest</div>
