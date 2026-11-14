@@ -2019,3 +2019,9 @@ kbd {
 .ask-row textarea { flex: 1; min-width: 0; font: inherit; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line, #e6dccd); }
 .ask-row .btn { width: auto; }
 @media (max-width: 700px) { .ask-row { flex-direction: column; } }
+.idea-reel.drag { border-color: var(--lila, #6444a5); background: #f1ecf8; }
+.drop-hint { text-align: center; padding: 18px; cursor: pointer; color: #6b6150; }
+.drop-hint .drop-icon { font-size: 1.6rem; color: var(--lila, #6444a5); }
+.combine-row { cursor: grab; }
+.combine-row.dragging { opacity: 0.4; }
+.combine-row .grip { color: #b9aed0; cursor: grab; user-select: none; }

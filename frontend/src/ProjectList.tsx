@@ -230,6 +230,12 @@ function IdeaReelForm({ onError }: { onError: (m: string | null) => void }) {
   const [language, setLanguage] = useState("en");
   const [busy, setBusy] = useState<string | null>(null);
   const urls = photos.map((f) => URL.createObjectURL(f));
+  const [over, setOver] = useState(false);
+  const dropPhotos = (list: FileList | null) => {
+    const fs = Array.from(list ?? []).filter((f) => f.type.startsWith("image/"));
+    if (fs.length) setPhotos((cur) => [...cur, ...fs].slice(0, 20));
+    else if (list?.length) onError("That is not a photo. Please drop images (JPG or PNG).");
+  };
   useEffect(() => () => urls.forEach((u) => URL.revokeObjectURL(u)));
 
   const go = async () => {
@@ -252,7 +258,10 @@ function IdeaReelForm({ onError }: { onError: (m: string | null) => void }) {
   };
 
   return (
-    <div className="idea-reel">
+    <div className={`idea-reel ${over ? "drag" : ""}`}
+      onDragOver={(e) => { if (e.dataTransfer.types.includes("Files")) { e.preventDefault(); setOver(true); } }}
+      onDragLeave={(e) => { if (e.currentTarget === e.target) setOver(false); }}
+      onDrop={(e) => { if (e.dataTransfer.files.length) { e.preventDefault(); setOver(false); dropPhotos(e.dataTransfer.files); } }}>
       <label className="small">Your idea (Claude writes the texts on the reel from it)
         <textarea rows={4} value={idea} onChange={(e) => setIdea(e.target.value)}
           placeholder={'e.g. "3 signs your rest is not real rest – calm, soft, end with a question"'} />
@@ -278,11 +287,10 @@ function IdeaReelForm({ onError }: { onError: (m: string | null) => void }) {
           </div>
         ))}
         <label className="btn ghost idea-add">
-          + Add photos (optional)
+          + Add photos (optional) – or drag them here
           <input type="file" accept="image/*" multiple hidden onChange={(e) => {
-            const fs = Array.from(e.target.files ?? []);
+            dropPhotos(e.target.files);
             e.target.value = "";
-            setPhotos([...photos, ...fs].slice(0, 20));
           }} />
         </label>
       </div>
@@ -322,6 +330,21 @@ function CombineForm({ onError, language, model }: { onError: (m: string | null)
   const [note, setNote] = useState<string | null>(null);
   const CHUNK = 8 * 1024 * 1024;
   const tr = (k: number) => trans[k] ?? "cut";
+  const [over, setOver] = useState(false);
+  const [dragK, setDragK] = useState<number | null>(null);
+  const isVideo = (f: File) => f.type.startsWith("video/") || /\.(mp4|mov|m4v|mkv|avi|webm|mts)$/i.test(f.name);
+  const dropFiles = (list: FileList | null) => {
+    const fs = Array.from(list ?? []).filter(isVideo);
+    if (fs.length) setFiles((cur) => [...cur, ...fs]);
+    else if (list?.length) onError("That is not a video. Please drop video files (e.g. MP4 or MOV).");
+  };
+  const reorder = (from: number, to: number) => {
+    if (from === to) return;
+    const next = [...files];
+    const [x] = next.splice(from, 1);
+    next.splice(to, 0, x);
+    setFiles(next);
+  };
   const planWithClaude = async () => {
     onError(null);
     setBusy("Claude is choosing the transitions …");
@@ -369,7 +392,16 @@ function CombineForm({ onError, language, model }: { onError: (m: string | null)
     }
   };
   return (
-    <div className="idea-reel">
+    <div className={`idea-reel ${over ? "drag" : ""}`}
+      onDragOver={(e) => { if (dragK == null && e.dataTransfer.types.includes("Files")) { e.preventDefault(); setOver(true); } }}
+      onDragLeave={(e) => { if (e.currentTarget === e.target) setOver(false); }}
+      onDrop={(e) => { if (dragK == null && e.dataTransfer.files.length) { e.preventDefault(); setOver(false); dropFiles(e.dataTransfer.files); } }}>
+      {!files.length && (
+        <div className="drop-hint" onClick={() => document.getElementById("combine-pick")?.click()}>
+          <div className="drop-icon">⬆</div>
+          <p><strong>Drag your videos here</strong> or click to choose – several at once. Then drag them into the right order.</p>
+        </div>
+      )}
       <div className="combine-list">
         {files.map((f, k) => (
           <Fragment key={`${f.name}-${k}`}>
@@ -382,7 +414,13 @@ function CombineForm({ onError, language, model }: { onError: (m: string | null)
               <span className="muted">{TRANS_HINT[tr(k - 1)]}</span>
             </div>
           )}
-          <div className="combine-row small">
+          <div className={`combine-row small ${dragK === k ? "dragging" : ""}`} draggable
+            onDragStart={(e) => { setDragK(k); e.dataTransfer.effectAllowed = "move"; }}
+            onDragOver={(e) => { if (dragK != null) { e.preventDefault(); } }}
+            onDrop={(e) => { if (dragK != null) { e.preventDefault(); e.stopPropagation(); reorder(dragK, k); setDragK(null); } }}
+            onDragEnd={() => setDragK(null)}
+            title="Drag to change the order">
+            <span className="grip">⋮⋮</span>
             <strong>{k + 1}.</strong>
             <span className="grow">{f.name}</span>
             <span className="muted">{formatSize(f.size)}</span>
@@ -394,10 +432,9 @@ function CombineForm({ onError, language, model }: { onError: (m: string | null)
         ))}
         <label className="btn ghost idea-add">
           + Add videos
-          <input type="file" accept="video/*" multiple hidden onChange={(e) => {
-            const fs = Array.from(e.target.files ?? []);
+          <input id="combine-pick" type="file" accept="video/*" multiple hidden onChange={(e) => {
+            dropFiles(e.target.files);
             e.target.value = "";
-            setFiles([...files, ...fs]);
           }} />
         </label>
       </div>
