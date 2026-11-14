@@ -398,7 +398,9 @@ export const api = {
   combineNew: () => call<{ draft: string }>("/api/combine", { method: "POST" }),
   combineChunk: (draft: string, k: number, name: string, offset: number, chunk: Blob) =>
     call<{ uploaded: number }>(`/api/combine/${draft}/clip/${k}?name=${encodeURIComponent(name)}&offset=${offset}`, { method: "PUT", body: chunk }),
-  combineBuild: (draft: string, body: { name: string; manual: boolean; language: string; model: string }) =>
+  combinePlan: (description: string, names: string[]) =>
+    call<{ transitions: string[]; note: string }>("/api/combine/plan/claude", json({ description, names })),
+  combineBuild: (draft: string, body: { name: string; manual: boolean; language: string; model: string; transitions: string[] }) =>
     call<Project>(`/api/combine/${draft}/build`, json(body)),
   timeCuts: (id: string, ranges: [number, number][]) => call<CutView>(`/api/projects/${id}/cuts/time`, { ...json({ ranges }), method: "PUT" }),
   uploadChunk: (id: string, offset: number, chunk: Blob) =>

@@ -2009,3 +2009,7 @@ kbd {
 .time-cut-list, .clip-marks { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .idea-reel label.check-line { flex-direction: row; align-items: center; gap: 6px; }
 .idea-reel label.check-line input { width: auto; }
+.combine-trans { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 2px 10px 2px 26px; color: var(--lila, #6444a5); }
+.combine-trans select { font: inherit; padding: 4px 8px; border-radius: 8px; border: 1px solid var(--line, #e6dccd); }
+.combine-describe { display: flex; flex-direction: column; gap: 6px; }
+.combine-describe .btn { align-self: flex-start; width: auto; }

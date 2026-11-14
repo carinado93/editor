@@ -91,6 +91,28 @@ class CombineBody(BaseModel):
     manual: bool = True  # "Ich schneide selbst": keine automatischen Schnitte
     language: str = "auto"
     model: str = "auto"
+    transitions: list[str] = []  # pro Nahtstelle: cut | fade | smoke | cover | flash | zoom | whip
+
+
+class CombinePlanBody(BaseModel):
+    description: str
+    names: list[str]
+
+
+@app.get("/api/combine/transitions")
+def combine_transitions():
+    from . import combine
+
+    return {"transitions": combine.TRANSITION_LABELS}
+
+
+@app.post("/api/combine/plan/{engine}")
+def combine_plan(engine: str, body: CombinePlanBody):
+    from . import combine
+
+    if engine not in ("claude", "ollama"):
+        raise UserError("Unknown AI.")
+    return combine.plan_transitions(body.description, body.names, engine)
 
 
 @app.post("/api/combine")
@@ -112,7 +134,7 @@ async def combine_chunk(did: str, k: int, request: Request, name: str = "clip.mp
 def combine_build(did: str, body: CombineBody):
     from . import combine
 
-    return combine.build(did, body.name, body.manual, body.language, body.model)
+    return combine.build(did, body.name, body.manual, body.language, body.model, body.transitions)
 
 
 class TimeCutsBody(BaseModel):

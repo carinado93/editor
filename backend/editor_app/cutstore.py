@@ -114,6 +114,11 @@ def create(pid: str, transcript: dict | None = None) -> dict:
         for dd in cl["detections"]:
             dd["active"] = False
         cl["time_cuts"] = []
+    for k, f in enumerate(projects.load(pid).get("auto_fx") or []):  # Rauch/Zoom an den Nahtstellen (Übergänge)
+        cl.setdefault("overlays", []).append({
+            "id": f"fx-auto-{k}", "kind": "fx", "type": f["type"], "place": "side", "on": True, "text": f["type"],
+            "title": "", "items": [], "item_t": [], "start": f["start"], "end": f["end"], "why": "transition",
+            "bg_t": None, "pose_t": [], "mode": "vanish", "scale": 1.0})
     if reel:
         cl["render_options"] = dict(REEL_RENDER_DEFAULTS)
         cl["overlays"] = default_hook(t)

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { api, formatSize, formatTime, type Mode, type Project, type SystemInfo } from "./api";
 import { dismiss, queueFiles, subscribe, type UploadState } from "./uploads";
 
@@ -297,13 +297,44 @@ function IdeaReelForm({ onError }: { onError: (m: string | null) => void }) {
   );
 }
 
+const TRANS_LABEL: Record<string, string> = {
+  cut: "Cut", fade: "Soft fade", smoke: "Appear / disappear in smoke", cover: "Cover transition (glass / hand in front of the lens)",
+  flash: "Flash", zoom: "Zoom", whip: "Whip",
+};
+const TRANS_HINT: Record<string, string> = {
+  cut: "",
+  fade: "the two videos blend softly",
+  smoke: "film on a tripod: one video of the empty room, one with you in the same spot – you appear/disappear in a smoke puff",
+  cover: "end video 1 by covering the lens (glass, hand, jacket), start video 2 covered too – the app cuts exactly in the covered moment",
+  flash: "a short white flash",
+  zoom: "zooms into the next video",
+  whip: "fast swipe with motion blur",
+};
+
 /** Mehrere Videos verbinden: Reihenfolge festlegen, hochladen, verbinden → selbst schneiden + Effekte. */
 function CombineForm({ onError, language, model }: { onError: (m: string | null) => void; language: string; model: string }) {
   const [files, setFiles] = useState<File[]>([]);
   const [name, setName] = useState("");
   const [manual, setManual] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
+  const [trans, setTrans] = useState<string[]>([]);
+  const [describe, setDescribe] = useState("");
+  const [note, setNote] = useState<string | null>(null);
   const CHUNK = 8 * 1024 * 1024;
+  const tr = (k: number) => trans[k] ?? "cut";
+  const planWithClaude = async () => {
+    onError(null);
+    setBusy("Claude is choosing the transitions …");
+    try {
+      const r = await api.combinePlan(describe, files.map((f) => f.name));
+      setTrans(r.transitions);
+      setNote(r.note);
+    } catch (e) {
+      onError((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  };
   const move = (k: number, dir: -1 | 1) => {
     const j = k + dir;
     if (j < 0 || j >= files.length) return;
@@ -329,7 +360,7 @@ function CombineForm({ onError, language, model }: { onError: (m: string | null)
         }
       }
       setBusy("Joining the videos … (about as long as the videos)");
-      const p = await api.combineBuild(draft, { name, manual, language, model });
+      const p = await api.combineBuild(draft, { name, manual, language, model, transitions: files.slice(1).map((_, k) => tr(k)) });
       window.location.hash = `#/p/${p.id}`;
     } catch (e) {
       onError((e as Error).message);
@@ -341,7 +372,17 @@ function CombineForm({ onError, language, model }: { onError: (m: string | null)
     <div className="idea-reel">
       <div className="combine-list">
         {files.map((f, k) => (
-          <div key={`${f.name}-${k}`} className="combine-row small">
+          <Fragment key={`${f.name}-${k}`}>
+          {k > 0 && (
+            <div className="combine-trans small">
+              <span>↓ transition</span>
+              <select value={tr(k - 1)} onChange={(e) => setTrans(files.slice(1).map((_, j) => (j === k - 1 ? e.target.value : tr(j))))}>
+                {Object.entries(TRANS_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+              </select>
+              <span className="muted">{TRANS_HINT[tr(k - 1)]}</span>
+            </div>
+          )}
+          <div className="combine-row small">
             <strong>{k + 1}.</strong>
             <span className="grow">{f.name}</span>
             <span className="muted">{formatSize(f.size)}</span>
@@ -349,6 +390,7 @@ function CombineForm({ onError, language, model }: { onError: (m: string | null)
             <button className="link" disabled={k === files.length - 1} onClick={() => move(k, 1)} title="later">↓</button>
             <button className="link danger" onClick={() => setFiles(files.filter((_, j) => j !== k))}>remove</button>
           </div>
+          </Fragment>
         ))}
         <label className="btn ghost idea-add">
           + Add videos
@@ -359,6 +401,16 @@ function CombineForm({ onError, language, model }: { onError: (m: string | null)
           }} />
         </label>
       </div>
+      {files.length > 1 && (
+        <div className="combine-describe small">
+          <label>Or describe what should happen – Claude picks the transitions
+            <textarea rows={2} value={describe} onChange={(e) => setDescribe(e.target.value)}
+              placeholder={'e.g. "in video 2 I appear in the room in smoke" or "I hold a glass in front of the camera, then I wear another outfit"'} />
+          </label>
+          <button className="btn ghost small-btn" disabled={!!busy || !describe.trim()} onClick={planWithClaude}>✨ Let Claude choose</button>
+          {note && <div className="banner small">{note}</div>}
+        </div>
+      )}
       <div className="idea-reel-row small">
         <label>Name<input value={name} placeholder="Combined video" onChange={(e) => setName(e.target.value)} /></label>
       </div>
