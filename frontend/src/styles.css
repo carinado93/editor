@@ -1995,3 +1995,17 @@ kbd {
 .idea-photo img { width: 84px; height: 150px; object-fit: cover; border-radius: 8px; box-shadow: 0 1px 5px rgba(60, 40, 30, 0.15); }
 .idea-add { cursor: pointer; width: auto; }
 .idea-reel > .btn { align-self: flex-start; width: auto; }
+.fx-pos { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 6px; }
+.fx-pos .seg { display: inline-flex; border: 1px solid rgba(100, 68, 165, 0.3); border-radius: 999px; overflow: hidden; }
+.fx-pos .seg button { border: 0; background: #fff; padding: 3px 10px; font: inherit; font-size: 0.8rem; cursor: pointer; color: var(--lila, #6444a5); }
+.fx-pos .seg button.on { background: var(--lila, #6444a5); color: #fff; }
+.fx-desc { margin-top: -2px; }
+.combine-list { display: flex; flex-direction: column; gap: 6px; }
+.combine-row { display: flex; gap: 10px; align-items: center; background: #fff; border: 1px solid var(--line, #e6dccd); border-radius: 10px; padding: 6px 10px; }
+.combine-row .grow { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.combine-list .idea-add { align-self: flex-start; }
+.time-cut { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; margin: 8px 0; }
+.time-cut .btn { width: auto; }
+.time-cut-list, .clip-marks { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.idea-reel label.check-line { flex-direction: row; align-items: center; gap: 6px; }
+.idea-reel label.check-line input { width: auto; }

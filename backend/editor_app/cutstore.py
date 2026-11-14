@@ -105,7 +105,15 @@ def create(pid: str, transcript: dict | None = None) -> dict:
     reel = _mode(pid) == "reel"
     if reel:
         settings["no_cuts"] = True
+    manual = bool(projects.load(pid).get("manual_cut"))
+    if manual:  # "Ich schneide selbst": Pausen bleiben, Laute bleiben, Vorschläge nur als Vorschlag
+        settings["tempo"] = "original"
+        settings["noises"] = False
     cl = cuts.build(t, settings, gaze_events=_gaze_events(pid))
+    if manual:
+        for dd in cl["detections"]:
+            dd["active"] = False
+        cl["time_cuts"] = []
     if reel:
         cl["render_options"] = dict(REEL_RENDER_DEFAULTS)
         cl["overlays"] = default_hook(t)
@@ -228,6 +236,22 @@ def set_words(pid: str, indices: list[int], cut: bool) -> dict:
                 man_cut.discard(k)
                 keep.add(k)
         cl["manual"] = {"keep": sorted(keep), "cut": sorted(man_cut)}
+    return _change(pid, fn)
+
+
+def set_time_cuts(pid: str, ranges: list) -> dict:
+    """Zeitbereiche selbst herausschneiden (auch Stellen ohne Sprechen, z. B. Anfang/Ende eines Clips)."""
+    clean = []
+    for r in ranges or []:
+        try:
+            a, b = sorted((float(r[0]), float(r[1])))
+        except (TypeError, ValueError, IndexError):
+            continue
+        if b - a > 0.05:
+            clean.append([round(max(0.0, a), 3), round(b, 3)])
+
+    def fn(cl):
+        cl["time_cuts"] = sorted(clean)
     return _change(pid, fn)
 
 
@@ -540,6 +564,8 @@ def set_overlays(pid: str, overlays: list[dict]) -> dict:
                     item["scale"] = round(max(0.4, min(2.5, float(o.get("scale") or 1))), 2)
                 except (TypeError, ValueError):
                     item["scale"] = 1.0
+                item["pos_x"] = o.get("pos_x") if o.get("pos_x") in ("left", "center", "right") else "auto"
+                item["pos_y"] = o.get("pos_y") if o.get("pos_y") in ("top", "middle", "bottom") else "auto"
             clean.append(item)
         cl["overlays"] = clean
     return _change(pid, fn)

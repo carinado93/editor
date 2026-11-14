@@ -1,6 +1,6 @@
 // Verbindung zum Python-Motor.
 
-export type Mode = "youtube" | "reel" | "idee";
+export type Mode = "youtube" | "reel" | "idee" | "kombi";
 
 export interface VideoInfo {
   duration: number;
@@ -29,6 +29,8 @@ export interface Project {
   settings: { model: string; language: string };
   transcript: { language: string; model: string; device: string; words: number } | null;
   idea_note?: string;
+  manual_cut?: boolean;
+  clip_starts?: { n: number; t: number; name: string }[];
   from_idea?: boolean;
   render?: { status: "warteschlange" | "arbeitet" | "fertig" | "fehler" | "abgebrochen"; progress: number; message: string; error: string | null; quality: string; file?: string };
   thumbnails?: { file: string; t: number }[];
@@ -48,7 +50,7 @@ export interface Detection {
 }
 
 export interface CutSettings {
-  tempo: "locker" | "normal" | "straff";
+  tempo: "locker" | "normal" | "straff" | "original";
   max_gap: number;
   signal_words: string[];
   fillers: Record<string, boolean>;
@@ -93,6 +95,8 @@ export interface Overlay {
   mode?: "vanish" | "appear";
   /** Größe des Effekts (1 = normal) */
   scale?: number;
+  pos_x?: "auto" | "left" | "center" | "right";
+  pos_y?: "auto" | "top" | "middle" | "bottom";
 }
 
 export interface EffectType {
@@ -173,6 +177,7 @@ export interface CutView {
     speed?: SpeedRange[];
     fx_allowed?: string[];
     render_options: RenderOptions;
+    time_cuts?: [number, number][];
   };
   evaluation: { flags: (CutType | null)[]; keep: [number, number][]; pauses: Pause[]; new_duration: number; old_duration: number };
   can_undo: boolean;
@@ -390,6 +395,12 @@ export const api = {
   transcript: (id: string) => call<Transcript>(`/api/projects/${id}/transcript`),
   create: (body: { name: string; mode: Mode; filename: string; size: number; model: string; language: string }) =>
     call<Project>("/api/projects", json(body)),
+  combineNew: () => call<{ draft: string }>("/api/combine", { method: "POST" }),
+  combineChunk: (draft: string, k: number, name: string, offset: number, chunk: Blob) =>
+    call<{ uploaded: number }>(`/api/combine/${draft}/clip/${k}?name=${encodeURIComponent(name)}&offset=${offset}`, { method: "PUT", body: chunk }),
+  combineBuild: (draft: string, body: { name: string; manual: boolean; language: string; model: string }) =>
+    call<Project>(`/api/combine/${draft}/build`, json(body)),
+  timeCuts: (id: string, ranges: [number, number][]) => call<CutView>(`/api/projects/${id}/cuts/time`, { ...json({ ranges }), method: "PUT" }),
   uploadChunk: (id: string, offset: number, chunk: Blob) =>
     call<{ uploaded: number }>(`/api/projects/${id}/upload?offset=${offset}`, { method: "PUT", body: chunk }),
   uploadDone: (id: string) => call<Project>(`/api/projects/${id}/upload/done`, { method: "POST" }),

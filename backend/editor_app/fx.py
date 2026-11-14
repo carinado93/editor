@@ -589,6 +589,29 @@ def draw_endcard(layer, ctx, it, t, d, place):
 def draw_bigwords(layer, ctx, it, t, d, place):
     """Große Untertitel, 1–2 Wörter auf einmal; Schlüsselwörter (aus "items") lila-kursiv in Serif."""
     words = ctx.words
+    if not words:  # Reel ohne Sprechen: Carinas eigener Text, Zeile für Zeile über die Dauer verteilt
+        lines = [x for x in (it.get("items") or []) if str(x).strip()] or \
+            [x for x in (it.get("title") or "").split("|") if x.strip()]
+        if not lines:
+            return
+        k = min(len(lines) - 1, int(t / max(0.1, d / len(lines))))
+        f = font("head", int(92 * ctx.u))
+        fa = font("serif_i", int(110 * ctx.u))
+        txt = lines[k].strip()
+        for ln_i, ln in enumerate(wrap(txt, f, int(ctx.w * 0.86))[:3]):
+            wdt = rich_width(ln, f, fa)
+            y = ctx.h * (0.70 if ctx.portrait else 0.80) + ln_i * f.size * 1.15
+            dr = ImageDraw.Draw(layer)
+            x = (ctx.w - wdt) / 2
+            for n, part in enumerate(ln.replace("**", "*").split("*")):
+                if not part:
+                    continue
+                acc = n % 2 == 1
+                ff = fa if acc else f
+                dr.text((x, y), part, font=ff, fill=(LILA if acc else WEISS) + (255,), anchor="ls",
+                        stroke_width=0 if acc else max(2, int(3 * ctx.u)), stroke_fill=(0, 0, 0, 70))
+                x += ff.getlength(part)
+        return
     keys = {k.lower().strip(".,!?") for k in (it.get("items") or [])}
     cur = [w for w in words if w["s"] - 0.02 <= t <= w["e"] + 0.25]
     if not cur:
@@ -1478,6 +1501,43 @@ def draw_outro(layer, ctx, it, t, d, place):
         dr.polygon(poly, fill=WEISS, outline=TINTE, width=max(2, int(3 * u)))
 
 
+def _position(layer: Image.Image, ctx, it: dict, typ: str, d: float, place: str) -> Image.Image:
+    """Carinas eigene Position (links/mitte/rechts, oben/mitte/unten): die ganze Text-Ebene verschieben.
+    Gemessen wird einmal am fertig aufgebauten Effekt (ca. 70 % der Dauer), damit nichts springt."""
+    px, py = it.get("pos_x", "auto"), it.get("pos_y", "auto")
+    if px in (None, "auto") and py in (None, "auto"):
+        return layer
+    key = ("posbox", px, py, ctx.u)
+    if key not in ctx.cache:
+        ref = Image.new("RGBA", layer.size, (0, 0, 0, 0))
+        LAYER_DRAWERS[typ](ref, ctx, it, max(0.0, min(d - 0.3, d * 0.7)), d, place)
+        ctx.cache[key] = ref.getchannel("A").getbbox()
+    box = ctx.cache[key]
+    if not box:
+        return layer
+    w, h = layer.size
+    bw, bh = box[2] - box[0], box[3] - box[1]
+    m = int(48 * ctx.u)
+    dx = dy = 0
+    if px == "left":
+        dx = m - box[0]
+    elif px == "center":
+        dx = (w - bw) // 2 - box[0]
+    elif px == "right":
+        dx = w - m - bw - box[0]
+    if py == "top":
+        dy = int(h * 0.12) - box[1]
+    elif py == "middle":
+        dy = (h - bh) // 2 - box[1]
+    elif py == "bottom":
+        dy = int(h * 0.82) - bh - box[1]
+    if not dx and not dy:
+        return layer
+    moved = Image.new("RGBA", layer.size, (0, 0, 0, 0))
+    moved.alpha_composite(layer, (dx, dy)) if dx >= 0 and dy >= 0 else moved.paste(layer, (dx, dy), layer)
+    return moved
+
+
 # Zeichner, die nur eine Ebene über dem Bild brauchen
 LAYER_DRAWERS = {"steps": draw_steps, "cards": draw_cards, "tags": draw_tags, "scores": draw_scores,
                  "headline": draw_headline, "checklist": draw_checklist, "endcard": draw_endcard,
@@ -1509,11 +1569,17 @@ def render_frame(frame: Image.Image, it: dict, t: float, d: float, ctx: Ctx, mas
             scene = lavender_bg(w, h) if "bg" not in ctx.cache else ctx.cache["bg"]
             ctx.cache["bg"] = scene
             layer = scene.copy()
-            LAYER_DRAWERS[typ](layer, ctx, it, t, d, place)
+            if it.get("pos_x", "auto") not in (None, "auto") or it.get("pos_y", "auto") not in (None, "auto"):
+                txt = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+                LAYER_DRAWERS[typ](txt, ctx, it, t, d, place)
+                layer.alpha_composite(_position(txt, ctx, it, typ, d, place))
+            else:
+                LAYER_DRAWERS[typ](layer, ctx, it, t, d, place)
             out = Image.blend(base, layer, vis)
         else:
             layer = Image.new("RGBA", (w, h), (0, 0, 0, 0))
             LAYER_DRAWERS[typ](layer, ctx, it, t, d, place)
+            layer = _position(layer, ctx, it, typ, d, place)
             out = base.copy()
             out.alpha_composite(layer)
             if typ == "clothesline" and mask is not None:

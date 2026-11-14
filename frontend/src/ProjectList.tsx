@@ -5,6 +5,7 @@ import { dismiss, queueFiles, subscribe, type UploadState } from "./uploads";
 const MODE_CARDS: { mode: Mode; title: string; text: string; ready: boolean }[] = [
   { mode: "youtube", title: "YouTube", text: "Long raw video. Pauses, slips, retakes and filler words get marked.", ready: true },
   { mode: "reel", title: "Enhance a reel", text: "Your clip stays exactly as it is. Texts, highlights and animations get added.", ready: true },
+  { mode: "kombi", title: "Join several videos", text: "2 or more clips → one video. You cut it yourself, then add effects.", ready: true },
   { mode: "idee", title: "Reel from an idea", text: "No filming: your photos (or your lavender background) + your idea → a reel.", ready: true },
 ];
 
@@ -89,7 +90,7 @@ export function ProjectList({ system }: { system: SystemInfo | null }) {
           ))}
         </div>
 
-        {mode === "idee" ? <IdeaReelForm onError={setError} /> : (
+        {mode === "kombi" ? <CombineForm onError={setError} language={language} model={model} /> : mode === "idee" ? <IdeaReelForm onError={setError} /> : (
         <div
           className={`drop ${drag ? "drag" : ""}`}
           onDragOver={(e) => {
@@ -292,6 +293,86 @@ function IdeaReelForm({ onError }: { onError: (m: string | null) => void }) {
         {" "}Afterwards everything works like “Enhance a reel”: Claude writes the texts, you add effects, render, done.
       </p>
       <button className="btn" disabled={!!busy || !idea.trim()} onClick={go}>{busy ?? "✨ Make the reel"}</button>
+    </div>
+  );
+}
+
+/** Mehrere Videos verbinden: Reihenfolge festlegen, hochladen, verbinden → selbst schneiden + Effekte. */
+function CombineForm({ onError, language, model }: { onError: (m: string | null) => void; language: string; model: string }) {
+  const [files, setFiles] = useState<File[]>([]);
+  const [name, setName] = useState("");
+  const [manual, setManual] = useState(true);
+  const [busy, setBusy] = useState<string | null>(null);
+  const CHUNK = 8 * 1024 * 1024;
+  const move = (k: number, dir: -1 | 1) => {
+    const j = k + dir;
+    if (j < 0 || j >= files.length) return;
+    const next = [...files];
+    [next[k], next[j]] = [next[j], next[k]];
+    setFiles(next);
+  };
+  const go = async () => {
+    onError(null);
+    try {
+      setBusy("Preparing …");
+      const { draft } = await api.combineNew();
+      const total = files.reduce((a, f) => a + f.size, 0);
+      let done = 0;
+      for (let k = 0; k < files.length; k++) {
+        const f = files[k];
+        let offset = 0;
+        while (offset < f.size) {
+          const r = await api.combineChunk(draft, k, f.name, offset, f.slice(offset, offset + CHUNK));
+          done += r.uploaded - offset;
+          offset = r.uploaded;
+          setBusy(`Uploading video ${k + 1} of ${files.length} … ${Math.round((done / total) * 100)} %`);
+        }
+      }
+      setBusy("Joining the videos … (about as long as the videos)");
+      const p = await api.combineBuild(draft, { name, manual, language, model });
+      window.location.hash = `#/p/${p.id}`;
+    } catch (e) {
+      onError((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  };
+  return (
+    <div className="idea-reel">
+      <div className="combine-list">
+        {files.map((f, k) => (
+          <div key={`${f.name}-${k}`} className="combine-row small">
+            <strong>{k + 1}.</strong>
+            <span className="grow">{f.name}</span>
+            <span className="muted">{formatSize(f.size)}</span>
+            <button className="link" disabled={k === 0} onClick={() => move(k, -1)} title="earlier">↑</button>
+            <button className="link" disabled={k === files.length - 1} onClick={() => move(k, 1)} title="later">↓</button>
+            <button className="link danger" onClick={() => setFiles(files.filter((_, j) => j !== k))}>remove</button>
+          </div>
+        ))}
+        <label className="btn ghost idea-add">
+          + Add videos
+          <input type="file" accept="video/*" multiple hidden onChange={(e) => {
+            const fs = Array.from(e.target.files ?? []);
+            e.target.value = "";
+            setFiles([...files, ...fs]);
+          }} />
+        </label>
+      </div>
+      <div className="idea-reel-row small">
+        <label>Name<input value={name} placeholder="Combined video" onChange={(e) => setName(e.target.value)} /></label>
+      </div>
+      <label className="small check-line">
+        <input type="checkbox" checked={manual} onChange={(e) => setManual(e.target.checked)} />{" "}
+        I cut it myself (nothing is cut automatically – suggestions are only marked, pauses stay)
+      </label>
+      <p className="small muted">
+        The videos are joined in this order (size and frame rate of the first video; a portrait first video → portrait result).
+        Your originals stay untouched. Then: cut in the transcript or by time, add effects, render.
+      </p>
+      <button className="btn" disabled={!!busy || files.length < 2} onClick={go}>
+        {busy ?? (files.length < 2 ? "Add at least 2 videos" : `✨ Join ${files.length} videos`)}
+      </button>
     </div>
   );
 }

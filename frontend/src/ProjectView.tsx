@@ -19,7 +19,7 @@ const TYPE_LABEL: Record<CutType, string> = {
   manuell: "Deleted by you",
 };
 
-const TEMPO_LABEL: Record<string, string> = { locker: "relaxed", normal: "normal", straff: "tight" };
+const TEMPO_LABEL: Record<string, string> = { original: "keep all pauses", locker: "relaxed", normal: "normal", straff: "tight" };
 
 const QUALITIES: Record<string, string> = {
   "1080": "1080p (recommended)",
@@ -445,9 +445,11 @@ export function ProjectView({ id }: { id: string }) {
             {noisesCut > 0 && <span className="chip cut-fuellwort">Sounds without words: {noisesCut}</span>}
             {suggestions > 0 && <span className="chip suggestion">Suggestions: {suggestions}</span>}
           </div>
+          {cutMode && <TimeCutBox id={id} cuts={cuts} time={time} clips={project.clip_starts ?? []} busy={busy}
+            onSeek={(t) => seek(t, false)} run={run} />}
           <div className="tempo" role="radiogroup" aria-label="Tempo">
             <span className="small muted">Tempo</span>
-            {(["locker", "normal", "straff"] as const).map((t) => (
+            {(["original", "locker", "normal", "straff"] as const).map((t) => (
               <button
                 key={t}
                 role="radio"
@@ -955,5 +957,55 @@ function CutSettingsPanel({
         </div>
       </div>
     </details>
+  );
+}
+
+/** Selbst schneiden nach Zeit (auch Stellen ohne Sprechen) + Sprungmarken zu den einzelnen Clips. */
+function TimeCutBox({ id, cuts, time, clips, busy, onSeek, run }: {
+  id: string; cuts: CutView; time: number; clips: { n: number; t: number; name: string }[]; busy: boolean;
+  onSeek: (t: number) => void; run: (fn: () => Promise<CutView>) => Promise<void>;
+}) {
+  const [from, setFrom] = useState<number | null>(null);
+  const ranges = cuts.cutlist.time_cuts ?? [];
+  return (
+    <div className="time-cut small">
+      {clips.length > 1 && (
+        <span className="clip-marks">
+          Clips:{" "}
+          {clips.map((c) => (
+            <button key={c.n} className="chip" onClick={() => onSeek(c.t)} title={`Jump to the start of video ${c.n}`}>
+              ▶ {c.n} · {formatTime(c.t)}
+            </button>
+          ))}
+        </span>
+      )}
+      <span>
+        Cut by time (also parts without speech):{" "}
+        {from == null ? (
+          <button className="btn ghost small-btn" disabled={busy} onClick={() => setFrom(time)}>✂ start cut here ({formatTime(time)})</button>
+        ) : (
+          <>
+            from <strong>{formatTime(from)}</strong>{" "}
+            <button className="btn small-btn" disabled={busy || time <= from} onClick={() => {
+              const a = from;
+              setFrom(null);
+              void run(() => api.timeCuts(id, [...ranges, [a, time]]));
+            }}>✂ cut until here ({formatTime(time)})</button>{" "}
+            <button className="link" onClick={() => setFrom(null)}>cancel</button>
+          </>
+        )}
+      </span>
+      {!!ranges.length && (
+        <span className="time-cut-list">
+          {ranges.map(([a, b], k) => (
+            <span key={k} className="chip cut-pause">
+              <button className="link" onClick={() => onSeek(a)}>{formatTime(a)}–{formatTime(b)}</button>{" "}
+              <button className="link danger" disabled={busy} title="Bring this part back"
+                onClick={() => run(() => api.timeCuts(id, ranges.filter((_, j) => j !== k)))}>✕</button>
+            </span>
+          ))}
+        </span>
+      )}
+    </div>
   );
 }

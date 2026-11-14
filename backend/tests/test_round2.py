@@ -82,3 +82,11 @@ def test_own_reel_from_selection_rounds_to_sentences():
     flags = cuts.word_cut_flags(len(cuts.flat_words(t)), cl["detections"], cl["manual"])
     c = clips.from_selection(t, cl, flags, 6, 7)  # mitten in "Rest is not enough."
     assert c["own"] and c["parts"] == [[2]] and c["text"].startswith("Rest") and c["hook_text"]
+
+
+def test_time_cuts_and_original_tempo_keep_silent_parts():
+    from editor_app import cuts
+    t = {"language": "en", "duration": 7.0, "segments": []}
+    cl = cuts.build(t, {**cuts.default_settings("en"), "tempo": "original", "noises": False})
+    cl["time_cuts"] = [[0, 0.5], [3.8, 4.6]]
+    assert cuts.evaluate(t, cl)["keep"] == [[0.5, 3.8], [4.6, 7.0]]

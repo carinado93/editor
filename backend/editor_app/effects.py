@@ -87,7 +87,9 @@ def clean(o: dict, duration: float | None = None) -> dict | None:
             "bg_t": round(float(o["bg_t"]), 2) if o.get("bg_t") is not None else None,
             "pose_t": [round(float(x), 2) for x in o.get("pose_t") or []][:8],
             "mode": "appear" if o.get("mode") == "appear" else "vanish",
-            "scale": round(max(0.4, min(2.5, float(o.get("scale") or 1))), 2)}
+            "scale": round(max(0.4, min(2.5, float(o.get("scale") or 1))), 2),
+            "pos_x": o.get("pos_x") if o.get("pos_x") in ("left", "center", "right") else "auto",
+            "pos_y": o.get("pos_y") if o.get("pos_y") in ("top", "middle", "bottom") else "auto"}
 
 
 def clip_transcript(transcript: dict, flags: list, segments: list[list[float]]) -> dict:

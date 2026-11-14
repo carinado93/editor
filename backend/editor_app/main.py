@@ -86,6 +86,44 @@ def create_project(body: NewProject):
                            {"model": body.model, "language": body.language})
 
 
+class CombineBody(BaseModel):
+    name: str = ""
+    manual: bool = True  # "Ich schneide selbst": keine automatischen Schnitte
+    language: str = "auto"
+    model: str = "auto"
+
+
+@app.post("/api/combine")
+def combine_new():
+    """Mehrere Videos verbinden: Entwurf anlegen, Clips hochladen (in Reihenfolge), dann verbinden."""
+    from . import combine
+
+    return {"draft": combine.new_draft()}
+
+
+@app.put("/api/combine/{did}/clip/{k}")
+async def combine_chunk(did: str, k: int, request: Request, name: str = "clip.mp4", offset: int = 0):
+    from . import combine
+
+    return {"uploaded": combine.write_chunk(did, k, name, offset, await request.body())}
+
+
+@app.post("/api/combine/{did}/build")
+def combine_build(did: str, body: CombineBody):
+    from . import combine
+
+    return combine.build(did, body.name, body.manual, body.language, body.model)
+
+
+class TimeCutsBody(BaseModel):
+    ranges: list[list[float]]
+
+
+@app.put("/api/projects/{pid}/cuts/time")
+def time_cuts(pid: str, body: TimeCutsBody):
+    return cutstore.set_time_cuts(pid, body.ranges)
+
+
 class IdeaReelBody(BaseModel):
     name: str = ""
     idea: str = ""

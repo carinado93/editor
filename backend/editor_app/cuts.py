@@ -34,6 +34,8 @@ TEMPO = {
     "locker": (0.75, 0.50),
     "normal": (0.45, 0.30),
     "straff": (0.30, 0.18),
+    # "Ich schneide selbst": keine Pause wird automatisch gekürzt, Anfang und Ende bleiben ganz
+    "original": (1e9, 1e9),
 }
 
 # Wörter, die man absichtlich doppelt sagt ("sehr sehr") → nur Vorschlag
@@ -317,11 +319,14 @@ def timeline(words: list[dict], flags: list[str | None], duration: float, tempo:
     pause_keep = set(pause_keep or [])
     kept = [k for k, f in enumerate(flags) if f is None]
     lead = 0.15  # so viel Luft vor dem ersten und nach dem letzten Wort
+    whole = tempo == "original"
     if not kept:
+        if whole and not any(flags):  # ganz ohne Sprechen (z. B. nur Bilder/B-Roll): alles bleibt
+            return {"keep": [[0.0, round(duration, 3)]], "pauses": [], "new_duration": round(duration, 2)}
         return {"keep": [], "pauses": [], "new_duration": 0.0}
     segs: list[list[float]] = []
     pauses = []
-    cur_start = max(0.0, words[kept[0]]["s"] - lead)
+    cur_start = 0.0 if whole and kept[0] == 0 else max(0.0, words[kept[0]]["s"] - lead)
     noise_list = sorted(noises or [], key=lambda n: n["start"])
     for a, b in zip(kept, kept[1:]):
         wa, wb = words[a], words[b]
@@ -356,7 +361,8 @@ def timeline(words: list[dict], flags: list[str | None], duration: float, tempo:
             if gap > max_pause or loud:
                 pauses.append({"after": a, "start": round(words[a]["e"], 3), "end": round(words[a + 1]["s"], 3),
                                "length": round(gap, 2), "kept": True, "noise": loud})
-    segs.append([cur_start, min(duration, words[kept[-1]]["e"] + lead)])
+    end = duration if whole and kept[-1] == len(words) - 1 else min(duration, words[kept[-1]]["e"] + lead)
+    segs.append([cur_start, end])
     segs = [[round(s, 3), round(e, 3)] for s, e in segs if e - s > 0.02]
     pauses.sort(key=lambda p: p["after"])
     return {"keep": segs, "pauses": pauses, "new_duration": round(sum(e - s for s, e in segs), 2)}
@@ -387,7 +393,22 @@ def evaluate(transcript: dict, cutlist: dict) -> dict:
         return {"flags": [None] * len(words), "keep": [[0.0, dur]], "pauses": [], "new_duration": dur,
                 "old_duration": dur}
     flags = word_cut_flags(len(words), cutlist["detections"], cutlist["manual"])
+    time_cuts = [r for r in cutlist.get("time_cuts", []) if r[1] - r[0] > 0.05]
+    for k, w in enumerate(words):  # Wörter in selbst gewählten Zeitbereichen sind auch geschnitten
+        mid = (w["s"] + w["e"]) / 2
+        if flags[k] is None and any(a <= mid <= b for a, b in time_cuts):
+            flags[k] = "zeit"
     tl = timeline(words, flags, transcript.get("duration", words[-1]["e"] if words else 0),
                   cutlist["settings"].get("tempo", "normal"), cutlist.get("pause_keep"),
                   cutlist.get("noises") if cutlist["settings"].get("noises", True) else None)
+    if time_cuts:  # auch Stellen ohne Sprechen (z. B. Anfang/Ende eines Clips) herausnehmen
+        keep = []
+        for s0, e0 in tl["keep"]:
+            parts = [[s0, e0]]
+            for a, b in time_cuts:
+                parts = [q for s1, e1 in parts for q in ([[s1, min(e1, a)]] if s1 < a else []) +
+                         ([[max(s1, b), e1]] if e1 > b else [])]
+            keep += [[round(x, 3), round(y, 3)] for x, y in parts if y - x > 0.04]
+        tl["keep"] = keep
+        tl["new_duration"] = round(sum(e - s for s, e in keep), 2)
     return {"flags": flags, **tl, "old_duration": round(transcript.get("duration", 0), 2)}

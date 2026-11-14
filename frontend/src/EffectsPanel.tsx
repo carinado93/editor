@@ -19,13 +19,56 @@ const HINT: Record<string, string> = {
   scores: "one per line: Text|score 1-10",
   checklist: "one point per line",
   endcard: "the big call to action, e.g. Comment CALM",
-  bigwords: "key words that turn purple, one per line",
+  bigwords: "with speech: key words that turn purple · without speech: your own lines, one per line",
   clothesline: "one card per line, optional: Big word|small line",
   repeat: "the repeating phrase, e.g. & again (empty = '&' + your last word)",
   wordswap: "the changing words, one per line (heavy, slow, uncertain …)",
   switch: "small line in the pill below (optional, your words)",
   stickers: "one sticker per line",
   outro: "optional, one per line: Like | Subscribe | Subscribed (empty = these words)",
+};
+
+/** Effekte, die an Carina hängen (oder das ganze Bild füllen) – dort gibt es keine freie Position. */
+const NO_POSITION = ["behind", "glow", "background", "poof", "lighttrail", "vanish", "flash", "sticker", "counter",
+  "ghost", "whip", "switch", "statement", "card", "endcard"];
+
+/** Ein Satz pro Effekt: was er macht (unter der Auswahl beim Hinzufügen). */
+const DESC: Record<string, string> = {
+  steps: "Boxes for each step appear one after another, connected by a line.",
+  cards: "White cards with your points pop up around the middle.",
+  tags: "Small slanted labels fly in, one per point.",
+  scores: "Rating cards with a bar, e.g. “Sleep | 6”.",
+  headline: "Big headline line by line like a staircase, *word* in gold italic.",
+  checklist: "A checklist; each point gets a tick.",
+  endcard: "Full purple closing card with a call to action (e.g. Comment CALM).",
+  bigwords: "Big captions of what you say, 1–2 words at a time; key words turn purple. Without speech: your own lines, one after another.",
+  pill: "A small pill label at the top, e.g. “+ breathing exercise”.",
+  behind: "A big word BEHIND you (you are cut out and stand in front of it). Needs you in the video.",
+  glow: "A glowing outline around you. Needs you in the video.",
+  background: "Swaps the room behind you for a soft lavender pattern, like a green screen. Needs you in the video.",
+  card: "Your video shrinks into a rounded card on lavender, with a headline above.",
+  poof: "A soft smoke puff – for a cut where something appears or disappears.",
+  clothesline: "Cards hanging on a line next to you.",
+  lighttrail: "A light that travels around your outline. Needs you in the video.",
+  vanish: "You disappear / appear in smoke (film on a tripod + a few seconds of the empty room).",
+  flash: "Your poses pop up around the room (tripod).",
+  sticker: "Your head as a sticker on a colourful background (bubble head).",
+  counter: "A number counts up behind you (e.g. 0 → 120 days).",
+  typewriter: "Text appears letter by letter like a typewriter.",
+  ghost: "A soft ghost trail follows your movement.",
+  whip: "A quick zoom-blur transition between two parts.",
+  statement: "Full-screen card in soft purple with one short line in capitals.",
+  quote: "A quote in elegant serif over the clip.",
+  switch: "Your own headline revealed with a switch effect (your exact text).",
+  repeat: "A line that repeats (“& again … & again”).",
+  wordswap: "One sentence where the last word keeps changing.",
+  label: "A purple box with white capitals – a key message or SEO word.",
+  quotepill: "A cream pill with a calm quote, *word* in purple italic.",
+  number: "A word with a big number, e.g. “Burnout | ×3”.",
+  name: "Your name + title as a lower third.",
+  stickers: "Handwritten white notes appear one under the other – one per line.",
+  buzzword: "One key word pops up next to your face.",
+  outro: "“Thank you for watching” + Like & Subscribe buttons with a mouse click.",
 };
 
 /** Vorschau-Bild, das sich bei jeder Änderung selbst neu zeichnet (kurz warten, dann neu laden). */
@@ -36,7 +79,7 @@ function FxPreview({ preview, item }: { preview: PreviewFn; item: Overlay }) {
   const [loading, setLoading] = useState(false);
   const [failed, setFailed] = useState(false);
   const last = useRef<string | null>(null);
-  const key = JSON.stringify([item.type, item.place, item.title, item.items, item.start, item.end, item.scale]);
+  const key = JSON.stringify([item.type, item.place, item.title, item.items, item.start, item.end, item.scale, item.pos_x, item.pos_y]);
   useEffect(() => {
     const ctrl = new AbortController();
     const timer = setTimeout(async () => {
@@ -422,6 +465,7 @@ export function EffectsEditor({ items: source, allowedInit, time, onSeek, previe
             onChange={(e) => setAddText(e.target.value)} />
           <button className="btn" onClick={add}>+ Add at {formatTime(time)}</button>
         </div>
+        {DESC[addType] && <div className="small muted fx-desc">ⓘ {DESC[addType]}</div>}
         {endAt != null && (
           <button className="btn ghost" onClick={addOutro} title="'Thank you for watching' + Like & Subscribe buttons in the last 6 seconds">
             + Like &amp; Subscribe at the end
@@ -558,6 +602,25 @@ export function EffectsEditor({ items: source, allowedInit, time, onSeek, previe
                 <span className="muted">{Math.round((o.scale ?? 1) * 100)} %</span>
                 {(o.scale ?? 1) !== 1 && <button className="link" onClick={() => upd(i, { scale: 1 })}>reset</button>}
               </label>
+              {!NO_POSITION.includes(o.type ?? "") && (
+                <span className="small fx-pos">
+                  Position
+                  <span className="seg">
+                    {(["auto", "left", "center", "right"] as const).map((v) => (
+                      <button key={v} className={(o.pos_x ?? "auto") === v ? "on" : ""} onClick={() => upd(i, { pos_x: v })}>
+                        {v === "auto" ? "auto" : v === "left" ? "⇤ left" : v === "center" ? "center" : "right ⇥"}
+                      </button>
+                    ))}
+                  </span>
+                  <span className="seg">
+                    {(["auto", "top", "middle", "bottom"] as const).map((v) => (
+                      <button key={v} className={(o.pos_y ?? "auto") === v ? "on" : ""} onClick={() => upd(i, { pos_y: v })}>
+                        {v === "auto" ? "auto" : v === "top" ? "↑ top" : v === "middle" ? "middle" : "bottom ↓"}
+                      </button>
+                    ))}
+                  </span>
+                </span>
+              )}
               {o.why && <div className="small muted">{o.why}</div>}
               </div>
             </div>
