@@ -137,6 +137,20 @@ def combine_build(did: str, body: CombineBody):
     return combine.build(did, body.name, body.manual, body.language, body.model, body.transitions)
 
 
+class AssistantBody(BaseModel):
+    wish: str
+
+
+@app.post("/api/projects/{pid}/assistant/{engine}")
+def assistant_run(pid: str, engine: str, body: AssistantBody):
+    """"Sag Claude, was sich ändern soll" – direkt in der App ausgeführt (Effekte, Schnitte, Tempo)."""
+    from . import assistant
+
+    if engine not in ("claude", "ollama"):
+        raise UserError("Unknown AI.")
+    return assistant.run(pid, body.wish, engine)
+
+
 class TimeCutsBody(BaseModel):
     ranges: list[list[float]]
 

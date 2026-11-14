@@ -90,3 +90,16 @@ def test_time_cuts_and_original_tempo_keep_silent_parts():
     cl = cuts.build(t, {**cuts.default_settings("en"), "tempo": "original", "noises": False})
     cl["time_cuts"] = [[0, 0.5], [3.8, 4.6]]
     assert cuts.evaluate(t, cl)["keep"] == [[0.5, 3.8], [4.6, 7.0]]
+
+
+def test_cover_detection_finds_covered_moments(tmp_path):
+    import subprocess
+    from editor_app import combine, media
+    a, b = tmp_path / "a.mp4", tmp_path / "b.mp4"
+    for out, order in ((a, "[x][y]"), (b, "[y][x]")):
+        subprocess.run([media.ffmpeg(), "-loglevel", "error", "-y", "-f", "lavfi", "-i", "testsrc2=s=320x240:r=30:d=2",
+                        "-f", "lavfi", "-i", "color=black:s=320x240:r=30:d=0.5", "-filter_complex",
+                        f"[0]format=yuv420p[x];[1]format=yuv420p[y];{order}concat=n=2:v=1[v]", "-map", "[v]",
+                        "-pix_fmt", "yuv420p", str(out)], check=True)
+    assert abs(combine.find_cover(a, 2.5, at_end=True) - 2.0) < 0.15   # A: erster abgedeckter Moment
+    assert abs(combine.find_cover(b, 2.5, at_end=False) - 0.45) < 0.15  # B: letzter abgedeckter Moment

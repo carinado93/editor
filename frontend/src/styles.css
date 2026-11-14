@@ -2013,3 +2013,9 @@ kbd {
 .combine-trans select { font: inherit; padding: 4px 8px; border-radius: 8px; border: 1px solid var(--line, #e6dccd); }
 .combine-describe { display: flex; flex-direction: column; gap: 6px; }
 .combine-describe .btn { align-self: flex-start; width: auto; }
+.ask-claude { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; background: linear-gradient(180deg, #f6f1fb, #fffdf9); }
+.ask-claude strong { color: var(--lila, #6444a5); }
+.ask-row { display: flex; gap: 10px; align-items: stretch; }
+.ask-row textarea { flex: 1; min-width: 0; font: inherit; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line, #e6dccd); }
+.ask-row .btn { width: auto; }
+@media (max-width: 700px) { .ask-row { flex-direction: column; } }

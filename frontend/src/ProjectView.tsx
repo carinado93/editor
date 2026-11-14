@@ -394,6 +394,7 @@ export function ProjectView({ id }: { id: string }) {
       {project.from_idea && project.status === "fertig" && !project.idea_note && (
         <div className="banner small">✓ Claude wrote the texts from your idea and added text effects – watch the preview, change anything below, then “Render reel”.</div>
       )}
+      {editMode && cuts && <AskClaude id={id} onCuts={setCuts} canUndo={cuts.can_undo} />}
       {editMode && cuts && (
         <nav className="step-nav" aria-label="Steps">
           <a href="#step-cut" onClick={jump}>{cutMode ? "1 · Cut" : "1 · Texts"}</a>
@@ -1007,5 +1008,50 @@ function TimeCutBox({ id, cuts, time, clips, busy, onSeek, run }: {
         </span>
       )}
     </div>
+  );
+}
+
+/** "Tell Claude what to change": in eigenen Worten – Claude ändert Effekte, Schnitte, Tempo direkt in der App. */
+function AskClaude({ id, onCuts, canUndo }: { id: string; onCuts: (c: CutView) => void; canUndo: boolean }) {
+  const [wish, setWish] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [res, setRes] = useState<{ message: string; done: string[] } | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const go = async () => {
+    setBusy(true);
+    setErr(null);
+    setRes(null);
+    try {
+      const r = await api.assistant(id, wish);
+      onCuts(r.view);
+      setRes({ message: r.message, done: r.done });
+      setWish("");
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <section className="card ask-claude">
+      <strong>✨ Tell Claude what to change</strong>
+      <div className="ask-row">
+        <textarea rows={2} value={wish} onChange={(e) => setWish(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && wish.trim() && !busy) { e.preventDefault(); void go(); } }}
+          placeholder={'e.g. "a checklist when I list the 3 signs, on the right" · "cut the first 3 seconds" · "statement card MYTH 2 at 1:20" · "slow motion when I sit down" · "remove the purple label"'} />
+        <button className="btn" disabled={busy || !wish.trim()} onClick={go}>{busy ? "Claude is working …" : "Do it"}</button>
+      </div>
+      {err && <div className="banner error small">{err}</div>}
+      {res && (
+        <div className="banner small">
+          {res.message && <div>{res.message}</div>}
+          {!!res.done.length && <div className="muted">Done: {res.done.join(" · ")}</div>}
+          {!res.done.length && !res.message && <div>Nothing to change.</div>}
+          {canUndo && !!res.done.length && (
+            <button className="link" onClick={async () => onCuts(await api.undo(id))}>↶ undo (press again for each step)</button>
+          )}
+        </div>
+      )}
+    </section>
   );
 }

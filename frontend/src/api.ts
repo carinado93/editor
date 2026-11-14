@@ -402,6 +402,8 @@ export const api = {
     call<{ transitions: string[]; note: string }>("/api/combine/plan/claude", json({ description, names })),
   combineBuild: (draft: string, body: { name: string; manual: boolean; language: string; model: string; transitions: string[] }) =>
     call<Project>(`/api/combine/${draft}/build`, json(body)),
+  assistant: (id: string, wish: string) =>
+    call<{ view: CutView; message: string; done: string[] }>(`/api/projects/${id}/assistant/claude`, json({ wish })),
   timeCuts: (id: string, ranges: [number, number][]) => call<CutView>(`/api/projects/${id}/cuts/time`, { ...json({ ranges }), method: "PUT" }),
   uploadChunk: (id: string, offset: number, chunk: Blob) =>
     call<{ uploaded: number }>(`/api/projects/${id}/upload?offset=${offset}`, { method: "PUT", body: chunk }),
