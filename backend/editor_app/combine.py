@@ -132,7 +132,7 @@ def build(did: str, name: str, manual: bool, language: str, model: str, transiti
             args += ["-f", "lavfi", "-t", f"{info['duration']:.3f}", "-i", "anullsrc=r=48000:cl=stereo"]
             ai = f"{n_in}:a"
             n_in += 1
-        parts.append(f"[{vi}:v:0]trim={a0:.3f}:{a1:.3f},setpts=PTS-STARTPTS,"
+        parts.append(f"[{vi}:v:0]trim={a0:.3f}:{a1:.3f},setpts=PTS-STARTPTS,{media.sdr_filter(info)}"
                      f"scale={W}:{H}:force_original_aspect_ratio=decrease,"
                      f"pad={W}:{H}:(ow-iw)/2:(oh-ih)/2:black,setsar=1,fps={fps_s},format=yuv420p[v{k}];"
                      f"[{ai}]atrim={a0:.3f}:{a1:.3f},asetpts=PTS-STARTPTS,aresample=48000,"
@@ -170,7 +170,8 @@ def build(did: str, name: str, manual: bool, language: str, model: str, transiti
     if progress:
         progress("Joining your videos …")
     cmd = [*args, *media.filter_script_args(script), "-map", f"[{cur_v}]", "-map", f"[{cur_a}]", *render._encoder(),
-           "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", str(out)]
+           *media.SDR_TAGS, "-fps_mode", "cfr", "-r", fps_s, "-c:a", "aac", "-b:a", "192k", "-ar", "48000",
+           "-map_metadata", "-1", "-movflags", "+faststart", str(out)]
     media._run_with_progress(cmd, cur_len, None)
     p = projects.create(name.strip() or "Combined video", "youtube", "verbunden.mp4", out.stat().st_size,
                         {"model": model or "auto", "language": language if language in ("de", "en", "auto") else "auto"})

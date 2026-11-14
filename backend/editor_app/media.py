@@ -80,6 +80,9 @@ def probe(path: Path) -> dict:
         "fps": round(fps, 3),
         "fps_rational": video.get("avg_frame_rate") or video.get("r_frame_rate"),
         "video_codec": video.get("codec_name"),
+        "color_transfer": video.get("color_transfer") or "",
+        "pix_fmt": video.get("pix_fmt") or "",
+        "hdr": (video.get("color_transfer") or "") in ("arib-std-b67", "smpte2084"),
         "video_index": int(video["index"]),
         "has_audio": audio is not None,
         "audio_index": int(audio["index"]) if audio else None,
@@ -181,7 +184,24 @@ def h264_encoder() -> list[str]:
     return ["-c:v", "libx264", "-preset", "veryfast", "-crf", "28"]
 
 
-def make_proxy(src: Path, dst: Path, info: dict, progress: Progress | None = None) -> None:
+@functools.cache
+def has_filter(name: str) -> bool:
+    r = run([ffmpeg(), "-hide_banner", "-filters"])
+    return f" {name} " in r.stdout
+
+
+def sdr_filter(info: dict) -> str:
+    """HDR vom Handy (HLG/PQ, 10 Bit) → normales SDR, damit Browser und Schnitt sauber funktionieren."""
+    if info.get("hdr") and has_filter("zscale") and has_filter("tonemap"):
+        return ("zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=hable:desat=0,"
+                "zscale=t=bt709:m=bt709:r=tv,")
+    return ""
+
+
+SDR_TAGS = ["-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709"]
+
+
+def make_proxy(src: Path, dst: Path, info: dict, progress: Progress | None = None, safe: bool = False) -> None:
     """Kleines Vorschau-Video (540p, H.264) zum flüssigen Abspielen im Browser.
 
     Ein Schlüsselbild pro Sekunde, damit Springen im Player sofort geht.
@@ -194,11 +214,13 @@ def make_proxy(src: Path, dst: Path, info: dict, progress: Progress | None = Non
     fps = min(30.0, info["fps"] or 30.0)
     tmp = dst.with_suffix(".tmp.mp4")
     # Mit Nvidia-Karte auch das Entpacken (HEVC/4K von DJI und Handy) auf der Grafikkarte
-    hw = ["-hwaccel", "auto"] if h264_encoder()[1] == "h264_nvenc" else []
+    hw = ["-hwaccel", "auto"] if h264_encoder()[1] == "h264_nvenc" and not safe else []
     args = [*hw, "-i", str(src), "-map", f"0:{info['video_index']}"]
     if info["has_audio"]:
         args += ["-map", f"0:{info['audio_index']}"]
-    args += ["-vf", f"{scale},fps={fps:g},format=yuv420p", *h264_encoder(), "-g", str(round(fps)),
+    enc = ["-c:v", "libx264", "-preset", "veryfast", "-crf", "26", "-profile:v", "high"] if safe else h264_encoder()
+    args += ["-vf", f"{sdr_filter(info)}{scale},fps={fps:g},format=yuv420p", *enc, *SDR_TAGS, "-g", str(round(fps)),
+             "-fps_mode", "cfr",
              "-c:a", "aac", "-b:a", "96k", "-ac", "2", "-movflags", "+faststart", "-map_metadata", "-1",
              "-dn", "-sn", str(tmp)]
     try:

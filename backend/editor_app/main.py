@@ -631,6 +631,17 @@ def outbox_where():
     return {"folder": str(outbox.root())}
 
 
+@app.post("/api/projects/{pid}/rebuild-preview")
+def rebuild_preview(pid: str):
+    """Vorschau-Video neu bauen (sicherer Weg: ohne Grafikkarten-Entpacken, normale Farben)."""
+    p = projects.load(pid)
+    src = projects.path(pid, p["original_file"])
+    info = media.probe(src)
+    media.make_proxy(src, projects.path(pid, "vorschau.mp4"), info, None, safe=True)
+    projects.update(pid, info=info, preview_v=int(time.time()))
+    return projects.load(pid)
+
+
 @app.post("/api/projects/{pid}/open-folder")
 def open_folder(pid: str):
     """Öffnet den Export-Ordner im Windows-Explorer."""

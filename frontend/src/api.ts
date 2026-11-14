@@ -30,6 +30,7 @@ export interface Project {
   transcript: { language: string; model: string; device: string; words: number } | null;
   idea_note?: string;
   manual_cut?: boolean;
+  preview_v?: number;
   clip_starts?: { n: number; t: number; name: string }[];
   from_idea?: boolean;
   render?: { status: "warteschlange" | "arbeitet" | "fertig" | "fehler" | "abgebrochen"; progress: number; message: string; error: string | null; quality: string; file?: string };
@@ -512,7 +513,8 @@ export const api = {
   render: (id: string, quality: string) => call<Project>(`/api/projects/${id}/render`, json({ quality })),
   openFolder: (id: string) => call<{ ok: boolean }>(`/api/projects/${id}/open-folder`, { method: "POST" }),
   exportUrl: (id: string, file: string) => `/api/projects/${id}/export/${encodeURIComponent(file)}`,
-  proxyUrl: (id: string) => `/api/projects/${id}/vorschau.mp4`,
+  proxyUrl: (id: string, v?: number) => `/api/projects/${id}/vorschau.mp4${v ? `?v=${v}` : ""}`,
+  rebuildPreview: (id: string) => call<Project>(`/api/projects/${id}/rebuild-preview`, { method: "POST" }),
   thumbUrl: (id: string) => `/api/projects/${id}/bild.jpg`,
 };
 

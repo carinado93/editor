@@ -69,6 +69,8 @@ export function ProjectView({ id }: { id: string }) {
   });
   const [doneMsg, setDoneMsg] = useState<string | null>(null);
   const [makingReel, setMakingReel] = useState(false);
+  const [previewBroken, setPreviewBroken] = useState(false);
+  const [fixing, setFixing] = useState(false);
   const lastRender = useRef<string | undefined>(undefined);
   useEffect(() => {
     const r = project?.render;
@@ -475,7 +477,24 @@ export function ProjectView({ id }: { id: string }) {
         <div className="player card">
           {project.step !== "pruefen" && project.step !== "ton" && project.step !== "vorschau" && project.info ? (
             <div className="video-wrap">
-              <video ref={video} src={api.proxyUrl(id)} controls preload="auto" playsInline />
+              <video ref={video} src={api.proxyUrl(id, project.preview_v)} controls preload="auto" playsInline
+                onError={() => setPreviewBroken(true)} onLoadedMetadata={() => setPreviewBroken(false)} />
+              {previewBroken && (
+                <div className="banner error small">
+                  ⚠ The browser can't play the preview of this video.{" "}
+                  <button className="btn small-btn" disabled={fixing} onClick={async () => {
+                    setFixing(true);
+                    try {
+                      setProject(await api.rebuildPreview(id));
+                      setPreviewBroken(false);
+                    } catch (e) {
+                      setError((e as Error).message);
+                    } finally {
+                      setFixing(false);
+                    }
+                  }}>{fixing ? "Rebuilding the preview … (about a minute)" : "Fix preview"}</button>
+                </div>
+              )}
               {editMode && (preview || reelMode) && cuts && <TextOverlay time={time} cuts={cuts} words={words} subLines={subLines} faceBox={faceBox} portrait={portrait} />}
             </div>
           ) : (
