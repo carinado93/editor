@@ -241,6 +241,7 @@ class Ctx:
         self.base_u = min(w, h) / 1080
         self.u = self.base_u
         self.portrait = h > w
+        self.no_face = not face_box  # z. B. Reel aus Fotos/Hintergrund: Elemente "neben Carina" mittig setzen
         self.face = face_box or [0.35, 0.12, 0.65, 0.5]
         self.words = words or []  # [{w, s, e}] in Zeit relativ zum Effekt-Beginn
         self.cache: dict = {}
@@ -1229,7 +1230,18 @@ def _chest(ctx):
     return (fx0 + fx1) / 2 * ctx.w, ctx.h * min(0.82, max(0.56, fy1 + 0.22))
 
 
+def _sx(ctx, x: float, right: bool, width: float) -> float:
+    """Mittelpunkt eines Elements neben Carina – ohne Gesicht mittig, und immer ganz im Bild."""
+    if ctx.no_face:
+        return ctx.w / 2
+    cx = x + (width / 2 if right else -width / 2)
+    m = 24 * ctx.u
+    return min(max(cx, width / 2 + m), ctx.w - width / 2 - m)
+
+
 def _side(ctx):
+    if ctx.no_face:
+        return ctx.w / 2, ctx.h * 0.36, True
     fx0, fy0, fx1, fy1 = ctx.face
     right = (fx0 + fx1) / 2 < 0.55
     x = ctx.w * (min(0.8, fx1 + 0.05) if right else max(0.2, fx0 - 0.05))
@@ -1296,14 +1308,14 @@ def draw_number(layer, ctx, it, t, d, place):
             ctx.cache[key] = _box_text(word.strip().upper(), f, WEISS, LILA, int(16 * ctx.u), int(6 * ctx.u), int(6 * ctx.u))
         sp = ctx.cache[key]
         s_, a = appear(t, 0.0, 0, d)
-        paste_scaled(layer, sp, (x + (sp.width / 2 if right else -sp.width / 2), y), s_, a)
+        paste_scaled(layer, sp, (_sx(ctx, x, right, sp.width), y), s_, a)
     if num.strip():
         key = ("nn", num, fn.size)
         if key not in ctx.cache:
             ctx.cache[key] = _box_text(num.strip(), fn, GOLD, LILA_TIEF, int(18 * ctx.u), int(4 * ctx.u), int(8 * ctx.u))
         sp = ctx.cache[key]
         s_, a = appear(t, 0.2, 0, d)
-        paste_scaled(layer, sp, (x + (sp.width / 2 if right else -sp.width / 2), y + sp.height * 0.9), s_, a)
+        paste_scaled(layer, sp, (_sx(ctx, x, right, sp.width), y + sp.height * 0.9), s_, a)
 
 
 def draw_name(layer, ctx, it, t, d, place):
@@ -1326,7 +1338,7 @@ def draw_name(layer, ctx, it, t, d, place):
         ctx.cache[key] = im
     sp = ctx.cache[key]
     s_, al = appear(t, 0.0, 0, d)
-    paste_scaled(layer, sp, (x + (sp.width / 2 if right else -sp.width / 2), y), s_, al)
+    paste_scaled(layer, sp, (_sx(ctx, x, right, sp.width), y), s_, al)
 
 
 def draw_stickers(layer, ctx, it, t, d, place):
@@ -1345,7 +1357,7 @@ def draw_stickers(layer, ctx, it, t, d, place):
                                      int(6 * ctx.u), int(4 * ctx.u))
         sp = ctx.cache[key]
         s_, a = appear(t, times[k], 0, d)
-        paste_scaled(layer, sp, (x + (sp.width / 2 if right else -sp.width / 2), y + k * step), s_, a,
+        paste_scaled(layer, sp, (_sx(ctx, x, right, sp.width), y + k * step), s_, a,
                      rot=(-2 if k % 2 == 0 else 1.5))
 
 
@@ -1361,7 +1373,7 @@ def draw_buzzword(layer, ctx, it, t, d, place):
         ctx.cache[key] = _box_text(txt, f, LILA_TIEF, (205, 191, 224), int(18 * ctx.u), int(4 * ctx.u), int(8 * ctx.u))
     sp = ctx.cache[key]
     s_, a = appear(t, 0.0, 0, d, pop=0.26)
-    paste_scaled(layer, sp, (x + (sp.width / 2 if right else -sp.width / 2), y), s_, a)
+    paste_scaled(layer, sp, (_sx(ctx, x, right, sp.width), y), s_, a)
 
 
 def _heart(size: int, color) -> Image.Image:
