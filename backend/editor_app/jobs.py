@@ -269,6 +269,15 @@ def _process(pid: str) -> None:
         projects.update(pid, status="arbeitet", step="blick", progress=0.97, message="Gaze detection …")
         _gaze(pid)
         _bg_queue.put((pid, "buzz", {}))  # Animationen/Buzzwords im Hintergrund planen (blockiert nichts)
+    if projects.load(pid).get("from_idea"):  # Reel aus einer Idee: Texte + Effekte gleich von Claude
+        from . import idea_reel
+        try:
+            note = idea_reel.auto_texts(pid, lambda m: projects.update(pid, status="arbeitet", progress=0.98,
+                                                                       message=m))
+        except Exception as exc:  # noqa: BLE001 – Reel ist trotzdem fertig, Texte kann sie selbst anstoßen
+            traceback.print_exc()
+            note = f"Claude could not write the texts automatically ({explain(exc)}). Press “Write with Claude” below."
+        projects.update(pid, idea_note=note)
     projects.update(pid, status="fertig", step="", progress=1.0, message="Done",
                     transcript={"language": result["language"], "model": result["model"],
                                 "device": result["device"], "words": words})

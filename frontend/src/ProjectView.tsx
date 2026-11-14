@@ -390,6 +390,10 @@ export function ProjectView({ id }: { id: string }) {
           </span>
         )}
       </div>
+      {project.from_idea && project.idea_note && <div className="banner error small">⚠ {project.idea_note}</div>}
+      {project.from_idea && project.status === "fertig" && !project.idea_note && (
+        <div className="banner small">✓ Claude wrote the texts from your idea and added text effects – watch the preview, change anything below, then “Render reel”.</div>
+      )}
       {editMode && cuts && (
         <nav className="step-nav" aria-label="Steps">
           <a href="#step-cut" onClick={jump}>{cutMode ? "1 · Cut" : "1 · Texts"}</a>

@@ -64,7 +64,13 @@ def build(did: str, name: str, idea: str, seconds: float, language: str) -> dict
     photos = sorted(d.glob("foto_*.jpg"))
     seconds = max(1.5, min(8.0, float(seconds or 3)))
     if not photos:  # ohne Fotos: Carinas Lavendel-Muster als ruhiger Hintergrund (ca. 12 s)
-        bg = fx.pattern_bg(int(W * 1.12), int(H * 1.12)).convert("RGB")
+        # ruhiger Lavendel-Verlauf mit feinen Pflanzen-Linien (Carinas Stil) – die Texte stehen im Vordergrund
+        from . import covers
+        bg = fx.lavender_bg(int(W * 1.12), int(H * 1.12)).convert("RGBA")
+        small = covers.botanical((bg.width // 2, bg.height // 2), (150, 125, 195), seed=7, alpha=80, layout="corner")
+        deco = small.resize(bg.size, Image.LANCZOS)  # doppelt so groß gezeichnet – passend zum hohen Reel
+        bg.alpha_composite(deco)
+        bg = bg.convert("RGB")
         bg.save(d / "foto_00.jpg", "JPEG", quality=94)
         photos = [d / "foto_00.jpg"]
         seconds = 12.0
@@ -92,3 +98,43 @@ def build(did: str, name: str, idea: str, seconds: float, language: str) -> dict
     shutil.rmtree(d, ignore_errors=True)
     jobs.enqueue(pid)
     return projects.load(pid)
+
+
+AUTO_FX = ["statement", "quote", "label", "quotepill", "typewriter", "headline", "pill", "repeat", "wordswap"]
+
+
+def auto_texts(pid: str, report=None) -> str:
+    """Gleich nach dem Vorbereiten: Claude schreibt aus der Idee die Texte (Hook + Szenen-Texte ins Video,
+    Caption, 5 Hashtags) und plant passende Text-Effekte. Gibt einen Hinweis zurück ("" = alles gut)."""
+    from . import captions, claude, cutstore
+
+    if not claude.available():
+        return ("Claude is not set up yet, so the texts were not written automatically. Add your Claude key in "
+                "Settings, then press “Write with Claude” in the reel package below.")
+    rf = projects.path(pid, "reel_texte.json")
+    try:
+        idea = json.loads(rf.read_text(encoding="utf-8")).get("idea", "")
+    except (OSError, ValueError):
+        idea = ""
+    p = projects.load(pid)
+    dur = (p.get("info") or {}).get("duration", 10)
+    lang = cutstore._transcript(pid).get("language", "en")
+    proxy = projects.path(pid, "vorschau.mp4")
+    images = media.stills_base64(proxy if proxy.exists() else projects.path(pid, p["original_file"]), dur, n=5)
+    if report:
+        report("Claude writes the texts from your idea …")
+    data = captions.parse(claude.ask_json(captions.build_idea_prompt(idea, lang, dur, "", bool(images)),
+                                          claude.REEL_SCHEMA, images=images), lang)
+    data.update(source="claude", idea=idea)
+    rf.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
+    if data.get("scenes"):
+        overlays, _ = captions.distribute_scenes(data["scenes"], dur)
+        cutstore.set_overlays(pid, overlays)
+    if report:
+        report("Claude adds text effects …")
+    try:
+        cutstore.suggest_effects(pid, "claude", AUTO_FX, "calm, few effects, the texts of the idea are the star")
+    except Exception:  # noqa: BLE001 – Effekte sind ein Zusatz, die Texte sind schon da
+        import traceback
+        traceback.print_exc()
+    return ""

@@ -28,6 +28,8 @@ export interface Project {
   info: VideoInfo | null;
   settings: { model: string; language: string };
   transcript: { language: string; model: string; device: string; words: number } | null;
+  idea_note?: string;
+  from_idea?: boolean;
   render?: { status: "warteschlange" | "arbeitet" | "fertig" | "fehler" | "abgebrochen"; progress: number; message: string; error: string | null; quality: string; file?: string };
   thumbnails?: { file: string; t: number }[];
   exports?: { file: string; duration: number; segments: number; size: number; quality: string; created: number }[];
