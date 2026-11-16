@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { api, formatTime, type CutView, type EffectType, type FxStyle, type Overlay, type RenderOptions, type SpeedRange } from "./api";
+import { api, formatTime, type TranslateRow, type CutView, type EffectType, type FxStyle, type Overlay, type RenderOptions, type SpeedRange } from "./api";
 import { Status } from "./ReelPackage";
 import { TimeRange } from "./TimeRange";
 
@@ -189,7 +189,65 @@ export function EffectsPanel({ id, cuts, onCuts, time, onSeek, keep }: {
           </div>
         ))}
       </EffectsEditor>
+      <LanguageVersion id={id} cuts={cuts} onCuts={onCuts} />
     </section>
+  );
+}
+
+/** Sprachversion: alle Bildschirm-Texte übersetzen – erst Tabelle prüfen, dann übernehmen (Original bleibt gespeichert). */
+function LanguageVersion({ id, cuts, onCuts }: { id: string; cuts: CutView; onCuts: (c: CutView) => void }) {
+  const [lang, setLang] = useState("de");
+  const [rows, setRows] = useState<TranslateRow[] | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const current = cuts.cutlist.text_language;
+  const run = async (engine: "claude" | "ollama") => {
+    setErr(null);
+    setBusy(engine === "claude" ? "Claude is translating … (about 20–60 s)" : "Local AI is translating …");
+    try {
+      setRows((await api.translatePropose(id, engine, lang)).rows);
+    } catch (e) {
+      setErr(String((e as Error).message ?? e));
+    } finally {
+      setBusy(null);
+    }
+  };
+  return (
+    <div className="fx-tool" style={{ marginTop: 20 }}>
+      <h4>Language version</h4>
+      <p className="small muted">
+        All on-screen texts in another language – same effects, same timing. You check every line first; your
+        original texts stay saved.{current ? ` Texts are now in ${current === "de" ? "German" : "English"}.` : ""}
+      </p>
+      <div className="fx-add-row">
+        <select value={lang} onChange={(e) => setLang(e.target.value)}>
+          <option value="de">German</option>
+          <option value="en">English</option>
+        </select>
+        <button className="btn" disabled={!!busy} onClick={() => run("claude")}>{busy ?? "Translate with Claude"}</button>
+        <button className="btn ghost" disabled={!!busy} onClick={() => run("ollama")}>Free with Ollama</button>
+        {current && (
+          <button className="btn ghost" disabled={!!busy} onClick={async () => onCuts(await api.translateRestore(id))}>
+            Back to original texts
+          </button>
+        )}
+      </div>
+      {err && <p className="small danger">{err}</p>}
+      {rows && (
+        <div className="small" style={{ marginTop: 10 }}>
+          {rows.map((r, k) => (
+            <div key={r.key} style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 6 }}>
+              <span className="muted">{r.src}</span>
+              <input value={r.dst} onChange={(e) => setRows(rows.map((x, j) => (j === k ? { ...x, dst: e.target.value } : x)))} />
+            </div>
+          ))}
+          <button className="btn" onClick={async () => { onCuts(await api.translateApply(id, lang, rows)); setRows(null); }}>
+            ✓ Use these texts
+          </button>{" "}
+          <button className="btn ghost" onClick={() => setRows(null)}>Cancel</button>
+        </div>
+      )}
+    </div>
   );
 }
 

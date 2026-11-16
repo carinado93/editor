@@ -308,6 +308,8 @@ function IdeaReelForm({ onError }: { onError: (m: string | null) => void }) {
 const TRANS_LABEL: Record<string, string> = {
   cut: "Cut", fade: "Soft fade", smoke: "Appear / disappear in smoke", cover: "Cover transition (glass / hand in front of the lens)",
   flash: "Flash", zoom: "Zoom", whip: "Whip",
+  split: "Split screen (A left, B right, then B full)", rope: "Rope + click: your sticker flies into the next video",
+  placed: "Placed into the room (tripod)", iris: "Lilac circle closes and opens",
 };
 const TRANS_HINT: Record<string, string> = {
   cut: "",
@@ -317,6 +319,10 @@ const TRANS_HINT: Record<string, string> = {
   flash: "a short white flash",
   zoom: "zooms into the next video",
   whip: "fast swipe with motion blur",
+  split: "the end of video 1 plays on the left while video 2 starts on the right (e.g. coffee | breakfast), then video 2 grows to full screen",
+  rope: "video 1 freezes, a rope drops in with a sticker of you from video 2, a cursor clicks it and it flies into the real video",
+  placed: "tripod: end video 1 with 1 s of the empty room (or move around a lot in video 2). You are lowered in from above while you keep moving",
+  iris: "video 1 closes into a lilac circle, video 2 opens out of it",
 };
 
 /** Mehrere Videos verbinden: Reihenfolge festlegen, hochladen, verbinden → selbst schneiden + Effekte. */

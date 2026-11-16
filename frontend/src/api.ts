@@ -167,6 +167,8 @@ export interface Pause {
   noise?: boolean;
 }
 
+export interface TranslateRow { key: string; src: string; dst: string }
+
 export interface CutView {
   cutlist: {
     settings: CutSettings;
@@ -179,6 +181,8 @@ export interface CutView {
     fx_allowed?: string[];
     render_options: RenderOptions;
     time_cuts?: [number, number][];
+    text_language?: string;
+    texts_original?: Overlay[];
   };
   evaluation: { flags: (CutType | null)[]; keep: [number, number][]; pauses: Pause[]; new_duration: number; old_duration: number };
   can_undo: boolean;
@@ -424,6 +428,11 @@ export const api = {
   buzzword: (id: string, start: number, end: number, on: boolean) => call<CutView>(`/api/projects/${id}/cuts/buzzword`, json({ start, end, on })),
   queue: () => call<{ running: { lane: string; project: string; name: string; kind: string; seconds: number }[] }>(`/api/queue`),
   effectTypes: () => call<{ types: EffectType[] }>(`/api/effects/types`),
+  translatePropose: (id: string, engine: "claude" | "ollama", lang: string) =>
+    call<{ lang: string; rows: TranslateRow[] }>(`/api/projects/${id}/translate/${engine}`, json({ lang })),
+  translateApply: (id: string, lang: string, rows: TranslateRow[]) =>
+    call<CutView>(`/api/projects/${id}/translate`, { ...json({ lang, rows }), method: "PUT" }),
+  translateRestore: (id: string) => call<CutView>(`/api/projects/${id}/translate`, { method: "DELETE" }),
   suggestEffects: (id: string, engine: "claude" | "ollama", allowed: string[], wish: string) =>
     call<CutView>(`/api/projects/${id}/effects/${engine}`, json({ allowed, wish })),
   effectPreviewUrl: (id: string, fid: string, v: number) => `/api/projects/${id}/effects/preview/${fid}?v=${v}`,

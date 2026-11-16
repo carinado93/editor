@@ -61,6 +61,14 @@ TRANSITION_LABELS = {"cut": "Cut", "fade": "Soft fade", "smoke": "Appear / disap
                      "cover": "Cover transition (glass/hand in front of the lens)", "flash": "Flash",
                      "zoom": "Zoom", "whip": "Whip"}
 
+# Studio transitions (rendered as their own seam clip, see transitions_studio.py)
+from . import transitions_studio as _ts  # noqa: E402
+
+for _k in _ts.LABELS:
+    TRANSITIONS[_k] = (None, 0.0, None)
+TRANSITION_LABELS.update(_ts.LABELS)
+CUSTOM = set(_ts.LABELS)
+
 
 def _detail_curve(path: Path, start: float, length: float) -> list[tuple[float, float]]:
     """Wie viel Bild-Detail (Kanten) jedes Bild hat – abgedeckte Linse = sehr wenig Detail."""
@@ -120,6 +128,35 @@ def build(did: str, name: str, manual: bool, language: str, model: str, transiti
         if trans[k] == "cover":
             trims[k][1] = max(trims[k][0] + 0.5, find_cover(clips[k], infos[k]["duration"], at_end=True))
             trims[k + 1][0] = min(trims[k + 1][1] - 0.5, find_cover(clips[k + 1], infos[k + 1]["duration"], at_end=False))
+    # Studio transitions: render the seam as its own clip and shorten A / B around it
+    if any(t in CUSTOM for t in trans[:len(clips) - 1]):
+        c2, i2, t2, tr2, names = [clips[0]], [infos[0]], [trims[0]], [], ["Video 1"]
+        for k in range(len(clips) - 1):
+            kind = trans[k]
+            if kind in CUSTOM:
+                if progress:
+                    progress(f"Building transition {k + 1} ({TRANSITION_LABELS[kind]}) …")
+                ta, tb = _ts.spans(kind, t2[-1][1] - t2[-1][0], trims[k + 1][1] - trims[k + 1][0])
+                seam = d / f"seam_{k:02d}.mp4"
+                _ts.make_seam(kind, clips[k], infos[k], t2[-1][1], clips[k + 1], infos[k + 1], trims[k + 1][0],
+                              ta, tb, W, H, fps, seam, render._encoder())
+                t2[-1] = [t2[-1][0], t2[-1][1] - ta]
+                sinfo = media.probe(seam)
+                c2.append(seam)
+                i2.append(sinfo)
+                t2.append([0.0, sinfo["duration"]])
+                tr2 += ["cut", "cut"]
+                names.append("Transition")
+                trims[k + 1] = [trims[k + 1][0] + tb, trims[k + 1][1]]
+            else:
+                tr2.append(kind)
+            c2.append(clips[k + 1])
+            i2.append(infos[k + 1])
+            t2.append(trims[k + 1])
+            names.append(f"Video {k + 2}")
+        clips, infos, trims, trans = c2, i2, t2, tr2 + ["cut"] * len(c2)
+    else:
+        names = [f"Video {k + 1}" for k in range(len(clips))]
     args, parts, n_in = [], [], 0
     for k, (c, info) in enumerate(zip(clips, infos)):
         a0, a1 = trims[k]
@@ -178,7 +215,7 @@ def build(did: str, name: str, manual: bool, language: str, model: str, transiti
     pid = p["id"]
     shutil.move(str(out), projects.path(pid, p["original_file"]))
     projects.update(pid, uploaded=p["size"], manual_cut=bool(manual), auto_fx=auto_fx,
-                    clip_starts=[{"n": k + 1, "t": s_, "name": f"Video {k + 1}"} for k, s_ in enumerate(starts)],
+                    clip_starts=[{"n": k + 1, "t": s_, "name": names[k]} for k, s_ in enumerate(starts)],
                     transitions=trans[:len(clips) - 1])
     shutil.rmtree(d, ignore_errors=True)
     jobs.enqueue(pid)
@@ -203,6 +240,8 @@ Sie beschreibt, was passieren soll: "{description.strip()}"
 Wähle für jede der {n} Nahtstellen (zwischen Video 1 und 2, 2 und 3, …) genau einen Übergang:
 {menu}
 Hinweise: "erscheinen/verschwinden/auftauchen/weg" → smoke (Stativ: leerer Raum + sie im Raum).
+"gleichzeitig / nebeneinander / Kaffee links Frühstück rechts" → split. "Seil/Wäscheleine/Klick/Sticker" → rope.
+"in den Raum setzen/herablassen" → placed (Stativ). Weicher lila Wechsel → iris.
 Etwas vor die Kamera halten (Glas, Hand, Jacke), neues Outfit, Szenenwechsel durch Abdecken → cover.
 note: ein kurzer Satz auf Englisch, was du gewählt hast und was sie beim Filmen beachten muss.
 Antworte NUR mit JSON nach dem Schema."""

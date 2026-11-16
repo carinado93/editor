@@ -830,6 +830,31 @@ class ReelImportBody(BaseModel):
     language: str = ""
 
 
+class TranslateBody(BaseModel):
+    lang: str
+    rows: list[dict] = []
+
+
+@app.post("/api/projects/{pid}/translate/{engine}")
+def translate_propose(pid: str, engine: str, body: TranslateBody):
+    from . import translate
+    if engine not in ("claude", "ollama"):
+        raise UserError("Unknown AI.")
+    return translate.propose(pid, body.lang, engine)
+
+
+@app.put("/api/projects/{pid}/translate")
+def translate_apply(pid: str, body: TranslateBody):
+    from . import translate
+    return translate.apply(pid, body.lang, body.rows)
+
+
+@app.delete("/api/projects/{pid}/translate")
+def translate_restore(pid: str):
+    from . import translate
+    return translate.restore(pid)
+
+
 @app.put("/api/projects/{pid}/cuts/overlays")
 def put_overlays(pid: str, body: OverlaysBody):
     return cutstore.set_overlays(pid, body.overlays)

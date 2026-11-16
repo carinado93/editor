@@ -178,6 +178,15 @@
   New fonts Titan One, Fredoka, Inter (OFL). All know-how as Claude Code skills in `.claude/skills/` + `CLAUDE.md`.
   73 tests pass. Not yet in the app as effects (need multi-clip/plate support): rope + sticker flies into her,
   placed-down with clean plate, split screen, seamless mirror cut, language versions of a finished edit.
+- [x] 16.11.: **Studio transitions + language versions.** "Join videos" has 4 new transitions
+  (`transitions_studio.py`, rendered as their own seam clip between the trimmed clips, shown as "Transition" in the
+  clip list): split (lilac split screen, then B grows to full screen), rope (A freezes, a rope with her sticker from
+  B drops in, cursor click, sticker flies into the real video), placed (empty room, she is lowered in from above;
+  room = last frame of A if A ends on the empty room, else built from B — warns in the log if it isn't clean),
+  iris (lilac circle). Claude's transition planner knows them. Language version (`translate.py`, effects panel):
+  Claude/Ollama proposes a translation table, Carina edits and approves, texts are swapped, originals stay saved
+  and can be restored. The seamless mirror match cut stays a Claude Code workflow (skill
+  `carina-seamless-match-cut`) because every pair of clips needs hand-picked frames. 76 tests pass.
 
 ### Nächster Schritt
 M6 Vorlagen-Bibliothek + B2 (Reel aus Idee), M6b Karussell-Generator, M7 Politur. Carina wählt die Reihenfolge.
