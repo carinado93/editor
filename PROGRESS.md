@@ -170,6 +170,15 @@
   saubere helle Fläche, Aquarell nur Ecke oben links + Pinselstrich unten, Foto genau rechte Hälfte, Text nur links
   und automatisch so groß, dass nichts abgeschnitten wird; „*WORT*?“ bleibt zusammen (Carinas Wahl: nachbauen).
 
+- [x] 16.11.: **Studio effects from the "Day in my life" training** (`fx_studio.py`, new group "E" in the effects panel,
+  Claude/Ollama may suggest them too, not ticked by default): battery (brain battery + Low Battery popup), codechips,
+  nightfall (sun → moon, clock counts), logoff (glitch + "logging off…"), sportpill (stopwatch pill), ringtimer
+  (meditation), savedcard ("WORKOUT SAVED" + cursor click), subscribe (lilac iris + subscribe/like buttons),
+  heartcover (THANK YOU behind her + lilac heart covers the screen), sharestats (Strava-style "Share Activity" ending).
+  New fonts Titan One, Fredoka, Inter (OFL). All know-how as Claude Code skills in `.claude/skills/` + `CLAUDE.md`.
+  73 tests pass. Not yet in the app as effects (need multi-clip/plate support): rope + sticker flies into her,
+  placed-down with clean plate, split screen, seamless mirror cut, language versions of a finished edit.
+
 ### Nächster Schritt
 M6 Vorlagen-Bibliothek + B2 (Reel aus Idee), M6b Karussell-Generator, M7 Politur. Carina wählt die Reihenfolge.
 

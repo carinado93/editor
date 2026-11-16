@@ -8,6 +8,7 @@ const GROUP_LABEL: Record<string, string> = {
   B: "Text over the video",
   C: "You cut out (needs more render time)",
   D: "Tripod tricks (film on a tripod + a few seconds of the empty room)",
+  E: "Studio – day in my life (trained with Claude, Nov 2026)",
 };
 
 const PLACE_LABEL = { scene: "Full screen", side: "Next to you" };
@@ -26,11 +27,22 @@ const HINT: Record<string, string> = {
   switch: "small line in the pill below (optional, your words)",
   stickers: "one sticker per line",
   outro: "optional, one per line: Like | Subscribe | Subscribed (empty = these words)",
+  battery: "optional: Label|Line 1|Line 2|Line 3 (empty = brain battery|Low Battery|3% remaining|connect to coffee)",
+  codechips: "one code line per line (empty = funny examples)",
+  nightfall: "Start|End|line, e.g. 18:00|21:47|wait… it's night?",
+  logoff: "optional, e.g. logging off",
+  sportpill: "SPORT|time, e.g. ZUMBA|30 min",
+  ringtimer: "Text|minutes, e.g. meditation time|30",
+  savedcard: "Title|Button, e.g. WORKOUT SAVED|RESUME: WORK · lines: Label|value",
+  subscribe: "3 lines with |, e.g. any support in the form of|a subscribe or like|would be highly appreciated",
+  heartcover: "LEFT|RIGHT word, e.g. THANK|YOU",
+  sharestats: "the call to action · lines: Label|value (e.g. Work|11h 00m), optional last line name|CARINA",
 };
 
 /** Effekte, die an Carina hängen (oder das ganze Bild füllen) – dort gibt es keine freie Position. */
 const NO_POSITION = ["behind", "glow", "background", "poof", "lighttrail", "vanish", "flash", "sticker", "counter",
-  "ghost", "whip", "switch", "statement", "card", "endcard"];
+  "ghost", "whip", "switch", "statement", "card", "endcard",
+  "battery", "codechips", "nightfall", "logoff", "sportpill", "ringtimer", "savedcard", "subscribe", "heartcover", "sharestats"];
 
 /** Ein Satz pro Effekt: was er macht (unter der Auswahl beim Hinzufügen). */
 const DESC: Record<string, string> = {
@@ -58,6 +70,16 @@ const DESC: Record<string, string> = {
   ghost: "A soft ghost trail follows your movement.",
   whip: "A quick zoom-blur transition between two parts.",
   statement: "Full-screen card in soft purple with one short line in capitals.",
+  battery: "A tall 'brain battery' drains from 40 % to 3 % (lilac → red), then an iPhone 'Low Battery – connect to coffee' popup. For yawning / tired moments.",
+  codechips: "Dark code chips type themselves next to you. For working on the computer.",
+  nightfall: "The room gets a night tint, the sun sets, the moon rises and the clock counts up.",
+  logoff: "A glitch on the picture, then a lilac 'logging off…' pill. For shutting the computer down.",
+  sportpill: "A lilac pill top left with a ticking stopwatch: sport + duration. Put one on each sport scene.",
+  ringtimer: "A ring timer counts down (e.g. 30:00 → 00:00) while the title writes itself. For meditation.",
+  savedcard: "The video dims and a lilac 'WORKOUT SAVED' card pops up with 3 values; a cursor clicks the button. Keep it ≥ 2 s.",
+  subscribe: "Lilac fills the screen from the middle (best when something covers the lens), 'a subscribe or like' + buttons get clicked, then the video opens again.",
+  heartcover: "THANK / YOU drop in behind you, then a lilac heart grows from your face and covers the whole screen. Needs you in the video.",
+  sharestats: "Strava-style ending: background turns dark, you stay cut out, a phone 'Share Activity' shows your day stats, a tap on Story sends the sticker next to you.",
   quote: "A quote in elegant serif over the clip.",
   switch: "Your own headline revealed with a switch effect (your exact text).",
   repeat: "A line that repeats (“& again … & again”).",
@@ -232,7 +254,7 @@ export function EffectsEditor({ items: source, allowedInit, time, onSeek, previe
       r.types = r.types.filter((t) => !(exclude ?? []).includes(t.key))
         .sort((x, y) => x.label.localeCompare(y.label, "en", { sensitivity: "base" }));  // A–Z in allen Listen
       setTypes(r.types);
-      setAllowed((a) => (a.length ? a : r.types.filter((t) => t.group !== "C").map((t) => t.key)));
+      setAllowed((a) => (a.length ? a : r.types.filter((t) => t.group !== "C" && t.group !== "E").map((t) => t.key)));
     }).catch(() => {});
   }, []);
   // ---------- gespeicherte Stile ----------
@@ -384,7 +406,7 @@ export function EffectsEditor({ items: source, allowedInit, time, onSeek, previe
     });
   };
 
-  const groups = ["A", "B", "C", "D"];
+  const groups = ["A", "B", "C", "D", "E"];
   const typeOf = (k?: string) => types.find((t) => t.key === k);
 
   return (

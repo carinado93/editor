@@ -1564,6 +1564,9 @@ def render_frame(frame: Image.Image, it: dict, t: float, d: float, ctx: Ctx, mas
     vis = min(fade_in, fade_out)
     base = frame.convert("RGBA")
 
+    if typ in STUDIO_DRAWERS:  # Studio effects (fx_studio.py) draw themselves, incl. fades
+        return STUDIO_DRAWERS[typ](base, ctx, it, t, d, mask).convert("RGB")
+
     if typ in LAYER_DRAWERS:
         if place == "scene" and typ != "endcard":
             scene = lavender_bg(w, h) if "bg" not in ctx.cache else ctx.cache["bg"]
@@ -1717,7 +1720,8 @@ def with_placeholders(it: dict) -> dict:
                                         "endcard")
     if not (it.get("title") or "").strip() and not (optional_title and has_items) and it.get("type") not in ("poof", "glow", "lighttrail", "ghost", "whip",
                                                                        "vanish", "flash", "sticker", "bigwords",
-                                                                       "outro"):
+                                                                       "outro") \
+            and it.get("type") not in STUDIO_DRAWERS:
         it["title"] = {"counter": "120|Tage", "behind": "TEXT", "switch": "YOUR HEADLINE", "number": "Burnout|×3",
                        "name": "Carina Dorca|Stress- & Burnout-Coach", "buzzword": "Burnout",
                        "statement": "YOUR SHORT LINE.", "quote": "\u201eyour quote\u201c",
@@ -1743,3 +1747,11 @@ def preview_png(it: dict, w: int, h: int, face_box, frame: Image.Image | None, o
     mask = segmenter.mask(frame) if (segmenter and it.get("type") in NEEDS_MASK) else None
     t = 0.3 if it.get("type") == "poof" else d * 0.75  # Puff: im dichtesten Moment zeigen
     render_frame(frame, it, t, d, ctx, mask).save(out)
+
+
+# ---------------------------------------------------------------- Studio effects (Day-in-my-life training, Nov 2026)
+from . import fx_studio as _studio  # noqa: E402  (registers group "E")
+
+STUDIO_DRAWERS = dict(_studio.STUDIO_DRAWERS)
+TYPES.update(_studio.STUDIO_TYPES)
+NEEDS_MASK |= _studio.STUDIO_MASK

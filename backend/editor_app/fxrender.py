@@ -56,7 +56,7 @@ def prepare(overlays: list[dict], tmap, words_new: list[dict], total: float) -> 
     return [c for c in clean if c["e"] - c["s"] >= 0.6]
 
 
-_FULLSCREEN = {"statement", "endcard", "card", "flash", "sticker", "switch", "outro"}
+_FULLSCREEN = {"statement", "endcard", "card", "flash", "sticker", "switch", "outro"} | fx._studio.STUDIO_FULLSCREEN
 
 
 def _priority(it: dict) -> int:

@@ -42,6 +42,7 @@ DESCRIBE = {
     "repeat": "Satz oben, darunter wiederholt sich eine Wendung Zeile für Zeile (title = Satz, items = [Wendung, z. B. '& nochmal']) – Durchhalten, Wiederholung",
     "wordswap": "fester Satz, das letzte Wort wechselt (title = fester Teil, items = 4–6 wechselnde Wörter) – Gefühle, Zustände",
     "poof": "Puff-Wolke (Verschwinden/Auftauchen) – nur genau an einem Schnitt, an dem sie den Ort wechselt",
+    **fx._studio.STUDIO_DESCRIBE,
 }
 
 SCHEMA = {
