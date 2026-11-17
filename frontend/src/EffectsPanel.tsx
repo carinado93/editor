@@ -602,7 +602,24 @@ export function EffectsEditor({ items: source, allowedInit, time, onSeek, previe
                   remove
                 </button>
               </div>
-              {!["poof", "glow", "bigwords", "lighttrail", "ghost", "whip", "vanish", "flash", "sticker"].includes(o.type ?? "") && (
+              {o.type === "sportpill" && (() => {
+                // Sport-Label: Name und Minuten getrennt eingeben (gespeichert als "NAME|30 min")
+                const [nm, tm = ""] = (o.title ?? "").split("|");
+                const mins = (tm.match(/\d+([.,]\d+)?/) ?? [""])[0];
+                const setT = (n: string, m: string) => {
+                  const t = `${n.trim()}|${m ? `${m} min` : "30 min"}`;
+                  upd(i, { title: t, text: n || "sport" });
+                };
+                return (
+                  <div className="fx-sport small">
+                    <input className="fx-title" placeholder="Sport / text, e.g. ZUMBA" value={nm} onChange={(e) => setT(e.target.value, mins)} />
+                    <label>⏱ Minutes
+                      <input type="number" min={1} max={600} value={mins} placeholder="30" onChange={(e) => setT(nm, e.target.value)} />
+                    </label>
+                  </div>
+                );
+              })()}
+              {!["poof", "glow", "bigwords", "lighttrail", "ghost", "whip", "vanish", "flash", "sticker", "sportpill"].includes(o.type ?? "") && (
                 <input
                   className="fx-title"
                   placeholder={

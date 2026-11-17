@@ -2025,3 +2025,4 @@ kbd {
 .combine-row { cursor: grab; }
 .combine-row.dragging { opacity: 0.4; }
 .combine-row .grip { color: #b9aed0; cursor: grab; user-select: none; }
+.fx-sport { display: flex; gap: 10px; align-items: center; } .fx-sport .fx-title { flex: 1; } .fx-sport label { display: flex; gap: 6px; align-items: center; white-space: nowrap; } .fx-sport input[type=number] { width: 80px; }
