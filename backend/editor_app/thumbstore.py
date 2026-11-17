@@ -265,7 +265,8 @@ def generate(wid: str, mode: str, prompts: list[str], titles: list[list[str]], l
     if not st.get("cutout"):
         raise UserError("Please choose your photo first (step 1).")
     if mode == "colours":
-        prompts = [f"colours:{a}+{b}" for a, b in image_gen.COLOUR_PAIRS]
+        chosen = [p for p in prompts if p.startswith("colours:")]
+        prompts = chosen[:3] if len(chosen) >= 3 else [f"colours:{a}+{b}" for a, b in image_gen.COLOUR_PAIRS]
     prompts = [p for p in prompts if p.strip()] or ["cosy bright living room with plants, soft daylight"]
     titles = [t for t in titles if any(x.strip() for x in t)]
     if not titles:

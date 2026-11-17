@@ -6,7 +6,7 @@ description: Carina's colours, fonts, layout safe zones and rejected looks for a
 # Brand style
 
 ## Colours
-Lilac #C9B3EC (text, pills, stickers) · light lilac bg #D6C6F0 (gradient (222,208,246)→(206,190,238)) · dark lilac #7A649E · plum #4A346E · butter yellow #FAE8A5 · cream #F4EEE4 · dark brown #4A3A30 · olive #75733B / #6B6F3A · gold #D6B46E (dark covers).
+Lilac #C9B3EC (text, pills, stickers) · light lilac bg #D6C6F0 (gradient (222,208,246)→(206,190,238)) · dark lilac #7A649E · plum #4A346E · butter yellow #FAE8A5 · dusty rose #E8B9B7 (light blush #F2D6D2, from her meditation thumbnails) · cream #F4EEE4 · dark brown #4A3A30 · olive #75733B / #6B6F3A · gold #D6B46E (dark covers).
 Her colour beats brand colours: a Strava-style card was asked "but with lilac". Text on lilac backgrounds = white with plum shadow or plum.
 
 ## Fonts (via @fontsource npm, woff2 → ttf with fontTools)

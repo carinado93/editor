@@ -123,13 +123,15 @@ def _higgsfield(prompt: str, w: int, h: int, seed: int) -> Image.Image:
     raise UserError("Higgsfield took too long (5 min).")
 
 
-# Carinas Farben für "Meine Farben"-Hintergründe (je 2 kombiniert). Rosa ist nicht im Brand-Skill → zarter Pastellton.
+# Carinas Farben für "Meine Farben"-Hintergründe (je 2 kombiniert). Rosa = Altrosa aus ihren Meditations-Thumbnails.
 BRAND_COLOURS = {
     "lilac": (201, 179, 236),   # #C9B3EC
-    "pink": (242, 184, 210),    # #F2B8D2
+    "pink": (232, 185, 183),    # #E8B9B7 dusty rose from her meditation thumbnails
     "yellow": (250, 232, 165),  # #FAE8A5 butter yellow
+    "white": (254, 248, 243),   # #FEF8F3 warm white like her meditation thumbnails
 }
-COLOUR_PAIRS = [("lilac", "pink"), ("pink", "yellow"), ("yellow", "lilac")]
+COLOUR_PAIRS = [("lilac", "pink"), ("pink", "yellow"), ("yellow", "lilac")]   # Standard für die 3 Versionen
+ALL_PAIRS = COLOUR_PAIRS + [("white", "pink"), ("lilac", "white")]
 
 
 def colour_background(c1: str, c2: str, w: int = 1280, h: int = 720, seed: int = 0) -> Image.Image:

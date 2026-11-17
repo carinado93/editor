@@ -80,9 +80,10 @@
   - Tests `tests/test_thumbmaker.py`: fake generator (size, words not on face box, PNG < 2 MB, 3 versions) and the
     "text behind me" pixel check (opaque cut-out stays on top, ≥70 % visible). 79 tests pass.
   - "My colours" mode (Carina's wish, 17 Nov): 3 versions, each a soft gradient of 2 of her colours – lilac #C9B3EC +
-    pink #F2B8D2, pink + yellow #FAE8A5, yellow + lilac – with blurred light circles, fine grain and a plum top for
-    the white title (`image_gen.colour_background`). Local, free, no AI; it is the default mode. Pink is not in the
-    brand skill yet, so #F2B8D2 is a proposal. The colour pair can be switched per version.
+    dusty rose #E8B9B7, pink + yellow #FAE8A5, yellow + lilac – with blurred light circles, fine grain and a plum top for
+    the white title (`image_gen.colour_background`). Local, free, no AI; it is the default mode. Pink = dusty rose measured from her
+    meditation thumbnails (pill #E8B9B7, light blush #F2D6D2), now also in the brand skill. Extra pairs white #FEF8F3 + pink and lilac + white;
+    she picks a pair for each of the 3 versions (defaults lilac+pink, pink+yellow, yellow+lilac) and can switch per version.
   - Not checked yet: hands in the cut-out (the public test photo has no hands) – check with Carina's own photo.
 
 ### Wartet auf Carina

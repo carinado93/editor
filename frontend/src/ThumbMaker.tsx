@@ -12,7 +12,10 @@ const PAIRS: [string, string][] = [
   ["colours:lilac+pink", "My colours: lilac + pink"],
   ["colours:pink+yellow", "My colours: pink + yellow"],
   ["colours:yellow+lilac", "My colours: yellow + lilac"],
+  ["colours:white+pink", "My colours: white + pink"],
+  ["colours:lilac+white", "My colours: lilac + white"],
 ];
+const DEFAULT_PAIRS = ["colours:lilac+pink", "colours:pink+yellow", "colours:yellow+lilac"];
 
 /** Startseite des Thumbnail-Makers: YouTube-Projekt wählen oder ein eigenes Thumbnail ohne Video. */
 export function ThumbMakerPage({ wid }: { wid?: string }) {
@@ -56,6 +59,7 @@ function ThumbMaker({ wid }: { wid: string }) {
   const [err, setErr] = useState<string | null>(null);
   const [mode, setMode] = useState<"backgrounds" | "titles" | "colours">("colours");
   const [prompts, setPrompts] = useState<string[]>(["", "", ""]);
+  const [pairs, setPairs] = useState<string[]>(DEFAULT_PAIRS);
   const [titles, setTitles] = useState<string[][]>([["", ""], ["", ""], ["", ""]]);
   const [layout, setLayout] = useState("auto");
   const [behind, setBehind] = useState(false);
@@ -130,7 +134,7 @@ function ThumbMaker({ wid }: { wid: string }) {
           <button className={`btn small-btn ${mode === "backgrounds" ? "" : "ghost"}`} onClick={() => setMode("backgrounds")}>3 backgrounds, same title</button>
           <button className={`btn small-btn ${mode === "titles" ? "" : "ghost"}`} onClick={() => setMode("titles")}>1 background, 3 titles</button>
           <button className={`btn small-btn ${mode === "colours" ? "" : "ghost"}`} onClick={() => setMode("colours")}>
-            <span className="tm-swatch" style={{ background: "linear-gradient(90deg,#C9B3EC,#F2B8D2,#FAE8A5)" }} /> My colours (lilac · pink · yellow)
+            <span className="tm-swatch" style={{ background: "linear-gradient(90deg,#FEF8F3,#C9B3EC,#E8B9B7,#FAE8A5)" }} /> My colours (lilac · pink · yellow · white)
           </button>
           <button className="btn ghost small-btn" disabled={!!busy} onClick={() => act("suggest", () => api.tmSuggest(wid))}>
             {busy === "suggest" ? "Claude is thinking …" : "✨ Suggest backgrounds + titles"}
@@ -162,7 +166,16 @@ function ThumbMaker({ wid }: { wid: string }) {
           </div>
         )}
         {mode === "colours" && (
-          <p className="small muted">3 versions, each with 2 of your colours: lilac + pink, pink + yellow, yellow + lilac. Made by the app – free, no AI.</p>
+          <div className="tm-prompts small">
+            <span className="muted">3 versions, each with 2 of your colours. Made by the app – free, no AI.</span>
+            {[0, 1, 2].map((k) => (
+              <label key={k}>Version {k + 1}{" "}
+                <select value={pairs[k]} onChange={(e) => setPairs(pairs.map((p, j) => (j === k ? e.target.value : p)))}>
+                  {PAIRS.map(([val, label]) => <option key={val} value={val}>{label.replace("My colours: ", "")}</option>)}
+                </select>
+              </label>
+            ))}
+          </div>
         )}
         {mode !== "colours" && <div className="tm-prompts">
           {(mode === "titles" ? [0] : [0, 1, 2]).map((k) => (
@@ -192,7 +205,7 @@ function ThumbMaker({ wid }: { wid: string }) {
           <label className="check-line"><input type="checkbox" checked={doodles} onChange={(e) => setDoodles(e.target.checked)} /> Lilac doodles</label>
         </div>
         <p className="small muted">Cost: <strong>{mode === "colours" ? "free" : mode === "titles" ? st.cost.replace("3 images", "1 image") : st.cost}</strong> · change the image service in Settings.</p>
-        <button className="btn" disabled={!!busy || !st.cutout} onClick={() => act("gen", () => api.tmGenerate(wid, { mode, prompts, titles, layout, behind, doodles }))}>
+        <button className="btn" disabled={!!busy || !st.cutout} onClick={() => act("gen", () => api.tmGenerate(wid, { mode, prompts: mode === "colours" ? pairs : prompts, titles, layout, behind, doodles }))}>
           {busy === "gen" ? "Making 3 versions … (up to a minute per background)" : !st.cutout ? "Choose your photo first" : "✨ Make 3 versions"}
         </button>
         {st.fallback_used && (
