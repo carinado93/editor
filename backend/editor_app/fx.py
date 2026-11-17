@@ -1501,16 +1501,34 @@ def draw_outro(layer, ctx, it, t, d, place):
         dr.polygon(poly, fill=WEISS, outline=TINTE, width=max(2, int(3 * u)))
 
 
-def _position(layer: Image.Image, ctx, it: dict, typ: str, d: float, place: str) -> Image.Image:
+def _nudge(it: dict) -> tuple[float, float]:
+    try:
+        return float(it.get("nudge_x") or 0), float(it.get("nudge_y") or 0)
+    except (TypeError, ValueError):
+        return 0.0, 0.0
+
+
+def _has_pos(it: dict) -> bool:
+    nx, ny = _nudge(it)
+    return it.get("pos_x", "auto") not in (None, "auto") or it.get("pos_y", "auto") not in (None, "auto") \
+        or bool(nx) or bool(ny)
+
+
+def _position(layer: Image.Image, ctx, it: dict, typ: str, d: float, place: str, draw=None) -> Image.Image:
     """Carinas eigene Position (links/mitte/rechts, oben/mitte/unten): die ganze Text-Ebene verschieben.
     Gemessen wird einmal am fertig aufgebauten Effekt (ca. 70 % der Dauer), damit nichts springt."""
     px, py = it.get("pos_x", "auto"), it.get("pos_y", "auto")
-    if px in (None, "auto") and py in (None, "auto"):
+    nx, ny = _nudge(it)
+    if px in (None, "auto") and py in (None, "auto") and not nx and not ny:
         return layer
     key = ("posbox", px, py, ctx.u)
     if key not in ctx.cache:
-        ref = Image.new("RGBA", layer.size, (0, 0, 0, 0))
-        LAYER_DRAWERS[typ](ref, ctx, it, max(0.0, min(d - 0.3, d * 0.7)), d, place)
+        tref = max(0.0, min(d - 0.3, d * 0.7))
+        if draw is not None:  # Studio-Effekte: Element auf leerem Bild zeichnen und messen
+            ref = draw(tref)
+        else:
+            ref = Image.new("RGBA", layer.size, (0, 0, 0, 0))
+            LAYER_DRAWERS[typ](ref, ctx, it, tref, d, place)
         ctx.cache[key] = ref.getchannel("A").getbbox()
     box = ctx.cache[key]
     if not box:
@@ -1531,6 +1549,11 @@ def _position(layer: Image.Image, ctx, it: dict, typ: str, d: float, place: str)
         dy = (h - bh) // 2 - box[1]
     elif py == "bottom":
         dy = int(h * 0.82) - bh - box[1]
+    # Feinschieben mit den Pfeilen (Anteil der Bildbreite/-höhe); immer noch mind. ein Stück im Bild
+    dx += int(nx * w)
+    dy += int(ny * h)
+    dx = max(-box[2] + 40, min(w - box[0] - 40, dx))
+    dy = max(-box[3] + 40, min(h - box[1] - 40, dy))
     if not dx and not dy:
         return layer
     moved = Image.new("RGBA", layer.size, (0, 0, 0, 0))
@@ -1565,6 +1588,14 @@ def render_frame(frame: Image.Image, it: dict, t: float, d: float, ctx: Ctx, mas
     base = frame.convert("RGBA")
 
     if typ in STUDIO_DRAWERS:  # Studio effects (fx_studio.py) draw themselves, incl. fades
+        if typ in STUDIO_MOVABLE and _has_pos(it):
+            # Carinas eigene Position: Element auf leerem Bild zeichnen, verschieben, dann über das Video legen
+            def draw_on_blank(tt):
+                return STUDIO_DRAWERS[typ](Image.new("RGBA", (w, h), (0, 0, 0, 0)), ctx, it, tt, d, mask).convert("RGBA")
+            layer = _position(draw_on_blank(t), ctx, it, typ, d, place, draw=draw_on_blank)
+            out = base.copy()
+            out.alpha_composite(layer)
+            return out.convert("RGB")
         return STUDIO_DRAWERS[typ](base, ctx, it, t, d, mask).convert("RGB")
 
     if typ in LAYER_DRAWERS:
@@ -1572,7 +1603,7 @@ def render_frame(frame: Image.Image, it: dict, t: float, d: float, ctx: Ctx, mas
             scene = lavender_bg(w, h) if "bg" not in ctx.cache else ctx.cache["bg"]
             ctx.cache["bg"] = scene
             layer = scene.copy()
-            if it.get("pos_x", "auto") not in (None, "auto") or it.get("pos_y", "auto") not in (None, "auto"):
+            if _has_pos(it):
                 txt = Image.new("RGBA", (w, h), (0, 0, 0, 0))
                 LAYER_DRAWERS[typ](txt, ctx, it, t, d, place)
                 layer.alpha_composite(_position(txt, ctx, it, typ, d, place))
@@ -1751,6 +1782,8 @@ def preview_png(it: dict, w: int, h: int, face_box, frame: Image.Image | None, o
 
 # ---------------------------------------------------------------- Studio effects (Day-in-my-life training, Nov 2026)
 from . import fx_studio as _studio  # noqa: E402  (registers group "E")
+# Studio-Effekte, die ein Element über das Bild legen – die kann Carina frei positionieren
+STUDIO_MOVABLE = {"battery", "codechips", "logoff", "sportpill", "ringtimer"}
 
 STUDIO_DRAWERS = dict(_studio.STUDIO_DRAWERS)
 TYPES.update(_studio.STUDIO_TYPES)

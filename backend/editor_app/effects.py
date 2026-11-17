@@ -90,7 +90,9 @@ def clean(o: dict, duration: float | None = None) -> dict | None:
             "mode": "appear" if o.get("mode") == "appear" else "vanish",
             "scale": round(max(0.4, min(2.5, float(o.get("scale") or 1))), 2),
             "pos_x": o.get("pos_x") if o.get("pos_x") in ("left", "center", "right") else "auto",
-            "pos_y": o.get("pos_y") if o.get("pos_y") in ("top", "middle", "bottom") else "auto"}
+            "pos_y": o.get("pos_y") if o.get("pos_y") in ("top", "middle", "bottom") else "auto",
+            "nudge_x": round(max(-1.0, min(1.0, float(o.get("nudge_x") or 0))), 3),
+            "nudge_y": round(max(-1.0, min(1.0, float(o.get("nudge_y") or 0))), 3)}
 
 
 def clip_transcript(transcript: dict, flags: list, segments: list[list[float]]) -> dict:

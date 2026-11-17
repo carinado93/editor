@@ -571,6 +571,11 @@ def set_overlays(pid: str, overlays: list[dict]) -> dict:
                     item["scale"] = 1.0
                 item["pos_x"] = o.get("pos_x") if o.get("pos_x") in ("left", "center", "right") else "auto"
                 item["pos_y"] = o.get("pos_y") if o.get("pos_y") in ("top", "middle", "bottom") else "auto"
+                for nk in ("nudge_x", "nudge_y"):
+                    try:
+                        item[nk] = round(max(-1.0, min(1.0, float(o.get(nk) or 0))), 3)
+                    except (TypeError, ValueError):
+                        item[nk] = 0.0
             clean.append(item)
         cl["overlays"] = clean
     return _change(pid, fn)

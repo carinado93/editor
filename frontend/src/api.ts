@@ -98,6 +98,8 @@ export interface Overlay {
   scale?: number;
   pos_x?: "auto" | "left" | "center" | "right";
   pos_y?: "auto" | "top" | "middle" | "bottom";
+  nudge_x?: number;
+  nudge_y?: number;
 }
 
 export interface EffectType {

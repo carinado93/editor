@@ -42,7 +42,8 @@ const HINT: Record<string, string> = {
 /** Effekte, die an Carina hängen (oder das ganze Bild füllen) – dort gibt es keine freie Position. */
 const NO_POSITION = ["behind", "glow", "background", "poof", "lighttrail", "vanish", "flash", "sticker", "counter",
   "ghost", "whip", "switch", "statement", "card", "endcard",
-  "battery", "codechips", "nightfall", "logoff", "sportpill", "ringtimer", "savedcard", "subscribe", "heartcover", "sharestats"];
+  // Studio-Effekte, die das ganze Bild verändern
+  "nightfall", "savedcard", "subscribe", "heartcover", "sharestats"];
 
 /** Ein Satz pro Effekt: was er macht (unter der Auswahl beim Hinzufügen). */
 const DESC: Record<string, string> = {
@@ -67,7 +68,7 @@ const DESC: Record<string, string> = {
   sticker: "Your head as a sticker on a colourful background (bubble head).",
   counter: "A number counts up behind you (e.g. 0 → 120 days).",
   typewriter: "Text appears letter by letter like a typewriter.",
-  ghost: "A soft ghost trail follows your movement.",
+  ghost: "See-through copies of you trail behind your movement – only visible when you move (turn, walk, jump).",
   whip: "A quick zoom-blur transition between two parts.",
   statement: "Full-screen card in soft purple with one short line in capitals.",
   battery: "A tall 'brain battery' drains from 40 % to 3 % (lilac → red), then an iPhone 'Low Battery – connect to coffee' popup. For yawning / tired moments.",
@@ -93,6 +94,79 @@ const DESC: Record<string, string> = {
   outro: "“Thank you for watching” + Like & Subscribe buttons with a mouse click.",
 };
 
+/** Studio-Effekte: ein eigenes Feld für jeden Text (gespeichert wie vorher als "a|b|c" bzw. Zeilen "Label|Wert"). */
+type StudioSpec = {
+  title?: [string, string][];          // [Feldname, Standardtext]
+  items?: [string, string][];          // feste Einzelzeilen (z. B. Knopf-Texte)
+  rows?: { labels: [string, string]; defaults: [string, string][] };  // Zeilen "Label|Wert", beliebig viele
+  name?: [string, string];             // zusätzliche Zeile "name|…" (Statistik-Sticker)
+};
+const STUDIO_FIELDS: Record<string, StudioSpec> = {
+  battery: { title: [["Label", "brain battery"], ["Popup title", "Low Battery"], ["Popup line 2", "3% remaining"], ["Popup line 3", "connect to coffee"]] },
+  nightfall: { title: [["Start time", "18:00"], ["End time", "21:47"], ["Sentence", "wait… it's night?"]] },
+  logoff: { title: [["Text", "logging off"]] },
+  subscribe: { title: [["Line 1", "any support in the form of"], ["Line 2", "a subscribe or like"], ["Line 3", "would be highly appreciated"]],
+    items: [["Button", "SUBSCRIBE"], ["Button after the click", "SUBSCRIBED"]] },
+  heartcover: { title: [["Left word", "THANK"], ["Right word", "YOU"]] },
+  savedcard: { title: [["Heading", "WORKOUT SAVED"], ["Button", "RESUME: WORK"]],
+    rows: { labels: ["Label", "Value"], defaults: [["Time", "2h 00m"], ["Activities", "3"], ["Mood", "reset"]] } },
+  sharestats: { title: [["Call to action", "give kudos & follow for part 2"]],
+    rows: { labels: ["Activity", "Time"], defaults: [["Work", "11h 00m"], ["Sports", "2h 00m"], ["Meditation", "30m"]] },
+    name: ["Name on the sticker", "CARINA"] },
+};
+
+function StudioFields({ o, spec, onChange }: { o: Overlay; spec: StudioSpec; onChange: (p: Partial<Overlay>) => void }) {
+  const parts = (o.title ?? "").split("|");
+  const setPart = (k: number, v: string) => {
+    const n = spec.title?.length ?? 0;
+    const next = Array.from({ length: n }, (_, j) => (j === k ? v : parts[j] ?? ""));
+    const t = next.join("|").replace(/\|+$/, "");
+    onChange({ title: t, text: t || o.type || "fx" });
+  };
+  const items = o.items ?? [];
+  const nameLine = spec.name ? items.find((x) => x.toLowerCase().startsWith("name|")) : undefined;
+  const plain = spec.name ? items.filter((x) => !x.toLowerCase().startsWith("name|")) : items;
+  const rows: [string, string][] = spec.rows
+    ? (plain.length ? plain.map((x) => [(x.split("|")[0] ?? ""), (x.split("|")[1] ?? "")] as [string, string]) : spec.rows.defaults.map((d) => [...d] as [string, string]))
+    : [];
+  const saveRows = (rs: [string, string][], nm = nameLine) =>
+    onChange({ items: [...rs.map(([a, b]) => `${a}|${b}`), ...(nm ? [nm] : [])] });
+  return (
+    <div className="studio-fields small">
+      {spec.title?.map(([label, def], k) => (
+        <label key={label}>{label}
+          <input value={parts[k] ?? ""} placeholder={def} onChange={(e) => setPart(k, e.target.value)} />
+        </label>
+      ))}
+      {spec.items?.map(([label, def], k) => (
+        <label key={label}>{label}
+          <input value={items[k] ?? ""} placeholder={def}
+            onChange={(e) => onChange({ items: spec.items!.map((_, j) => (j === k ? e.target.value : items[j] ?? "")) })} />
+        </label>
+      ))}
+      {spec.rows && (
+        <div className="studio-rows">
+          <span className="muted">{spec.rows.labels[0]} · {spec.rows.labels[1]}</span>
+          {rows.map(([a, b], k) => (
+            <div key={k} className="studio-row">
+              <input value={a} placeholder={spec.rows!.labels[0]} onChange={(e) => saveRows(rows.map((r, j) => (j === k ? [e.target.value, r[1]] : r)))} />
+              <input value={b} placeholder={spec.rows!.labels[1]} onChange={(e) => saveRows(rows.map((r, j) => (j === k ? [r[0], e.target.value] : r)))} />
+              <button className="link danger" disabled={rows.length <= 1} onClick={() => saveRows(rows.filter((_, j) => j !== k))}>✕</button>
+            </div>
+          ))}
+          {rows.length < 5 && <button className="link" onClick={() => saveRows([...rows, ["", ""]])}>+ add a line</button>}
+        </div>
+      )}
+      {spec.name && (
+        <label>{spec.name[0]}
+          <input value={nameLine ? nameLine.split("|")[1] ?? "" : ""} placeholder={spec.name[1]}
+            onChange={(e) => saveRows(rows, e.target.value ? `name|${e.target.value}` : undefined)} />
+        </label>
+      )}
+    </div>
+  );
+}
+
 /** Vorschau-Bild, das sich bei jeder Änderung selbst neu zeichnet (kurz warten, dann neu laden). */
 type PreviewFn = (item: Overlay, signal: AbortSignal) => Promise<string>;
 
@@ -101,7 +175,7 @@ function FxPreview({ preview, item }: { preview: PreviewFn; item: Overlay }) {
   const [loading, setLoading] = useState(false);
   const [failed, setFailed] = useState(false);
   const last = useRef<string | null>(null);
-  const key = JSON.stringify([item.type, item.place, item.title, item.items, item.start, item.end, item.scale, item.pos_x, item.pos_y]);
+  const key = JSON.stringify([item.type, item.place, item.title, item.items, item.start, item.end, item.scale, item.pos_x, item.pos_y, item.nudge_x, item.nudge_y]);
   useEffect(() => {
     const ctrl = new AbortController();
     const timer = setTimeout(async () => {
@@ -602,6 +676,21 @@ export function EffectsEditor({ items: source, allowedInit, time, onSeek, previe
                   remove
                 </button>
               </div>
+              {DESC[o.type ?? ""] && <div className="small muted fx-desc">ⓘ {DESC[o.type ?? ""]}</div>}
+              {STUDIO_FIELDS[o.type ?? ""] && <StudioFields o={o} spec={STUDIO_FIELDS[o.type ?? ""]} onChange={(p) => upd(i, p)} />}
+              {o.type === "ringtimer" && (() => {
+                const [nm, tm = ""] = (o.title ?? "").split("|");
+                const mins = (tm.match(/\d+([.,]\d+)?/) ?? [""])[0];
+                const setT = (n: string, m: string) => upd(i, { title: `${n.trim()}|${m || "30"}`, text: n || "meditation" });
+                return (
+                  <div className="fx-sport small">
+                    <input className="fx-title" placeholder="Text, e.g. meditation time" value={nm} onChange={(e) => setT(e.target.value, mins)} />
+                    <label>⏱ Minutes
+                      <input type="number" min={1} max={600} value={mins} placeholder="30" onChange={(e) => setT(nm, e.target.value)} />
+                    </label>
+                  </div>
+                );
+              })()}
               {o.type === "sportpill" && (() => {
                 // Sport-Label: Name und Minuten getrennt eingeben (gespeichert als "NAME|30 min")
                 const [nm, tm = ""] = (o.title ?? "").split("|");
@@ -619,7 +708,7 @@ export function EffectsEditor({ items: source, allowedInit, time, onSeek, previe
                   </div>
                 );
               })()}
-              {!["poof", "glow", "bigwords", "lighttrail", "ghost", "whip", "vanish", "flash", "sticker", "sportpill"].includes(o.type ?? "") && (
+              {!["poof", "glow", "bigwords", "lighttrail", "ghost", "whip", "vanish", "flash", "sticker", "sportpill", "ringtimer"].includes(o.type ?? "") && !STUDIO_FIELDS[o.type ?? ""] && (
                 <input
                   className="fx-title"
                   placeholder={
@@ -639,7 +728,7 @@ export function EffectsEditor({ items: source, allowedInit, time, onSeek, previe
                   onChange={(e) => upd(i, { title: e.target.value, text: e.target.value || o.type || "fx" })}
                 />
               )}
-              {listType && (
+              {listType && !STUDIO_FIELDS[o.type ?? ""] && (
                 <textarea
                   rows={Math.max(2, (o.items ?? []).length)}
                   placeholder={HINT[o.type ?? ""]}
@@ -715,6 +804,18 @@ export function EffectsEditor({ items: source, allowedInit, time, onSeek, previe
                         {v === "auto" ? "auto" : v === "top" ? "↑ top" : v === "middle" ? "middle" : "bottom ↓"}
                       </button>
                     ))}
+                  </span>
+                  <span className="nudge" title="Move a little with every click (Shift+click = bigger step)">
+                    {([["←", -1, 0], ["↑", 0, -1], ["↓", 0, 1], ["→", 1, 0]] as const).map(([lbl, ddx, ddy]) => (
+                      <button key={lbl} onClick={(e) => {
+                        const step = e.shiftKey ? 0.05 : 0.01;
+                        const r = (v: number) => Math.round(Math.max(-1, Math.min(1, v)) * 1000) / 1000;
+                        upd(i, { nudge_x: r((o.nudge_x ?? 0) + ddx * step), nudge_y: r((o.nudge_y ?? 0) + ddy * step) });
+                      }}>{lbl}</button>
+                    ))}
+                    {(!!o.nudge_x || !!o.nudge_y) && (
+                      <button className="link" onClick={() => upd(i, { nudge_x: 0, nudge_y: 0 })}>reset</button>
+                    )}
                   </span>
                 </span>
               )}
