@@ -79,6 +79,10 @@
   - `thumbstore.py` + `/api/thumbmaker/*` endpoints, `/api/einstellungen/image-gen`.
   - Tests `tests/test_thumbmaker.py`: fake generator (size, words not on face box, PNG < 2 MB, 3 versions) and the
     "text behind me" pixel check (opaque cut-out stays on top, ≥70 % visible). 79 tests pass.
+  - "My colours" mode (Carina's wish, 17 Nov): 3 versions, each a soft gradient of 2 of her colours – lilac #C9B3EC +
+    pink #F2B8D2, pink + yellow #FAE8A5, yellow + lilac – with blurred light circles, fine grain and a plum top for
+    the white title (`image_gen.colour_background`). Local, free, no AI; it is the default mode. Pink is not in the
+    brand skill yet, so #F2B8D2 is a proposal. The colour pair can be switched per version.
   - Not checked yet: hands in the cut-out (the public test photo has no hands) – check with Carina's own photo.
 
 ### Wartet auf Carina

@@ -200,6 +200,7 @@ class Spec:
     doodle_text: str = "me"
     person: dict = field(default_factory=dict)   # {"dx", "dy" (Anteil), "s" (Faktor)} – Carinas Feinschiebung
     text: dict = field(default_factory=dict)     # {"dx", "dy", "s"} – Titel verschieben/skalieren
+    shade: float = 0.5            # wie stark oben abgedunkelt wird (Farb-Hintergründe haben schon Pflaume oben)
 
 
 @dataclass
@@ -368,7 +369,7 @@ def compose(bg: Image.Image, cut: Image.Image, face: list[float] | None, spec: S
             warnings.append("The text gets close to your face – try another layout or move yourself.")
 
     # ---------- zeichnen: Hintergrund → (Text) → Schatten + Carina → (Text) → Doodles
-    canvas = darken_top(bg.convert("RGB").resize((W, H))).convert("RGBA")
+    canvas = darken_top(bg.convert("RGB").resize((W, H)), spec.shade).convert("RGBA")
     person = cut.resize((pbox[2], pbox[3]), Image.LANCZOS)
     sh, pad = soft_shadow(person)
     text_layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))

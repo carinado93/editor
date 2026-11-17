@@ -81,3 +81,18 @@ def test_store_makes_three_versions_with_fake_generator(monkeypatch, tmp_path):
         f = d / v["png"]
         assert f.exists() and f.stat().st_size < 2_000_000
         assert Image.open(f).size == (1280, 720)
+
+
+def test_my_colours_mode_makes_three_colour_pairs(monkeypatch, tmp_path):
+    monkeypatch.setattr(thumbstore, "OWN", tmp_path)
+    wid = thumbstore.new_own()
+    d = thumbstore.wdir(wid)
+    fake_cutout().save(d / "cut.png")
+    st = json.loads((d / "state.json").read_text(encoding="utf-8"))
+    st.update(cutout="cut.png", photo="cut.png", face=FACE)
+    (d / "state.json").write_text(json.dumps(st), encoding="utf-8")
+    out = thumbstore.generate(wid, "colours", [], [["worth", "it?"]], "top", False, False)
+    assert [v["prompt"] for v in out["versions"]] == ["colours:lilac+pink", "colours:pink+yellow", "colours:yellow+lilac"]
+    assert not out["fallback_used"]
+    for v in out["versions"]:
+        assert v["spec"]["colours"] and (d / v["png"]).stat().st_size < 2_000_000

@@ -206,7 +206,7 @@ def _spec(d: dict) -> thumbmaker.Spec:
     return thumbmaker.Spec(title1=str(d.get("title1", "")), title2=str(d.get("title2", "")),
                            layout=d.get("layout", "auto"), behind=bool(d.get("behind")), doodles=bool(d.get("doodles")),
                            doodle_text=str(d.get("doodle_text", "me")), person=d.get("person") or {},
-                           text=d.get("text") or {})
+                           text=d.get("text") or {}, shade=0.15 if d.get("colours") else 0.5)
 
 
 def _render(wid: str, v: dict) -> dict:
@@ -234,8 +234,23 @@ def _render(wid: str, v: dict) -> dict:
     return v
 
 
+def colour_pair(prompt: str) -> tuple[str, str] | None:
+    """"colours:lilac+pink" → ("lilac", "pink")."""
+    if not prompt.startswith("colours:"):
+        return None
+    pair = tuple(prompt[8:].split("+"))
+    if len(pair) != 2 or not all(c in image_gen.BRAND_COLOURS for c in pair):
+        raise UserError("Unknown colour pair.")
+    return pair
+
+
 def _background(wid: str, prompt: str, seed: int) -> tuple[str, str]:
     d = wdir(wid)
+    pair = colour_pair(prompt)
+    if pair:
+        name = f"bg_{int(time.time() * 1000)}_{seed}.png"
+        image_gen.colour_background(*pair, thumbmaker.W, thumbmaker.H, seed=seed).save(d / name)
+        return name, "colours"
     fallback = Image.open(d / "photo.png").convert("RGB") if (d / "photo.png").exists() else None
     img, used = image_gen.generate(prompt, thumbmaker.W, thumbmaker.H, seed=seed, fallback_frame=fallback)
     name = f"bg_{int(time.time() * 1000)}_{seed}.png"
@@ -249,6 +264,8 @@ def generate(wid: str, mode: str, prompts: list[str], titles: list[list[str]], l
     st = load(wid)
     if not st.get("cutout"):
         raise UserError("Please choose your photo first (step 1).")
+    if mode == "colours":
+        prompts = [f"colours:{a}+{b}" for a, b in image_gen.COLOUR_PAIRS]
     prompts = [p for p in prompts if p.strip()] or ["cosy bright living room with plants, soft daylight"]
     titles = [t for t in titles if any(x.strip() for x in t)]
     if not titles:
@@ -268,7 +285,8 @@ def generate(wid: str, mode: str, prompts: list[str], titles: list[list[str]], l
     for k, (pr, bg, tt) in enumerate(plan):
         v = {"id": f"v{k + 1}", "prompt": pr, "bg": bg,
              "spec": {"title1": tt[0], "title2": tt[1] if len(tt) > 1 else "", "layout": layout, "behind": behind,
-                      "doodles": doodles, "doodle_text": "me", "person": {}, "text": {}}}
+                      "doodles": doodles, "doodle_text": "me", "person": {}, "text": {},
+                      "colours": pr.startswith("colours:")}}
         versions.append(_render(wid, v))
     st["versions"] = versions
     st["last_mode"] = mode
@@ -293,6 +311,7 @@ def new_background(wid: str, vid: str, prompt: str) -> dict:
         if v["id"] == vid:
             v["prompt"] = prompt.strip() or v.get("prompt", "")
             v["bg"], used = _background(wid, v["prompt"], seed=int(time.time()) % 100000)
+            v["spec"]["colours"] = used == "colours"
             st["fallback_used"] = used == "frame" and image_gen.settings()["provider"] != "frame"
             _render(wid, v)
             return _save(wid, st)

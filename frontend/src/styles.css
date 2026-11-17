@@ -2070,3 +2070,4 @@ a.chip { text-decoration: none; color: inherit; }
 .tm-doodle { width: 140px; }
 .tm-page .btn, .tm-page label.btn { width: auto; flex: 0 0 auto; }
 .tm-page .row-buttons { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 6px 0; }
+.tm-swatch { display: inline-block; width: 26px; height: 12px; border-radius: 6px; vertical-align: middle; margin-right: 4px; }

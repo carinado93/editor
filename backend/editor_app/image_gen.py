@@ -123,6 +123,38 @@ def _higgsfield(prompt: str, w: int, h: int, seed: int) -> Image.Image:
     raise UserError("Higgsfield took too long (5 min).")
 
 
+# Carinas Farben für "Meine Farben"-Hintergründe (je 2 kombiniert). Rosa ist nicht im Brand-Skill → zarter Pastellton.
+BRAND_COLOURS = {
+    "lilac": (201, 179, 236),   # #C9B3EC
+    "pink": (242, 184, 210),    # #F2B8D2
+    "yellow": (250, 232, 165),  # #FAE8A5 butter yellow
+}
+COLOUR_PAIRS = [("lilac", "pink"), ("pink", "yellow"), ("yellow", "lilac")]
+
+
+def colour_background(c1: str, c2: str, w: int = 1280, h: int = 720, seed: int = 0) -> Image.Image:
+    """Weicher Verlauf aus zwei ihrer Farben + große, unscharfe Lichtkreise und feines Korn (kein Foto, keine KI).
+    Oben geht der Verlauf in ein tiefes Pflaume über, damit der weiße Titel lesbar bleibt."""
+    import numpy as np
+    a, b = (np.array(BRAND_COLOURS[c], np.float32) for c in (c1, c2))
+    rng = np.random.default_rng(seed)
+    yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
+    t = np.clip((xx / w) * 0.75 + (yy / h) * 0.25, 0, 1)[..., None]
+    t = t * t * (3 - 2 * t)
+    img = a * (1 - t) + b * t
+    for _ in range(6):  # Lichtkreise in beiden Farben + Weiß
+        cx, cy = rng.uniform(0, w), rng.uniform(h * 0.25, h)
+        r = rng.uniform(0.18, 0.4) * w
+        col = [a, b, np.array([255, 250, 245], np.float32)][rng.integers(0, 3)]
+        m = np.exp(-(((xx - cx) ** 2 + (yy - cy) ** 2) / (2 * (r / 2) ** 2)))[..., None] * rng.uniform(0.15, 0.32)
+        img = img * (1 - m) + col * m
+    plum = np.array([74, 52, 110], np.float32)
+    top = np.clip(1 - yy / (h * 0.5), 0, 1)[..., None] ** 1.5 * 0.58
+    img = img * (1 - top) + plum * top
+    img += rng.normal(0, 2.2, img.shape[:2])[..., None]
+    return Image.fromarray(np.clip(img, 0, 255).astype(np.uint8))
+
+
 def frame_background(frame: Image.Image | None, w: int, h: int, seed: int = 0) -> Image.Image:
     """Ohne KI: ihr eigenes Videobild, stark weichgezeichnet und etwas dunkler (nur Hintergrund, nicht sie selbst).
     Je nach seed ein anderer Ausschnitt, damit die 3 Versionen sich unterscheiden."""

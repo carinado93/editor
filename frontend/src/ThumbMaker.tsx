@@ -8,6 +8,12 @@ const LAYOUTS: [string, string][] = [
   ["side", "Side – me on one side, words stacked on the other"],
 ];
 
+const PAIRS: [string, string][] = [
+  ["colours:lilac+pink", "My colours: lilac + pink"],
+  ["colours:pink+yellow", "My colours: pink + yellow"],
+  ["colours:yellow+lilac", "My colours: yellow + lilac"],
+];
+
 /** Startseite des Thumbnail-Makers: YouTube-Projekt wählen oder ein eigenes Thumbnail ohne Video. */
 export function ThumbMakerPage({ wid }: { wid?: string }) {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -48,7 +54,7 @@ function ThumbMaker({ wid }: { wid: string }) {
   const [frames, setFrames] = useState<{ k: number; t: number; file: string }[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const [mode, setMode] = useState<"backgrounds" | "titles">("backgrounds");
+  const [mode, setMode] = useState<"backgrounds" | "titles" | "colours">("colours");
   const [prompts, setPrompts] = useState<string[]>(["", "", ""]);
   const [titles, setTitles] = useState<string[][]>([["", ""], ["", ""], ["", ""]]);
   const [layout, setLayout] = useState("auto");
@@ -123,6 +129,9 @@ function ThumbMaker({ wid }: { wid: string }) {
         <div className="row-buttons small">
           <button className={`btn small-btn ${mode === "backgrounds" ? "" : "ghost"}`} onClick={() => setMode("backgrounds")}>3 backgrounds, same title</button>
           <button className={`btn small-btn ${mode === "titles" ? "" : "ghost"}`} onClick={() => setMode("titles")}>1 background, 3 titles</button>
+          <button className={`btn small-btn ${mode === "colours" ? "" : "ghost"}`} onClick={() => setMode("colours")}>
+            <span className="tm-swatch" style={{ background: "linear-gradient(90deg,#C9B3EC,#F2B8D2,#FAE8A5)" }} /> My colours (lilac · pink · yellow)
+          </button>
           <button className="btn ghost small-btn" disabled={!!busy} onClick={() => act("suggest", () => api.tmSuggest(wid))}>
             {busy === "suggest" ? "Claude is thinking …" : "✨ Suggest backgrounds + titles"}
           </button>
@@ -152,14 +161,17 @@ function ThumbMaker({ wid }: { wid: string }) {
             ))}
           </div>
         )}
-        <div className="tm-prompts">
+        {mode === "colours" && (
+          <p className="small muted">3 versions, each with 2 of your colours: lilac + pink, pink + yellow, yellow + lilac. Made by the app – free, no AI.</p>
+        )}
+        {mode !== "colours" && <div className="tm-prompts">
           {(mode === "titles" ? [0] : [0, 1, 2]).map((k) => (
             <label key={k} className="small">Background {mode === "titles" ? "" : k + 1} – describe it in your words
               <textarea rows={2} value={prompts[k]} placeholder="e.g. cosy home office at night, lilac neon light, two monitors"
                 onChange={(e) => setPrompts(prompts.map((p, j) => (j === k ? e.target.value : p)))} />
             </label>
           ))}
-        </div>
+        </div>}
         <div className="tm-titles small">
           {(mode === "titles" ? [0, 1, 2] : [0]).map((k) => (
             <div key={k} className="tm-title-row">
@@ -179,7 +191,7 @@ function ThumbMaker({ wid }: { wid: string }) {
           <label className="check-line"><input type="checkbox" checked={behind} onChange={(e) => setBehind(e.target.checked)} /> Text behind me</label>
           <label className="check-line"><input type="checkbox" checked={doodles} onChange={(e) => setDoodles(e.target.checked)} /> Lilac doodles</label>
         </div>
-        <p className="small muted">Cost: <strong>{mode === "titles" ? st.cost.replace("3 images", "1 image") : st.cost}</strong> · change the image service in Settings.</p>
+        <p className="small muted">Cost: <strong>{mode === "colours" ? "free" : mode === "titles" ? st.cost.replace("3 images", "1 image") : st.cost}</strong> · change the image service in Settings.</p>
         <button className="btn" disabled={!!busy || !st.cutout} onClick={() => act("gen", () => api.tmGenerate(wid, { mode, prompts, titles, layout, behind, doodles }))}>
           {busy === "gen" ? "Making 3 versions … (up to a minute per background)" : !st.cutout ? "Choose your photo first" : "✨ Make 3 versions"}
         </button>
@@ -298,7 +310,14 @@ function VersionCard({ wid, v, busy, onState, onErr }: {
           <button className="link" onClick={() => save({ person: {}, text: {} })}>reset position</button>
         </div>
         <div className="tm-bg">
-          <input value={bgPrompt} onChange={(e) => setBgPrompt(e.target.value)} placeholder="describe a new background" />
+          {bgPrompt.startsWith("colours:") ? (
+            <select value={bgPrompt} onChange={(e) => setBgPrompt(e.target.value)}>
+              {PAIRS.map(([val, label]) => <option key={val} value={val}>{label}</option>)}
+              <option value="">… or describe an AI background instead</option>
+            </select>
+          ) : (
+            <input value={bgPrompt} onChange={(e) => setBgPrompt(e.target.value)} placeholder="describe a new background" />
+          )}
           <button className="btn ghost small-btn" disabled={busy || !!working} onClick={async () => {
             setWorking("bg");
             try {
