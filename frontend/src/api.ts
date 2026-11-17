@@ -311,6 +311,23 @@ export interface CoverPhoto {
   face: number[] | null;
 }
 
+export interface TmSpec {
+  title1: string; title2: string; layout: string; behind: boolean; doodles: boolean; doodle_text: string;
+  person?: { dx?: number; dy?: number; s?: number }; text?: { dx?: number; dy?: number; s?: number };
+}
+export interface TmVersion {
+  id: string; prompt: string; bg: string; spec: TmSpec; png: string; layout_used: string; warnings: string[]; size: number;
+}
+export interface TmState {
+  wid: string; name: string; has_video: boolean; cost: string; provider: string;
+  photo?: string; cutout?: string; photo_source?: string; photo_v?: number;
+  versions?: TmVersion[]; ideas?: { backgrounds: string[]; titles: string[][] }; fallback_used?: boolean;
+}
+export interface ImageGenSettings {
+  provider: string; higgsfield_key_set: boolean;
+  providers: Record<string, { label: string; cost: string; needs_key: boolean }>;
+}
+
 async function call<T>(url: string, init?: RequestInit): Promise<T> {
   let res: Response;
   try {
@@ -527,6 +544,24 @@ export const api = {
   proxyUrl: (id: string, v?: number) => `/api/projects/${id}/vorschau.mp4${v ? `?v=${v}` : ""}`,
   rebuildPreview: (id: string) => call<Project>(`/api/projects/${id}/rebuild-preview`, { method: "POST" }),
   thumbUrl: (id: string) => `/api/projects/${id}/bild.jpg`,
+  tmList: () => call<{ own: { wid: string; name: string; count: number }[] }>("/api/thumbmaker"),
+  tmNew: () => call<TmState>("/api/thumbmaker", { method: "POST" }),
+  tmGet: (wid: string) => call<TmState>(`/api/thumbmaker/${wid}`),
+  tmFrames: (wid: string) => call<{ frames: { k: number; t: number; file: string }[] }>(`/api/thumbmaker/${wid}/frames`),
+  tmFrameUrl: (wid: string, name: string) => `/api/thumbmaker/${wid}/frame/${encodeURIComponent(name)}`,
+  tmPhotoFrame: (wid: string, k: number) => call<TmState>(`/api/thumbmaker/${wid}/photo/frame/${k}`, { method: "POST" }),
+  tmPhotoUpload: (wid: string, f: File) => call<TmState>(`/api/thumbmaker/${wid}/photo`, { method: "PUT", body: f }),
+  tmSuggest: (wid: string, engine = "claude") => call<TmState>(`/api/thumbmaker/${wid}/suggest/${engine}`, { method: "POST" }),
+  tmGenerate: (wid: string, body: { mode: string; prompts: string[]; titles: string[][]; layout: string; behind: boolean; doodles: boolean }) =>
+    call<TmState>(`/api/thumbmaker/${wid}/generate`, json(body)),
+  tmUpdate: (wid: string, vid: string, spec: Partial<TmSpec>) =>
+    call<TmState>(`/api/thumbmaker/${wid}/version/${vid}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(spec) }),
+  tmNewBackground: (wid: string, vid: string, prompt: string) => call<TmState>(`/api/thumbmaker/${wid}/version/${vid}/background`, json({ prompt })),
+  tmFileUrl: (wid: string, name: string) => `/api/thumbmaker/${wid}/file/${encodeURIComponent(name)}`,
+  tmZipUrl: (wid: string) => `/api/thumbmaker/${wid}/zip`,
+  imageGenSettings: () => call<ImageGenSettings>("/api/einstellungen/image-gen"),
+  saveImageGenSettings: (body: { provider?: string; higgsfield_key?: string }) =>
+    call<ImageGenSettings>("/api/einstellungen/image-gen", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }),
 };
 
 export function formatTime(sec: number): string {

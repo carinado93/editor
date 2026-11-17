@@ -1461,6 +1461,146 @@ def styles_delete(sid: str):
     return {"styles": styles.delete(sid)}
 
 
+# ---------- YouTube-Thumbnail-Maker ----------
+
+class TmGenerateBody(BaseModel):
+    mode: str = "backgrounds"          # backgrounds | titles
+    prompts: list[str] = []
+    titles: list[list[str]] = []
+    layout: str = "auto"
+    behind: bool = False
+    doodles: bool = False
+
+
+class TmBgBody(BaseModel):
+    prompt: str = ""
+
+
+class ImageGenSettingsBody(BaseModel):
+    provider: str | None = None
+    higgsfield_key: str | None = None
+
+
+@app.get("/api/thumbmaker")
+def tm_list():
+    from . import thumbstore
+
+    return {"own": thumbstore.list_own()}
+
+
+@app.post("/api/thumbmaker")
+def tm_new():
+    from . import thumbstore
+
+    return thumbstore.load(thumbstore.new_own())
+
+
+@app.get("/api/thumbmaker/{wid}")
+def tm_get(wid: str):
+    from . import thumbstore
+
+    return thumbstore.load(wid)
+
+
+@app.get("/api/thumbmaker/{wid}/frames")
+def tm_frames(wid: str):
+    from . import thumbstore
+
+    return {"frames": thumbstore.frames(wid)}
+
+
+@app.get("/api/thumbmaker/{wid}/frame/{name}")
+def tm_frame_file(wid: str, name: str):
+    from . import thumbstore
+
+    return FileResponse(thumbstore.frame_file(wid, name), media_type="image/jpeg")
+
+
+@app.post("/api/thumbmaker/{wid}/photo/frame/{k}")
+def tm_photo_frame(wid: str, k: int):
+    from . import thumbstore
+
+    return thumbstore.photo_from_frame(wid, k)
+
+
+@app.put("/api/thumbmaker/{wid}/photo")
+async def tm_photo_upload(wid: str, request: Request):
+    import io as _io
+
+    from PIL import Image
+
+    from . import thumbstore
+
+    try:
+        img = Image.open(_io.BytesIO(await request.body()))
+    except Exception:
+        raise UserError("This file is not an image the app can read (please use JPG or PNG).")
+    return thumbstore.set_photo(wid, img, "upload")
+
+
+@app.post("/api/thumbmaker/{wid}/suggest/{engine}")
+def tm_suggest(wid: str, engine: str):
+    from . import thumbstore
+
+    if engine not in ("claude", "ollama"):
+        raise UserError("Unknown AI.")
+    return thumbstore.suggest(wid, engine)
+
+
+@app.post("/api/thumbmaker/{wid}/generate")
+def tm_generate(wid: str, body: TmGenerateBody):
+    from . import thumbstore
+
+    return thumbstore.generate(wid, body.mode, body.prompts, body.titles, body.layout, body.behind, body.doodles)
+
+
+@app.put("/api/thumbmaker/{wid}/version/{vid}")
+def tm_update(wid: str, vid: str, body: dict):
+    from . import thumbstore
+
+    return thumbstore.update_version(wid, vid, body)
+
+
+@app.post("/api/thumbmaker/{wid}/version/{vid}/background")
+def tm_new_bg(wid: str, vid: str, body: TmBgBody):
+    from . import thumbstore
+
+    return thumbstore.new_background(wid, vid, body.prompt)
+
+
+@app.get("/api/thumbmaker/{wid}/file/{name}")
+def tm_file(wid: str, name: str, download: int = 0):
+    from . import thumbstore
+
+    f = thumbstore.file(wid, name)
+    return FileResponse(f, media_type="image/png" if name.endswith(".png") else "image/jpeg",
+                        filename=name if download else None)
+
+
+@app.get("/api/thumbmaker/{wid}/zip")
+def tm_zip(wid: str):
+    from fastapi.responses import Response
+
+    from . import thumbstore
+
+    return Response(thumbstore.zip_all(wid), media_type="application/zip",
+                    headers={"Content-Disposition": 'attachment; filename="thumbnails.zip"'})
+
+
+@app.get("/api/einstellungen/image-gen")
+def image_gen_settings():
+    from . import image_gen
+
+    return image_gen.settings()
+
+
+@app.put("/api/einstellungen/image-gen")
+def image_gen_settings_save(body: ImageGenSettingsBody):
+    from . import image_gen
+
+    return image_gen.save_settings(body.provider, body.higgsfield_key)
+
+
 # ---------- Karussell-Generator ----------
 
 class CarouselDraftBody(BaseModel):

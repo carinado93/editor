@@ -58,6 +58,29 @@
   - UI: Buzzword-Knopf, lila Blick-Vorschläge, Render-Optionen, Text-Vorschau direkt über dem Video
   - 20 automatische Tests
 
+- [x] **Thumbnail maker (17 Nov 2026, branch `thumbnail-maker`, waiting for Carina's OK before merging)**
+  - New "Thumbnail" page (`#/thumbnail`) plus a "🎨 Thumbnail maker" button in every YouTube project (step-thumb card;
+    the existing frame suggestions and CoverStudio stay unchanged).
+  - Flow: photo (upload or one of 12 video frames) → cut-out (`fx.Segmenter` + GrabCut refine, finger/hair fix) →
+    background description + "Suggest" (Claude: 3 backgrounds + 3 two-word titles, proposals only) → 3 versions
+    ("3 backgrounds, same title" or "1 background, 3 titles") → grid with a 360 px phone preview → edit title, layout,
+    text behind/in front, doodles, drag/arrow/size for her and for the title, "New background" for one version →
+    download one PNG or a zip of all 3 (also saved in the project folder and in the Desktop outbox).
+  - `image_gen.py`: `generate(prompt, w, h)`; providers: Pollinations (free, no key, default), Higgsfield
+    (`api.higgsfield.ai`, model `bytedance/seedream/v4/text-to-image`, key `HF_KEY=id:secret` in `.env`,
+    set in Settings → Thumbnail backgrounds), or "frame". Any failure/offline → blurred, darkened frame of her own
+    photo (different crop per version). Prompt suffix always added (photorealistic, no people/text/logos, empty top).
+    Cost shown before generating. Neither Pollinations nor Higgsfield could be reached from the dev container, so
+    the real API calls are untested; the Higgsfield price (~$0.03/image) is an estimate.
+  - `thumbmaker.py`: 1280×720 PNG < 2 MB; dark top ramp; her big, soft shadow, never graded; Poppins Black white word 1,
+    lilac play tag #B79CE0, Cormorant Garamond Bold Italic word 2 with lilac brush underline; layouts top / two /
+    side / auto; tries scale × lower × font size until text avoids face and (behind mode) ≥70 % of each word and
+    the first letter stay visible, otherwise warns. Draw order bg → text (behind) → her → text (front) → tag → doodles.
+  - `thumbstore.py` + `/api/thumbmaker/*` endpoints, `/api/einstellungen/image-gen`.
+  - Tests `tests/test_thumbmaker.py`: fake generator (size, words not on face box, PNG < 2 MB, 3 versions) and the
+    "text behind me" pixel check (opaque cut-out stays on top, ≥70 % visible). 79 tests pass.
+  - Not checked yet: hands in the cut-out (the public test photo has no hands) – check with Carina's own photo.
+
 ### Wartet auf Carina
 - [ ] Neue Version holen (Git: Pull), ein Video mit Buzzwords + eingebrannten Untertiteln rendern und sagen, ob Stil,
   Größe und Position passen

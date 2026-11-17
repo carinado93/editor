@@ -2028,3 +2028,45 @@ kbd {
 .fx-sport { display: flex; gap: 10px; align-items: center; } .fx-sport .fx-title { flex: 1; } .fx-sport label { display: flex; gap: 6px; align-items: center; white-space: nowrap; } .fx-sport input[type=number] { width: 80px; }
 .fx-pos .nudge { display: inline-flex; gap: 3px; align-items: center; } .fx-pos .nudge button:not(.link) { width: 30px; height: 28px; border-radius: 8px; border: 1px solid rgba(100,68,165,.35); background: #fff; color: var(--lila,#6444a5); cursor: pointer; font-size: 1rem; } .fx-pos .nudge button:not(.link):active { background: var(--lila,#6444a5); color: #fff; }
 .studio-fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; margin: 6px 0; } .studio-fields label { display: flex; flex-direction: column; gap: 3px; } .studio-fields input { font: inherit; padding: 5px 8px; border-radius: 8px; border: 1px solid var(--line,#e6dccd); } .studio-rows { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 4px; } .studio-row { display: flex; gap: 6px; align-items: center; } .studio-row input { flex: 1; }
+
+/* ---------- Thumbnail maker ---------- */
+.tm-page .card { margin-bottom: 16px; }
+.carousel-list { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 6px 0 12px; }
+a.chip { text-decoration: none; color: inherit; }
+.check-line { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.settings-card .check-line { display: flex; margin: 4px 0; }
+.tm-frames { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; margin: 8px 0 12px; }
+.tm-frame { padding: 0; border: 2px solid transparent; border-radius: 10px; overflow: hidden; cursor: pointer; background: none; }
+.tm-frame:hover { border-color: var(--lila); }
+.tm-frame img { width: 100%; display: block; aspect-ratio: 16 / 9; object-fit: cover; }
+.tm-cut { display: flex; gap: 12px; align-items: flex-end; margin-top: 10px; }
+.tm-cut img { height: 200px; border-radius: 10px; }
+.checker { background: repeating-conic-gradient(#e6e0d6 0 25%, #fff 0 50%) 0 0 / 16px 16px; }
+.tm-prompts { display: grid; gap: 8px; margin: 10px 0; }
+.tm-prompts textarea { width: 100%; display: block; margin-top: 3px; }
+.tm-titles { display: grid; gap: 6px; margin: 8px 0; }
+.tm-title-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.tm-title-row input { width: 160px; font-family: Poppins, sans-serif; font-weight: 600; }
+.tm-title-row input.script { font-family: "Cormorant Garamond", serif; font-style: italic; font-size: 1.1rem; }
+.tm-tag-mini { background: #b79ce0; color: #fff; border-radius: 7px; padding: 1px 7px; font-size: 0.7rem; }
+.tm-opts { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin: 8px 0; }
+.tm-versions { display: grid; gap: 22px; }
+.tm-version { border-top: 1px solid rgba(100, 68, 165, 0.18); padding-top: 14px; }
+.tm-previews { display: flex; gap: 14px; align-items: flex-start; flex-wrap: wrap; }
+.tm-big { position: relative; flex: 1 1 520px; max-width: 760px; }
+.tm-big img { width: 100%; display: block; border-radius: 10px; cursor: grab; touch-action: none; user-select: none; }
+.tm-big img:active { cursor: grabbing; }
+.tm-working { position: absolute; top: 8px; left: 8px; background: rgba(255, 255, 255, 0.9); border-radius: 8px; padding: 2px 8px; }
+.tm-phone { width: 360px; max-width: 100%; display: grid; gap: 4px; }
+.tm-phone img { width: 100%; border-radius: 8px; display: block; }
+.tm-move { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 6px 0; }
+.tm-move .seg { display: inline-flex; border: 1px solid rgba(100, 68, 165, 0.3); border-radius: 999px; overflow: hidden; }
+.tm-move .seg button { border: 0; background: #fff; padding: 3px 10px; font: inherit; cursor: pointer; color: var(--lila); }
+.tm-move .seg button.on { background: var(--lila); color: #fff; }
+.tm-move .nudge { display: inline-flex; gap: 3px; }
+.tm-move .nudge button { width: 30px; height: 28px; border-radius: 8px; border: 1px solid rgba(100, 68, 165, 0.35); background: #fff; color: var(--lila); cursor: pointer; }
+.tm-bg { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.tm-bg input { flex: 1; min-width: 220px; }
+.tm-doodle { width: 140px; }
+.tm-page .btn, .tm-page label.btn { width: auto; flex: 0 0 auto; }
+.tm-page .row-buttons { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 6px 0; }

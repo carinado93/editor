@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api } from "./api";
+import { api, type ImageGenSettings } from "./api";
 
 export function Settings() {
   const [st, setSt] = useState<{ configured: boolean; masked: string; model: string } | null>(null);
@@ -80,6 +80,7 @@ export function Settings() {
           Cost: about $0.05–0.10 per reel text, roughly $3–8 per month. You can see your usage on console.anthropic.com.
         </p>
       </section>
+      <ImageGenSettingsCard />
       <PublishSettings />
     </div>
   );
@@ -127,6 +128,54 @@ function PublishSettings() {
           setErr((e as Error).message);
         }
       }}>Save</button>
+      {msg && <div className="banner small">{msg}</div>}
+      {err && <div className="banner error small">⚠ {err}</div>}
+    </section>
+  );
+}
+
+/** Welcher Dienst die KI-Hintergründe für den Thumbnail-Maker macht. Schlüssel bleibt nur in .env auf ihrem PC. */
+function ImageGenSettingsCard() {
+  const [st, setSt] = useState<ImageGenSettings | null>(null);
+  const [key, setKey] = useState("");
+  const [msg, setMsg] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  useEffect(() => {
+    api.imageGenSettings().then(setSt).catch((e) => setErr(e.message));
+  }, []);
+  const save = async (body: { provider?: string; higgsfield_key?: string }) => {
+    setErr(null);
+    try {
+      setSt(await api.saveImageGenSettings(body));
+      setMsg("Saved ✓");
+      setKey("");
+    } catch (e) {
+      setErr((e as Error).message);
+    }
+  };
+  if (!st) return err ? <div className="banner error small">⚠ {err}</div> : null;
+  return (
+    <section className="card settings-card">
+      <h3>Thumbnail backgrounds (AI images)</h3>
+      <p className="small muted">Which service makes the backgrounds in the Thumbnail maker. Without internet the app always uses a blurred frame of your video.</p>
+      {Object.entries(st.providers).map(([k, p]) => (
+        <label key={k} className="check-line small">
+          <input type="radio" name="imgprov" checked={st.provider === k} onChange={() => save({ provider: k })} />
+          <strong>{p.label}</strong> <span className="muted">– {p.cost}</span>
+        </label>
+      ))}
+      {st.provider === "higgsfield" && (
+        <div className="publish-fields">
+          <label className="small">
+            Higgsfield API key (KEY-ID:SECRET from cloud.higgsfield.ai → API keys){" "}
+            {st.higgsfield_key_set && <span className="status ok">✓ set</span>}
+            <input type="password" autoComplete="off" value={key} placeholder="key-id:secret" onChange={(e) => setKey(e.target.value)} />
+          </label>
+          <button className="btn" disabled={!key.trim()} onClick={() => save({ higgsfield_key: key })}>Save key</button>
+          {st.higgsfield_key_set && <button className="btn ghost" onClick={() => confirm("Delete the Higgsfield key from this PC?") && save({ higgsfield_key: "" })}>Delete key</button>}
+        </div>
+      )}
+      <p className="small muted">The key stays only on your PC in the <code>.env</code> file. The price is shown before every generation.</p>
       {msg && <div className="banner small">{msg}</div>}
       {err && <div className="banner error small">⚠ {err}</div>}
     </section>
