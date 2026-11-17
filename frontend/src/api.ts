@@ -551,6 +551,8 @@ export const api = {
   tmFrameUrl: (wid: string, name: string) => `/api/thumbmaker/${wid}/frame/${encodeURIComponent(name)}`,
   tmPhotoFrame: (wid: string, k: number) => call<TmState>(`/api/thumbmaker/${wid}/photo/frame/${k}`, { method: "POST" }),
   tmPhotoUpload: (wid: string, f: File) => call<TmState>(`/api/thumbmaker/${wid}/photo`, { method: "PUT", body: f }),
+  tmFixCutout: (wid: string, strokes: { x: number; y: number; r: number; mode: string }[], reset = false) =>
+    call<TmState>(`/api/thumbmaker/${wid}/photo/fix`, json({ strokes, reset })),
   tmSuggest: (wid: string, engine = "claude") => call<TmState>(`/api/thumbmaker/${wid}/suggest/${engine}`, { method: "POST" }),
   tmGenerate: (wid: string, body: { mode: string; prompts: string[]; titles: string[][]; layout: string; behind: boolean; doodles: boolean }) =>
     call<TmState>(`/api/thumbmaker/${wid}/generate`, json(body)),

@@ -1538,6 +1538,18 @@ async def tm_photo_upload(wid: str, request: Request):
     return thumbstore.set_photo(wid, img, "upload")
 
 
+class TmFixBody(BaseModel):
+    strokes: list[dict] = []
+    reset: bool = False
+
+
+@app.post("/api/thumbmaker/{wid}/photo/fix")
+def tm_photo_fix(wid: str, body: TmFixBody):
+    from . import thumbstore
+
+    return thumbstore.fix_cutout(wid, body.strokes, body.reset)
+
+
 @app.post("/api/thumbmaker/{wid}/suggest/{engine}")
 def tm_suggest(wid: str, engine: str):
     from . import thumbstore

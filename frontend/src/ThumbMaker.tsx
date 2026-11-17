@@ -67,6 +67,7 @@ function ThumbMaker({ wid }: { wid: string }) {
   const [layout, setLayout] = useState("auto");
   const [behind, setBehind] = useState(false);
   const [doodles, setDoodles] = useState(false);
+  const [fixing, setFixing] = useState(false);
 
   useEffect(() => {
     api.tmGet(wid).then((s) => {
@@ -126,8 +127,14 @@ function ThumbMaker({ wid }: { wid: string }) {
         {st.cutout && (
           <div className="tm-cut">
             <img className="checker" src={`${v(st.cutout)}?v=${st.photo_v ?? 0}`} alt="You, cut out" />
-            <span className="small muted">Your cut-out ({st.photo_source}). Your photo is never colour-graded.</span>
+            <span className="small muted">Your cut-out ({st.photo_source}). Your photo is never colour-graded.
+              <br />Something from the room came along (a chair, a plant)?{" "}
+              <button className="link" onClick={() => setFixing(!fixing)}>{fixing ? "close the eraser" : "🧽 Fix the cut-out"}</button>
+            </span>
           </div>
+        )}
+        {st.cutout && fixing && (
+          <CutoutFixer wid={wid} v={st.photo_v ?? 0} onState={(s) => setSt(s)} onErr={setErr} onDone={() => setFixing(false)} />
         )}
       </section>
 
@@ -353,6 +360,112 @@ function VersionCard({ wid, v, busy, onState, onErr }: {
           <span className="muted">{Math.round((v.size ?? 0) / 1024)} KB · {v.layout_used}</span>
         </div>
       </div>
+    </div>
+  );
+}
+
+type Stroke = { x: number; y: number; r: number; mode: string };
+
+/** Radierer/Pinsel für den Ausschnitt: dunkel = weg, hell = sie. Malen, dann "Apply". */
+function CutoutFixer({ wid, v, onState, onErr, onDone }: {
+  wid: string; v: number; onState: (s: TmState) => void; onErr: (m: string) => void; onDone: () => void;
+}) {
+  const view = useRef<HTMLCanvasElement>(null);
+  const maskC = useRef<HTMLCanvasElement | null>(null);
+  const photo = useRef<HTMLImageElement | null>(null);
+  const [mode, setMode] = useState<"erase" | "restore">("erase");
+  const [size, setSize] = useState(0.025);
+  const [strokes, setStrokes] = useState<Stroke[]>([]);
+  const [busy, setBusy] = useState(false);
+  const drawing = useRef(false);
+
+  const redraw = () => {
+    const c = view.current, m = maskC.current, p = photo.current;
+    if (!c || !m || !p) return;
+    const g = c.getContext("2d")!;
+    g.globalCompositeOperation = "source-over";
+    g.drawImage(p, 0, 0, c.width, c.height);
+    const o = document.createElement("canvas");
+    o.width = c.width; o.height = c.height;
+    const og = o.getContext("2d")!;
+    og.fillStyle = "rgba(35, 20, 60, 0.72)";
+    og.fillRect(0, 0, o.width, o.height);
+    og.globalCompositeOperation = "destination-out";
+    og.drawImage(m, 0, 0);
+    g.drawImage(o, 0, 0);
+  };
+
+  useEffect(() => {
+    const p = new Image(), mi = new Image();
+    let n = 0;
+    const ready = () => {
+      if (++n < 2 || !view.current) return;
+      const w = Math.min(760, view.current.parentElement?.clientWidth ?? 760);
+      const h = Math.round((w * p.naturalHeight) / p.naturalWidth);
+      view.current.width = w; view.current.height = h;
+      const m = document.createElement("canvas");
+      m.width = w; m.height = h;
+      const mg = m.getContext("2d")!;
+      mg.drawImage(mi, 0, 0, w, h);
+      const d = mg.getImageData(0, 0, w, h);
+      for (let i = 0; i < d.data.length; i += 4) { d.data[i + 3] = d.data[i]; d.data[i] = d.data[i + 1] = d.data[i + 2] = 255; }
+      mg.putImageData(d, 0, 0);
+      maskC.current = m; photo.current = p;
+      redraw();
+    };
+    p.onload = ready; mi.onload = ready;
+    p.src = `${api.tmFileUrl(wid, "photo.png")}?v=${v}`;
+    mi.src = `${api.tmFileUrl(wid, "mask.png")}?v=${v}`;
+    setStrokes([]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wid, v]);
+
+  const paint = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const c = view.current, m = maskC.current;
+    if (!c || !m) return;
+    const r = c.getBoundingClientRect();
+    const x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height;
+    const g = m.getContext("2d")!;
+    g.globalCompositeOperation = mode === "erase" ? "destination-out" : "source-over";
+    g.fillStyle = "#fff";
+    g.beginPath();
+    g.arc(x * m.width, y * m.height, size * m.width, 0, Math.PI * 2);
+    g.fill();
+    setStrokes((s) => [...s, { x: Math.round(x * 10000) / 10000, y: Math.round(y * 10000) / 10000, r: size, mode }]);
+    redraw();
+  };
+  const send = async (reset: boolean) => {
+    setBusy(true);
+    try {
+      onState(await api.tmFixCutout(wid, reset ? [] : strokes, reset));
+      if (!reset) onDone();
+    } catch (er) {
+      onErr((er as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="tm-fix">
+      <p className="small muted">Paint over what does not belong to you (dark = gone, bright = you). Your photo itself is not changed.</p>
+      <div className="tm-move small">
+        <span className="seg">
+          <button className={mode === "erase" ? "on" : ""} onClick={() => setMode("erase")}>🧽 erase</button>
+          <button className={mode === "restore" ? "on" : ""} onClick={() => setMode("restore")}>🖌 bring back</button>
+        </span>
+        <label>brush
+          <input type="range" min={0.006} max={0.08} step={0.002} value={size} onChange={(e) => setSize(Number(e.target.value))} />
+        </label>
+        <button className="btn small-btn" disabled={busy || !strokes.length} onClick={() => send(false)}>
+          {busy ? "Saving …" : "✓ Apply (also updates your versions)"}
+        </button>
+        <button className="link" disabled={busy} onClick={() => send(true)}>undo all (back to the automatic cut-out)</button>
+      </div>
+      <canvas ref={view} className="tm-fix-canvas"
+        onPointerDown={(e) => { drawing.current = true; (e.target as HTMLElement).setPointerCapture(e.pointerId); paint(e); }}
+        onPointerMove={(e) => { if (drawing.current) paint(e); }}
+        onPointerUp={() => { drawing.current = false; }} />
     </div>
   );
 }

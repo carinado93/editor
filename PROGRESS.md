@@ -87,7 +87,13 @@
   - "My own background, blurred" mode (Carina's wish, 17 Nov, reference: George Alexander-style thumbnails – real room,
     soft, person sharp): her photo's background with her removed first (cv2 inpaint of the cut-out mask, `cut_box` saved
     in state) and Gaussian blur 6 / 12 / 22 px for the 3 versions; no colour change. Pickable per version too.
-  - Not checked yet: hands in the cut-out (the public test photo has no hands) – check with Carina's own photo.
+  - Tested with Carina's own photo (17 Nov, desk + microphone, raised hand): fingers, nails, glasses, hair and mic are
+    clean. Fixes from that test: (1) the segmenter takes her red armchair and plant leaves as "person" → new eraser /
+    bring-back brush on the cut-out (`POST /photo/fix`, full mask kept as mask.png / mask_auto.png, versions re-render);
+    (2) uncertain edge pixels no longer kept as a semi-transparent room veil (alpha remap 0.3–0.75 in `refine_mask`);
+    (3) sizing by face height (≤38 % of H) and up to 1.15·W wide, so wide photos (arms out) stay big; (4) sides where
+    she is cut off in the photo (`cut_box` touches the edge) are snapped to the frame edge; (5) if "text behind me"
+    cannot keep ≥70 % of each word, the title goes in front of her with a note instead of hiding letters.
 
 ### Wartet auf Carina
 - [ ] Neue Version holen (Git: Pull), ein Video mit Buzzwords + eingebrannten Untertiteln rendern und sagen, ob Stil,

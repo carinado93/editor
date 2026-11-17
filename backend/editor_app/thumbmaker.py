@@ -53,7 +53,22 @@ def cutout(photo: Image.Image, segmenter=None) -> tuple[Image.Image, list[float]
             seg.close()
     m = refine_mask(np.asarray(img), m)
     face = gaze.photo_face(img)
-    return crop_cutout(img, m, face)
+    cut, fbox = crop_cutout(img, m, face)
+    cut.info["mask"] = Image.fromarray((np.clip(m, 0, 1) * 255).astype(np.uint8))  # ganze Maske fürs Nachbessern
+    cut.info["photo_face"] = face
+    return cut, fbox
+
+
+def apply_strokes(mask: Image.Image, strokes: list[dict]) -> Image.Image:
+    """Radierer/Pinsel: strokes = [{"x","y" (0..1), "r" (Anteil der Bildbreite), "mode": "erase"|"restore"}]."""
+    from PIL import ImageDraw
+    w, h = mask.size
+    out = mask.copy()
+    d = ImageDraw.Draw(out)
+    for s in strokes[:5000]:
+        x, y, r = float(s.get("x", 0)) * w, float(s.get("y", 0)) * h, max(1.0, float(s.get("r", 0.02)) * w)
+        d.ellipse((x - r, y - r, x + r, y + r), fill=0 if s.get("mode") != "restore" else 255)
+    return out
 
 
 def refine_mask(rgb: np.ndarray, m: np.ndarray) -> np.ndarray:
@@ -88,6 +103,8 @@ def refine_mask(rgb: np.ndarray, m: np.ndarray) -> np.ndarray:
         keep = 1 + int(np.argmax(stats[1:, cv2.CC_STAT_AREA]))
         region = cv2.dilate((lab == keep).astype(np.uint8), np.ones((15, 15), np.uint8))
         both = both * region
+    # unsichere Randpixel (halb durchsichtige Wand um Haare/Schultern) nicht als Schleier mitnehmen
+    both = np.clip((both - 0.3) / 0.45, 0, 1)
     both = cv2.GaussianBlur(both, (0, 0), 1.2)
     return np.clip(cv2.resize(both, (w, h)), 0, 1)
 
@@ -201,6 +218,7 @@ class Spec:
     doodle_text: str = "me"
     person: dict = field(default_factory=dict)   # {"dx", "dy" (Anteil), "s" (Faktor)} – Carinas Feinschiebung
     text: dict = field(default_factory=dict)     # {"dx", "dy", "s"} – Titel verschieben/skalieren
+    edges: tuple = ()             # Seiten, an denen sie im Foto abgeschnitten ist: "left", "right", "bottom"
     shade: float = 0.5            # wie stark oben abgedunkelt wird (Farb-Hintergründe haben schon Pflaume oben)
 
 
@@ -220,13 +238,22 @@ def _place_person(cut: Image.Image, layout: str, face: list[float] | None, scale
     """Größe und Ort von Carina: groß im Bild, unten angeschnitten; Seite je nach Layout."""
     target_h = H * 0.98 * scale
     s = target_h / cut.height
-    if cut.width * s > W * 0.62:
-        s = W * 0.62 / cut.width
+    if face:   # Gesicht nicht riesiger als ~38 % der Bildhöhe (bei Nahaufnahmen)
+        fh = max(1e-3, face[3] - face[1]) * cut.height
+        s = min(s, H * 0.38 * scale / fh)
+    # breite Fotos (Arme ausgestreckt): Arme dürfen am Rand angeschnitten werden, damit sie groß bleibt
+    if cut.width * s > W * 1.15:
+        s = W * 1.15 / cut.width
     pw, ph = int(cut.width * s), int(cut.height * s)
     cx = {"side": 0.73}.get(layout, 0.5) * W
     fcx = ((face[0] + face[2]) / 2) if face else 0.5   # das Gesicht steht an der Zielstelle, nicht der Ausschnitt
     x = int(cx - fcx * pw)
     x = max(-int(pw * 0.25), min(W - int(pw * 0.75), x))
+    # im Foto abgeschnittene Seiten (Arm am Bildrand) nie mitten im Bild enden lassen
+    if "left" in spec.edges and x > 0:
+        x = 0
+    if "right" in spec.edges and x + pw < W:
+        x = W - pw if "left" not in spec.edges or pw >= W else x
     y = int(H - ph + ph * 0.06 + lower * H)   # Unterkante leicht angeschnitten; "lower" = tiefer setzen
     p = spec.person or {}
     x += int(float(p.get("dx", 0)) * W)
@@ -360,6 +387,14 @@ def compose(bg: Image.Image, cut: Image.Image, face: list[float] | None, spec: S
         if best is None:
             best = cand
     good, sc, base, pbox, fb, words, tag, tagpos, boxes, alpha, vis = best
+    if not good and spec.behind and not user_moved:
+        # "Text hinter mir" passt mit diesem Foto nicht (Kopf zu weit oben) → Titel vor sie, statt Wörter zu verstecken
+        from dataclasses import replace
+        front = compose(bg, cut, face, replace(spec, behind=False))
+        if not front.warnings:
+            front.warnings.append("“Text behind me” did not fit with this photo (no room around your head), so the title is "
+                                  "in front of you. Make yourself smaller with the size slider to try again.")
+            return front
     warnings = []
     if not good:
         if spec.behind and any(v < 0.7 for v in vis):

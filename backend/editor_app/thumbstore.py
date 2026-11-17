@@ -128,8 +128,36 @@ def set_photo(wid: str, img: Image.Image, source: str) -> dict:
     img.save(d / "photo.png")
     cut, face = thumbmaker.cutout(img)
     cut.save(d / "cut.png")
+    if cut.info.get("mask") is not None:
+        cut.info["mask"].save(d / "mask_auto.png")
+        cut.info["mask"].save(d / "mask.png")
     st = load(wid)
-    st.update(photo="photo.png", cutout="cut.png", face=face, cut_box=list(cut.info.get("bbox") or []) or None, photo_source=source, photo_v=int(time.time()))
+    st.update(photo="photo.png", cutout="cut.png", face=face, cut_box=list(cut.info.get("bbox") or []) or None,
+              photo_face=cut.info.get("photo_face"), photo_source=source, photo_v=int(time.time()))
+    return _save(wid, st)
+
+
+def fix_cutout(wid: str, strokes: list[dict], reset: bool = False) -> dict:
+    """Ausschnitt nachbessern (Radierer/Zurückholen) und alle Versionen neu zeichnen."""
+    import numpy as np
+    d = wdir(wid)
+    st = load(wid)
+    if not (d / "photo.png").exists() or not (d / "mask.png").exists():
+        raise UserError("Please choose your photo again first (step 1).")
+    photo = Image.open(d / "photo.png").convert("RGB")
+    mask = Image.open(d / ("mask_auto.png" if reset else "mask.png")).convert("L")
+    if strokes:
+        mask = thumbmaker.apply_strokes(mask, strokes)
+    mask.save(d / "mask.png")
+    try:
+        cut, face = thumbmaker.crop_cutout(photo, np.asarray(mask).astype(np.float32) / 255, st.get("photo_face"))
+    except ValueError as exc:
+        raise UserError("Nothing of you is left – press “Undo all” and try again.") from exc
+    cut.save(d / "cut.png")
+    st.update(face=face, cut_box=list(cut.info["bbox"]), photo_v=int(time.time()))
+    _save(wid, st)
+    for v in st.get("versions", []):
+        _render(wid, v)
     return _save(wid, st)
 
 
@@ -216,7 +244,13 @@ def _render(wid: str, v: dict) -> dict:
         raise UserError("Please choose your photo first.")
     cut = Image.open(d / st["cutout"]).convert("RGBA")
     bg = Image.open(d / v["bg"]).convert("RGB")
-    res = thumbmaker.compose(bg, cut, st.get("face"), _spec(v["spec"]))
+    spec = _spec(v["spec"])
+    box = st.get("cut_box")
+    if box and (d / "photo.png").exists():
+        pw_, ph_ = Image.open(d / "photo.png").size
+        spec.edges = tuple(e for e, hit in (("left", box[0] <= 2), ("right", box[2] >= pw_ - 2),
+                                            ("bottom", box[3] >= ph_ - 2)) if hit)
+    res = thumbmaker.compose(bg, cut, st.get("face"), spec)
     png = thumbmaker.to_png(res.image)
     name = f"thumb_{v['id']}_{int(time.time())}.png"
     for old in d.glob(f"thumb_{v['id']}_*.png"):
