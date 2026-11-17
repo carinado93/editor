@@ -219,6 +219,7 @@ class Spec:
     person: dict = field(default_factory=dict)   # {"dx", "dy" (Anteil), "s" (Faktor)} – Carinas Feinschiebung
     text: dict = field(default_factory=dict)     # {"dx", "dy", "s"} – Titel verschieben/skalieren
     edges: tuple = ()             # Seiten, an denen sie im Foto abgeschnitten ist: "left", "right", "bottom"
+    shadow: bool = True           # weicher Schatten hinter ihr (nicht bei ihrem echten, unscharfen Raum)
     shade: float = 0.5            # wie stark oben abgedunkelt wird (Farb-Hintergründe haben schon Pflaume oben)
 
 
@@ -424,7 +425,8 @@ def compose(bg: Image.Image, cut: Image.Image, face: list[float] | None, spec: S
             text_layer = tmp
     if spec.behind:
         canvas.alpha_composite(text_layer)
-    canvas.paste(sh, (pbox[0] - pad, pbox[1] - pad), sh)
+    if spec.shadow:
+        canvas.paste(sh, (pbox[0] - pad, pbox[1] - pad), sh)
     canvas.paste(person, (pbox[0], pbox[1]), person)
     if not spec.behind:
         canvas.alpha_composite(text_layer)

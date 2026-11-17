@@ -234,7 +234,8 @@ def _spec(d: dict) -> thumbmaker.Spec:
     return thumbmaker.Spec(title1=str(d.get("title1", "")), title2=str(d.get("title2", "")),
                            layout=d.get("layout", "auto"), behind=bool(d.get("behind")), doodles=bool(d.get("doodles")),
                            doodle_text=str(d.get("doodle_text", "me")), person=d.get("person") or {},
-                           text=d.get("text") or {}, shade=0.15 if d.get("colours") else 0.5)
+                           text=d.get("text") or {}, shade=0.15 if d.get("colours") else 0.5,
+                           shadow=not d.get("blur"))
 
 
 def _render(wid: str, v: dict) -> dict:
@@ -248,8 +249,8 @@ def _render(wid: str, v: dict) -> dict:
     box = st.get("cut_box")
     if box and (d / "photo.png").exists():
         pw_, ph_ = Image.open(d / "photo.png").size
-        spec.edges = tuple(e for e, hit in (("left", box[0] <= 2), ("right", box[2] >= pw_ - 2),
-                                            ("bottom", box[3] >= ph_ - 2)) if hit)
+        spec.edges = tuple(e for e, hit in (("left", box[0] <= pw_ * 0.012), ("right", box[2] >= pw_ * 0.988),
+                                            ("bottom", box[3] >= ph_ * 0.988)) if hit)
     res = thumbmaker.compose(bg, cut, st.get("face"), spec)
     png = thumbmaker.to_png(res.image)
     name = f"thumb_{v['id']}_{int(time.time())}.png"
@@ -333,7 +334,7 @@ def generate(wid: str, mode: str, prompts: list[str], titles: list[list[str]], l
         v = {"id": f"v{k + 1}", "prompt": pr, "bg": bg,
              "spec": {"title1": tt[0], "title2": tt[1] if len(tt) > 1 else "", "layout": layout, "behind": behind,
                       "doodles": doodles, "doodle_text": "me", "person": {}, "text": {},
-                      "colours": pr.startswith("colours:")}}
+                      "colours": pr.startswith("colours:"), "blur": pr.startswith("blur:")}}
         versions.append(_render(wid, v))
     st["versions"] = versions
     st["last_mode"] = mode
@@ -359,6 +360,7 @@ def new_background(wid: str, vid: str, prompt: str) -> dict:
             v["prompt"] = prompt.strip() or v.get("prompt", "")
             v["bg"], used = _background(wid, v["prompt"], seed=int(time.time()) % 100000)
             v["spec"]["colours"] = used == "colours"
+            v["spec"]["blur"] = used == "blur"
             st["fallback_used"] = used == "frame" and image_gen.settings()["provider"] != "frame"
             _render(wid, v)
             return _save(wid, st)

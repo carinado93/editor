@@ -58,7 +58,7 @@
   - UI: Buzzword-Knopf, lila Blick-Vorschläge, Render-Optionen, Text-Vorschau direkt über dem Video
   - 20 automatische Tests
 
-- [x] **Thumbnail maker (17 Nov 2026, branch `thumbnail-maker`, waiting for Carina's OK before merging)**
+- [x] **Thumbnail maker (17 Nov 2026, merged to main after Carina's OK)**
   - New "Thumbnail" page (`#/thumbnail`) plus a "🎨 Thumbnail maker" button in every YouTube project (step-thumb card;
     the existing frame suggestions and CoverStudio stay unchanged).
   - Flow: photo (upload or one of 12 video frames) → cut-out (`fx.Segmenter` + GrabCut refine, finger/hair fix) →
@@ -92,7 +92,8 @@
     bring-back brush on the cut-out (`POST /photo/fix`, full mask kept as mask.png / mask_auto.png, versions re-render);
     (2) uncertain edge pixels no longer kept as a semi-transparent room veil (alpha remap 0.3–0.75 in `refine_mask`);
     (3) sizing by face height (≤38 % of H) and up to 1.15·W wide, so wide photos (arms out) stay big; (4) sides where
-    she is cut off in the photo (`cut_box` touches the edge) are snapped to the frame edge; (5) if "text behind me"
+    she is cut off in the photo (`cut_box` touches the edge) are snapped to the frame edge; (5) no plum shadow behind her on her own blurred room (only the text uses lilac), edge snap tolerance 1.2 %;
+    (6) if "text behind me"
     cannot keep ≥70 % of each word, the title goes in front of her with a note instead of hiding letters.
 
 ### Wartet auf Carina
