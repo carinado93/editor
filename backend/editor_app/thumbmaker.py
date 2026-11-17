@@ -100,6 +100,7 @@ def crop_cutout(img: Image.Image, m: np.ndarray, face: list[float] | None) -> tu
     if not bbox:
         raise ValueError("No person found in this photo.")
     cut = rgba.crop(bbox)
+    cut.info["bbox"] = bbox   # wo sie im Foto steht (für "Hintergrund unscharf" ohne sie)
     fbox = None
     if face:
         x0, y0, x1, y1 = bbox

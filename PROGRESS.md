@@ -84,6 +84,9 @@
     the white title (`image_gen.colour_background`). Local, free, no AI; it is the default mode. Pink = dusty rose measured from her
     meditation thumbnails (pill #E8B9B7, light blush #F2D6D2), now also in the brand skill. Extra pairs white #FEF8F3 + pink and lilac + white;
     she picks a pair for each of the 3 versions (defaults lilac+pink, pink+yellow, yellow+lilac) and can switch per version.
+  - "My own background, blurred" mode (Carina's wish, 17 Nov, reference: George Alexander-style thumbnails – real room,
+    soft, person sharp): her photo's background with her removed first (cv2 inpaint of the cut-out mask, `cut_box` saved
+    in state) and Gaussian blur 6 / 12 / 22 px for the 3 versions; no colour change. Pickable per version too.
   - Not checked yet: hands in the cut-out (the public test photo has no hands) – check with Carina's own photo.
 
 ### Wartet auf Carina

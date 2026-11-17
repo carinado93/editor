@@ -129,7 +129,7 @@ def set_photo(wid: str, img: Image.Image, source: str) -> dict:
     cut, face = thumbmaker.cutout(img)
     cut.save(d / "cut.png")
     st = load(wid)
-    st.update(photo="photo.png", cutout="cut.png", face=face, photo_source=source, photo_v=int(time.time()))
+    st.update(photo="photo.png", cutout="cut.png", face=face, cut_box=list(cut.info.get("bbox") or []) or None, photo_source=source, photo_v=int(time.time()))
     return _save(wid, st)
 
 
@@ -246,6 +246,16 @@ def colour_pair(prompt: str) -> tuple[str, str] | None:
 
 def _background(wid: str, prompt: str, seed: int) -> tuple[str, str]:
     d = wdir(wid)
+    if prompt.startswith("blur:"):
+        if not (d / "photo.png").exists():
+            raise UserError("Please choose your photo first.")
+        st = load(wid)
+        cut = Image.open(d / st["cutout"]).convert("RGBA") if st.get("cutout") else None
+        radius = {"light": 6, "medium": 12, "strong": 22}.get(prompt[5:], 24)
+        name = f"bg_{int(time.time() * 1000)}_{seed}.png"
+        image_gen.blurred_own_background(Image.open(d / "photo.png"), cut, st.get("cut_box"),
+                                         thumbmaker.W, thumbmaker.H, radius).save(d / name)
+        return name, "blur"
     pair = colour_pair(prompt)
     if pair:
         name = f"bg_{int(time.time() * 1000)}_{seed}.png"
@@ -264,6 +274,8 @@ def generate(wid: str, mode: str, prompts: list[str], titles: list[list[str]], l
     st = load(wid)
     if not st.get("cutout"):
         raise UserError("Please choose your photo first (step 1).")
+    if mode == "blur":
+        prompts = ["blur:light", "blur:medium", "blur:strong"]
     if mode == "colours":
         chosen = [p for p in prompts if p.startswith("colours:")]
         prompts = chosen[:3] if len(chosen) >= 3 else [f"colours:{a}+{b}" for a, b in image_gen.COLOUR_PAIRS]

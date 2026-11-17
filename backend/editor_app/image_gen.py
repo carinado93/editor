@@ -157,6 +157,26 @@ def colour_background(c1: str, c2: str, w: int = 1280, h: int = 720, seed: int =
     return Image.fromarray(np.clip(img, 0, 255).astype(np.uint8))
 
 
+def blurred_own_background(photo: Image.Image, cut: Image.Image | None, box, w: int = 1280, h: int = 720,
+                           radius: int = 24) -> Image.Image:
+    """Ihr eigener Hintergrund aus dem Foto, unscharf. Sie selbst wird vorher herausgerechnet (Inpainting),
+    damit sie nicht doppelt (einmal scharf, einmal verschwommen) zu sehen ist. Keine Farbänderung."""
+    import cv2
+    import numpy as np
+    img = photo.convert("RGB")
+    if cut is not None and box:
+        mask = Image.new("L", img.size, 0)
+        mask.paste(cut.getchannel("A"), (box[0], box[1]))
+        sc = 640 / max(img.size)
+        small = img.resize((max(1, int(img.width * sc)), max(1, int(img.height * sc))), Image.BILINEAR)
+        m = np.asarray(mask.resize(small.size, Image.BILINEAR)) > 30
+        m = cv2.dilate(m.astype(np.uint8) * 255, np.ones((15, 15), np.uint8))
+        filled = cv2.inpaint(np.asarray(small), m, 9, cv2.INPAINT_TELEA)
+        filled = Image.fromarray(filled).filter(ImageFilter.GaussianBlur(10)).resize(img.size, Image.BILINEAR)
+        img = Image.composite(filled, img, mask.filter(ImageFilter.MaxFilter(21)).filter(ImageFilter.GaussianBlur(8)))
+    return _cover(img, w, h).filter(ImageFilter.GaussianBlur(radius))
+
+
 def frame_background(frame: Image.Image | None, w: int, h: int, seed: int = 0) -> Image.Image:
     """Ohne KI: ihr eigenes Videobild, stark weichgezeichnet und etwas dunkler (nur Hintergrund, nicht sie selbst).
     Je nach seed ein anderer Ausschnitt, damit die 3 Versionen sich unterscheiden."""

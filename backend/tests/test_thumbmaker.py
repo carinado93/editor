@@ -96,3 +96,22 @@ def test_my_colours_mode_makes_three_colour_pairs(monkeypatch, tmp_path):
     assert not out["fallback_used"]
     for v in out["versions"]:
         assert v["spec"]["colours"] and (d / v["png"]).stat().st_size < 2_000_000
+
+
+def test_blur_mode_uses_own_photo_without_the_person(monkeypatch, tmp_path):
+    monkeypatch.setattr(thumbstore, "OWN", tmp_path)
+    wid = thumbstore.new_own()
+    d = thumbstore.wdir(wid)
+    photo = Image.new("RGB", (1600, 900), (40, 60, 200))      # blauer Raum
+    cut = fake_cutout().resize((300, 540))
+    photo.paste(cut, (650, 360), cut)                            # grüne Person im Foto
+    photo.save(d / "photo.png")
+    cut.save(d / "cut.png")
+    st = json.loads((d / "state.json").read_text(encoding="utf-8"))
+    st.update(cutout="cut.png", photo="photo.png", face=FACE, cut_box=[650, 360, 950, 900])
+    (d / "state.json").write_text(json.dumps(st), encoding="utf-8")
+    out = thumbstore.generate(wid, "blur", [], [["worth", "it?"]], "top", False, False)
+    assert [v["prompt"] for v in out["versions"]] == ["blur:light", "blur:medium", "blur:strong"]
+    bg = np.asarray(Image.open(d / out["versions"][1]["bg"])).astype(int)
+    green = (np.abs(bg - PERSON_RGB).sum(axis=2) < 80).mean()
+    assert green < 0.01, "the person should be removed from the blurred background"

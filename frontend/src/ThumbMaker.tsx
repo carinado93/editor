@@ -14,6 +14,9 @@ const PAIRS: [string, string][] = [
   ["colours:yellow+lilac", "My colours: yellow + lilac"],
   ["colours:white+pink", "My colours: white + pink"],
   ["colours:lilac+white", "My colours: lilac + white"],
+  ["blur:light", "My own background – a little blur"],
+  ["blur:medium", "My own background – medium blur"],
+  ["blur:strong", "My own background – strong blur"],
 ];
 const DEFAULT_PAIRS = ["colours:lilac+pink", "colours:pink+yellow", "colours:yellow+lilac"];
 
@@ -57,7 +60,7 @@ function ThumbMaker({ wid }: { wid: string }) {
   const [frames, setFrames] = useState<{ k: number; t: number; file: string }[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const [mode, setMode] = useState<"backgrounds" | "titles" | "colours">("colours");
+  const [mode, setMode] = useState<"backgrounds" | "titles" | "colours" | "blur">("colours");
   const [prompts, setPrompts] = useState<string[]>(["", "", ""]);
   const [pairs, setPairs] = useState<string[]>(DEFAULT_PAIRS);
   const [titles, setTitles] = useState<string[][]>([["", ""], ["", ""], ["", ""]]);
@@ -133,6 +136,7 @@ function ThumbMaker({ wid }: { wid: string }) {
         <div className="row-buttons small">
           <button className={`btn small-btn ${mode === "backgrounds" ? "" : "ghost"}`} onClick={() => setMode("backgrounds")}>3 backgrounds, same title</button>
           <button className={`btn small-btn ${mode === "titles" ? "" : "ghost"}`} onClick={() => setMode("titles")}>1 background, 3 titles</button>
+          <button className={`btn small-btn ${mode === "blur" ? "" : "ghost"}`} onClick={() => setMode("blur")}>My own background, blurred</button>
           <button className={`btn small-btn ${mode === "colours" ? "" : "ghost"}`} onClick={() => setMode("colours")}>
             <span className="tm-swatch" style={{ background: "linear-gradient(90deg,#FEF8F3,#C9B3EC,#E8B9B7,#FAE8A5)" }} /> My colours (lilac · pink · yellow · white)
           </button>
@@ -171,13 +175,17 @@ function ThumbMaker({ wid }: { wid: string }) {
             {[0, 1, 2].map((k) => (
               <label key={k}>Version {k + 1}{" "}
                 <select value={pairs[k]} onChange={(e) => setPairs(pairs.map((p, j) => (j === k ? e.target.value : p)))}>
-                  {PAIRS.map(([val, label]) => <option key={val} value={val}>{label.replace("My colours: ", "")}</option>)}
+                  {PAIRS.filter(([val]) => val.startsWith("colours:")).map(([val, label]) => <option key={val} value={val}>{label.replace("My colours: ", "")}</option>)}
                 </select>
               </label>
             ))}
           </div>
         )}
-        {mode !== "colours" && <div className="tm-prompts">
+        {mode === "blur" && (
+          <p className="small muted">The real room from your photo, only softer – you stay sharp. 3 versions: a little, medium and strong blur.
+            The app removes you from the background first, so you are not there twice. Free, no AI.</p>
+        )}
+        {mode !== "colours" && mode !== "blur" && <div className="tm-prompts">
           {(mode === "titles" ? [0] : [0, 1, 2]).map((k) => (
             <label key={k} className="small">Background {mode === "titles" ? "" : k + 1} – describe it in your words
               <textarea rows={2} value={prompts[k]} placeholder="e.g. cosy home office at night, lilac neon light, two monitors"
@@ -204,7 +212,7 @@ function ThumbMaker({ wid }: { wid: string }) {
           <label className="check-line"><input type="checkbox" checked={behind} onChange={(e) => setBehind(e.target.checked)} /> Text behind me</label>
           <label className="check-line"><input type="checkbox" checked={doodles} onChange={(e) => setDoodles(e.target.checked)} /> Lilac doodles</label>
         </div>
-        <p className="small muted">Cost: <strong>{mode === "colours" ? "free" : mode === "titles" ? st.cost.replace("3 images", "1 image") : st.cost}</strong> · change the image service in Settings.</p>
+        <p className="small muted">Cost: <strong>{mode === "colours" || mode === "blur" ? "free" : mode === "titles" ? st.cost.replace("3 images", "1 image") : st.cost}</strong> · change the image service in Settings.</p>
         <button className="btn" disabled={!!busy || !st.cutout} onClick={() => act("gen", () => api.tmGenerate(wid, { mode, prompts: mode === "colours" ? pairs : prompts, titles, layout, behind, doodles }))}>
           {busy === "gen" ? "Making 3 versions … (up to a minute per background)" : !st.cutout ? "Choose your photo first" : "✨ Make 3 versions"}
         </button>
@@ -323,7 +331,7 @@ function VersionCard({ wid, v, busy, onState, onErr }: {
           <button className="link" onClick={() => save({ person: {}, text: {} })}>reset position</button>
         </div>
         <div className="tm-bg">
-          {bgPrompt.startsWith("colours:") ? (
+          {bgPrompt.startsWith("colours:") || bgPrompt.startsWith("blur:") ? (
             <select value={bgPrompt} onChange={(e) => setBgPrompt(e.target.value)}>
               {PAIRS.map(([val, label]) => <option key={val} value={val}>{label}</option>)}
               <option value="">… or describe an AI background instead</option>
