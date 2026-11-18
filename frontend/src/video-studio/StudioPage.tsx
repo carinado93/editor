@@ -177,13 +177,13 @@ function DroneCutter({ sid, meta }: { sid: string; meta: StudioMeta }) {
               const v = e.target.value;
               void set({ music: v.startsWith("file:") ? { mode: "file", file: v.slice(5) } : { mode: v } });
             }}>
-              <option value="auto">Automatic (fits mood and length)</option>
+              <option value="none">No music</option>
+              {!!tracks.length && <option value="auto">Automatic from my music folder (fits mood and length)</option>}
               {tracks.map((t) => <option key={t.file} value={`file:${t.file}`}>{t.title} · {t.mood} · {Math.round(t.bpm)} BPM</option>)}
               {st.own_music && <option value="own">My upload: {st.own_music.title}</option>}
-              <option value="none">No music</option>
             </select>
           </label>
-          {s.music.mode === "auto" && (
+          {s.music.mode === "auto" && !!tracks.length && (
             <label>Mood
               <select value={s.music.mood} onChange={(e) => set({ music: { mood: e.target.value } })}>
                 <option value="">any</option>
@@ -199,8 +199,8 @@ function DroneCutter({ sid, meta }: { sid: string; meta: StudioMeta }) {
             <input type="file" accept="audio/*" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void act(() => api.studioOwnMusic(sid, f)); }} />
           </label>
         </div>
-        {!tracks.length && <p className="small muted">No music in your library yet. Put royalty-free tracks (YouTube Audio Library, Pixabay Music) into <code>{musicInfo.folder}</code> – the app reads mood and BPM by itself.</p>}
-        {(s.music.mode === "own" || !tracks.length) && <p className="small banner">⚠ {musicInfo.note}</p>}
+        {s.music.mode === "none" && <p className="small muted">No music: the video is silent (or keeps the original sound if ticked), so you can add a sound later in Instagram/YouTube. Cuts follow a calm rhythm.</p>}
+        {s.music.mode === "own" && <p className="small banner">⚠ {musicInfo.note}</p>}
       </section>
 
       <section className="card">
