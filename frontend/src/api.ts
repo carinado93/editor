@@ -328,6 +328,25 @@ export interface ImageGenSettings {
   providers: Record<string, { label: string; cost: string; needs_key: boolean }>;
 }
 
+export interface StudioClip { id: string; name: string; file: string; thumb: string; analysed: boolean; info: VideoInfo & { fps: number } }
+export interface StudioShot { clip: string; src_in: number; src_dur: number; t0: number; dur: number; speed: number; score: number; hero: boolean; transit: boolean }
+export interface StudioTitle { enabled: boolean; font: string; size: number; spacing: number; spacing_start: number; y: number; color: number[]; animate: boolean; start: number; duration: number }
+export interface StudioSettings {
+  format: "reel" | "youtube" | "youtube4k"; length: number; minutes: number; location: string; subtitle: string;
+  title: StudioTitle; grade: { look: string; strength: number; protect_skin: boolean };
+  music: { mode: "auto" | "file" | "own" | "none"; mood: string; file: string; gain_db: number; duck: boolean };
+  keep_audio: boolean; codec: "h264" | "h265"; seed: number;
+}
+export interface StudioRender { file: string; width: number; height: number; fps: number; duration: number; size: number }
+export interface StudioJob { kind: string; status: "waiting" | "running" | "done" | "error" | "cancelled"; progress: number; message: string; error: string | null }
+export interface StudioProject {
+  sid: string; name: string; clips: StudioClip[]; settings: StudioSettings;
+  plan: { shots: StudioShot[]; duration: number; warnings?: string[]; music: { title?: string; bpm?: number; source?: string }; fps: number } | null;
+  renders: { preview?: StudioRender; final?: StudioRender }; job: StudioJob | null; own_music?: { title: string; bpm: number };
+}
+export interface StudioMeta { projects: { sid: string; name: string; clips: number; has_final: boolean }[]; fonts: string[]; looks: string[]; lengths: number[]; moods: string[] }
+export interface StudioTrack { file: string; title: string; bpm: number; duration: number; mood: string; license: string }
+
 async function call<T>(url: string, init?: RequestInit): Promise<T> {
   let res: Response;
   try {
@@ -544,6 +563,26 @@ export const api = {
   proxyUrl: (id: string, v?: number) => `/api/projects/${id}/vorschau.mp4${v ? `?v=${v}` : ""}`,
   rebuildPreview: (id: string) => call<Project>(`/api/projects/${id}/rebuild-preview`, { method: "POST" }),
   thumbUrl: (id: string) => `/api/projects/${id}/bild.jpg`,
+  studioMeta: () => call<StudioMeta>("/api/studio"),
+  studioNew: (name: string) => call<StudioProject>("/api/studio", json({ name })),
+  studioGet: (sid: string) => call<StudioProject>(`/api/studio/${sid}`),
+  studioDelete: (sid: string) => call<{ ok: boolean }>(`/api/studio/${sid}`, { method: "DELETE" }),
+  studioMusic: () => call<{ tracks: StudioTrack[]; folder: string; content_id_note: string }>("/api/studio/music"),
+  studioChunk: (sid: string, uid: string, offset: number, blob: Blob) =>
+    call<{ uploaded: number }>(`/api/studio/${sid}/upload/${uid}?offset=${offset}`, { method: "PUT", body: blob }),
+  studioFinish: (sid: string, uid: string, name: string) =>
+    call<StudioProject>(`/api/studio/${sid}/upload/${uid}/finish?name=${encodeURIComponent(name)}`, { method: "POST" }),
+  studioOrder: (sid: string, order: string[]) =>
+    call<StudioProject>(`/api/studio/${sid}/order`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ order }) }),
+  studioDeleteClip: (sid: string, cid: string) => call<StudioProject>(`/api/studio/${sid}/clips/${cid}`, { method: "DELETE" }),
+  studioSettings: (sid: string, s: Record<string, unknown>) =>
+    call<StudioProject>(`/api/studio/${sid}/settings`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(s) }),
+  studioOwnMusic: (sid: string, f: File) =>
+    call<StudioProject>(`/api/studio/${sid}/music?name=${encodeURIComponent(f.name)}`, { method: "PUT", body: f }),
+  studioGenerate: (sid: string, newVariant = false) => call<StudioProject>(`/api/studio/${sid}/generate?new_variant=${newVariant ? 1 : 0}`, { method: "POST" }),
+  studioFinal: (sid: string) => call<StudioProject>(`/api/studio/${sid}/final`, { method: "POST" }),
+  studioCancel: (sid: string) => call<StudioProject>(`/api/studio/${sid}/cancel`, { method: "POST" }),
+  studioFile: (sid: string, sub: string, name: string, download = false) => `/api/studio/${sid}/file/${sub}/${encodeURIComponent(name)}${download ? "?download=1" : ""}`,
   tmList: () => call<{ own: { wid: string; name: string; count: number }[] }>("/api/thumbmaker"),
   tmNew: () => call<TmState>("/api/thumbmaker", { method: "POST" }),
   tmGet: (wid: string) => call<TmState>(`/api/thumbmaker/${wid}`),

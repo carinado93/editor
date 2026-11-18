@@ -97,6 +97,31 @@ Es liegt dann zum Herunterladen in der Liste darunter und im Export-Ordner des P
 zusammen mit der Untertitel-Datei (`.srt`, z. B. zum Hochladen bei YouTube oder für CapCut).
 **Dein Original wird nie verändert.** Die App arbeitet mit einer Kopie im Ordner `projekte`.
 
+## Video Studio (Drone Cutter)
+
+Oben im Menü **„Video Studio“**. Aus deinen Drohnen-Clips wird automatisch ein Reise-Video im Stil von
+„Explore the World 4K“.
+
+1. **Clips hochladen** (mp4/mov, bis 4K). Ein Clip reicht, mehrere gehen auch. Mit der Maus kannst du die Reihenfolge ändern.
+2. **Format:** Reel/Short 9:16 (15, 30, 45 oder 60 Sekunden) oder YouTube 16:9 (HD oder 4K, Länge in Minuten).
+3. **Stil:** Farb-Look (z. B. „Natural+“, „Tropical Pop“, „Golden Hour“) mit Stärke und Hautton-Schutz, Musik
+   (automatisch nach Stimmung, ein Stück aus deiner Bibliothek, ein eigener Song oder keine Musik), Lautstärke,
+   Originalton auf Wunsch leise darunter.
+4. **Intro-Titel:** Ortsname in Großbuchstaben, dünne Schrift, sehr weite Buchstaben-Abstände, langsam einblenden.
+   Schrift, Größe, Abstand, Höhe und Farbe kannst du einstellen. Rechts siehst du die Vorschau.
+5. **„Generate preview“** macht eine kleine Vorschau. Mit **„Other version“** bekommst du eine andere Reihenfolge und andere Musik.
+   **„Render final“** macht die fertige Datei (1080×1920 bzw. HD/4K). Sie liegt zum Herunterladen bereit und auf dem Desktop.
+
+Was die App automatisch macht:
+- Sie findet die besten Momente: scharf, ruhig, gut belichtet, farbig. Wackelige, dunkle und unscharfe Stellen nimmt sie nicht.
+- Die beste Aufnahme kommt zuerst (Hook).
+- Die Schnitte liegen genau auf dem Takt der Musik, und die Länge stimmt aufs Bild genau.
+
+**Musik:** Lege lizenzfreie Stücke (YouTube Audio Library, Pixabay Music) in den Ordner `assets/music/`.
+Die App erkennt Tempo (BPM) und Stimmung von selbst. Die Angaben stehen in `assets/music/library.json`
+und dürfen geändert werden. Bekannte Songs aus den Charts können auf YouTube/Instagram Content-ID-Ansprüche
+auslösen (stummgeschalteter Ton oder gesperrtes Video).
+
 ## Wie lange dauert das?
 
 | | mit Nvidia-Grafikkarte | nur Prozessor |
@@ -149,5 +174,19 @@ Die App holt die neue Version, startet sich neu und lädt die Seite von selbst n
   damit Carina kein Node.js braucht. Nach Änderungen: `cd frontend && npm install && npm run build`.
   Entwickeln mit Live-Neuladen: `npm run dev` (leitet `/api` an Port 8000 weiter).
 - Tests: `uv run --group dev pytest`
+- **Video Studio** (`backend/editor_app/video_studio/`, Oberfläche `frontend/src/video-studio/`):
+  - `analysis.py`: Szenen (Histogramm + Phasenkorrelation), Qualität pro Moment, Helden- und Fahrt-Momente.
+  - `beats.py`: Takt/BPM nur mit numpy, ohne librosa (dessen numba passt nicht zur numpy-Version unter Windows).
+  - `planner.py`: Auswahl, Reihenfolge, Schnitte auf dem Takt.
+  - `color.py`: Farb-Looks werden zu einer .cube-LUT gebacken. ffmpeg nutzt `lut3d`, ohne `lut3d` `haldclut`.
+  - `text.py`: Intro-Titel. `music.py`: Bibliothek, Ducking. `render.py`: ffmpeg. `store.py`: Projekte unter `daten/studio/`.
+  - **Neuer Farb-Look:** einen Eintrag in `color.PRESETS` (Regler wie temp, contrast, highlights, vibrance, sat_by,
+    hue_shift, split, fade) und einen Namen in `LOOK_NAMES` (`StudioPage.tsx`).
+  - **Neue Schrift:** die .ttf nach `assets/fonts/` und `frontend/src/fonts/` legen, einen Eintrag in `text.FONTS`
+    und ein `@font-face` in `styles.css` anlegen.
+  - **Musik:** die Dateien nach `assets/music/` legen (nicht im Git).
+  - **Testclips:** in `test-media/` (nicht im Git).
+  - **Lizenzen:** Montserrat und Raleway (SIL OFL 1.1, Lizenzdateien in `assets/fonts/`). Keine fremden LUTs,
+    Effekte oder Musik im Repo, alle Looks sind eigene Parameter.
 - Grafikkarte: `uv sync --extra gpu` installiert die CUDA-Bibliotheken (cuBLAS, cuDNN 9). Klappt die Karte nicht,
   rechnet die App automatisch mit dem Prozessor weiter.

@@ -1,0 +1,152 @@
+"""Video Studio / Drone Cutter: Takt, Schnittplan, Farb-LUT, Titel, Musik, Render."""
+import json
+import subprocess
+import wave
+
+import numpy as np
+import pytest
+from PIL import Image
+
+from editor_app import media
+from editor_app.video_studio import analysis, beats, color, music, planner, render, store, text
+
+
+def _click_track(path, bpm=96, dur=20, sr=44100):
+    t = np.zeros(sr * dur)
+    for k in np.arange(0, dur, 60 / bpm):
+        i, n = int(k * sr), int(0.1 * sr)
+        t[i:i + n] += 0.8 * np.sin(2 * np.pi * 60 * np.arange(n) / sr) * np.exp(-np.arange(n) / sr * 30)
+    w = wave.open(str(path), "wb")
+    w.setnchannels(1), w.setsampwidth(2), w.setframerate(sr)
+    w.writeframes((np.clip(t, -1, 1) * 32767).astype(np.int16).tobytes())
+    w.close()
+    return path
+
+
+def _clip(path, dur=12, size="640x360", fps=30):
+    """Bewegter Testclip (Farbverlauf + Muster, langsamer Schwenk)."""
+    subprocess.run([media.ffmpeg(), "-y", "-loglevel", "error", "-f", "lavfi", "-i",
+                    f"testsrc2=size=1280x720:rate={fps}:duration={dur}", "-vf",
+                    f"crop=960:540:'160+100*sin(t/4)':90,scale={size}", "-c:v", "libx264", "-preset", "ultrafast",
+                    "-pix_fmt", "yuv420p", str(path)], check=True)
+    return path
+
+
+def test_beat_tracker_finds_tempo_and_beats(tmp_path):
+    r = beats.analyse(_click_track(tmp_path / "c.wav", bpm=96))
+    assert abs(r["bpm"] - 96) < 1.0
+    period = 60 / 96
+    # jeder gefundene Schlag liegt höchstens 25 ms neben dem echten Klick
+    errs = [min(abs(b - k * period) for k in range(40)) for b in r["beats"]]
+    assert max(errs) < 0.025
+
+
+@pytest.mark.parametrize("mode,dur", [("reel", 15), ("reel", 30), ("reel", 60), ("youtube", 180)])
+def test_plan_fits_length_exactly_and_snaps_to_beats(mode, dur):
+    moments = [{"clip": "a", "start": float(s), "dur": 6.0, "score": 0.7 - s * 0.001, "hero": s == 0, "transit": False,
+                "direction": "", "scene": s // 6} for s in range(0, 600, 6)]
+    bts = list(np.arange(0.31, dur, 60 / 100))
+    shots = planner.plan(moments, dur, mode, bts, fps=30.0, title_len=3.0 if mode == "reel" else 0)
+    total = sum(s.dur for s in shots)
+    assert abs(total - dur) < 1 / 30 + 1e-6
+    lo, hi = planner.MODES[mode]["min"], planner.MODES[mode]["first_max"]
+    # im Wunschbereich; liegt dort kein Schlag, darf es bis ±25 % abweichen (Schnitt bleibt auf dem Takt)
+    assert all(lo * 0.85 - 1e-6 <= s.dur <= hi * 1.25 + 1e-6 for s in shots)
+    for s in shots[1:]:   # jeder Schnitt auf einem Schlag (±1 Bild)
+        assert min(abs(s.t0 - b) for b in bts) <= 1 / 30 + 1e-6
+    if mode == "reel":
+        assert shots[0].hero and shots[0].dur >= 3.0     # Hook = bester Moment, trägt den Titel
+    used = [(s.clip, s.src_in, s.src_in + s.src_dur) for s in shots]
+    for i, a in enumerate(used):   # gleiche Bilder nie zweimal
+        for b in used[i + 1:]:
+            assert a[0] != b[0] or a[2] <= b[1] + 1e-6 or b[2] <= a[1] + 1e-6
+
+
+def test_colour_cube_identity_and_no_crushed_blacks():
+    x = np.linspace(0, 1, color.N)
+    ident = np.stack(np.meshgrid(x, x, x, indexing="ij")[::-1], -1)
+    assert np.abs(color.bake({"protect_skin": True}) - ident).max() < 1e-9
+    lut = color.bake(color.params_for("natural_plus"))
+    assert lut[0, 0, 0].max() < 0.01 and lut[-1, -1, -1].min() > 0.9   # Schwarz bleibt, Weiß nicht ausgefressen
+    img = (np.random.default_rng(1).random((40, 40, 3)) * 255).astype(np.uint8)
+    assert np.array_equal(color.apply_lut(img, ident), img)              # Interpolation exakt
+
+
+def test_cube_file_roundtrip(tmp_path):
+    lut = color.bake(color.params_for("golden_hour"))
+    f = color.write_cube(lut, tmp_path / "g.cube")
+    assert np.abs(color.read_cube(f) - lut).max() < 1e-5
+
+
+def test_skin_tones_are_protected():
+    skin = np.array([[[0.85, 0.62, 0.5]]])
+    p = color.params_for("tropical_pop")
+    on = color.grade(skin, {**p, "protect_skin": True})
+    off = color.grade(skin, {**p, "protect_skin": False})
+    sat = lambda c: c.max() - c.min()  # noqa: E731
+    assert sat(on) < sat(off)
+
+
+def test_location_title_centred_caps_and_tightening():
+    t = text.Title(text="Sri Lanka", subtitle="Island")
+    early, late = text.state(t, 0.5), text.state(t, 2.6)
+    assert early[1] > late[1] and early[0] < 1.0       # Laufweite zieht sich zusammen, Einblenden
+    assert text.state(t, t.start + t.duration + 0.1)[0] == 0
+    im = text.render_frame(t, 1080, 1920, 2.0)
+    a = np.asarray(im.getchannel("A")) > 128
+    ys, xs = np.where(a)
+    assert abs((xs.min() + xs.max()) / 2 - 540) < 12            # waagrecht mittig
+    assert 0.38 * 1920 < ys.min() < 0.46 * 1920                 # etwas über der Mitte
+
+
+def test_music_window_beats_loop_and_filter():
+    tr = {"duration": 10.0, "bpm": 120, "beats": list(np.arange(0.0, 10.0, 0.5))}
+    bts = music.beats_in_window(tr, 2.0, 25.0)
+    assert bts[0] == 0.0 and max(bts) <= 25.0 and len(bts) >= 45   # geloopt
+    inp, chain = music.audio_filter(music.MUSIC_DIR / "x.mp3", 2.0, 15.0, duck=(0.2, 3.2))
+    assert "-stream_loop" in inp and "afade=t=out" in chain and "volume=" in chain
+
+
+def test_analysis_finds_moments(tmp_path):
+    f = _clip(tmp_path / "a.mp4", dur=10)
+    r = analysis.analyse("a", f)
+    assert r["moments"] and all(0 <= m["start"] < 10 for m in r["moments"])
+    assert r["moments"][0]["score"] >= r["moments"][-1]["score"]
+
+
+def test_render_reel_end_to_end(tmp_path):
+    src = _clip(tmp_path / "a.mp4", dur=12)
+    info = media.probe(src)
+    plan = {"format": "reel", "shots": [
+        {"clip": "a", "src_in": 0.5, "src_dur": 3.0, "t0": 0, "dur": 3.0, "speed": 1.0},
+        {"clip": "a", "src_in": 5.0, "src_dur": 2.0, "t0": 3.0, "dur": 2.0, "speed": 1.0},
+        {"clip": "a", "src_in": 8.0, "src_dur": 2.0, "t0": 5.0, "dur": 2.0, "speed": 1.0}],
+        "grade": {"look": "natural_plus", "strength": 1.0},
+        "title": {"text": "Sri Lanka", "subtitle": "Island", "start": 0.2, "duration": 2.5},
+        "music": {"file": "click.wav", "path": str(_click_track(tmp_path / "click.wav")), "start": 0.0}}
+    out = tmp_path / "out.mp4"
+    res = render.render(plan, {"a": {"path": src, "info": info}}, tmp_path / "work", out, "preview")
+    assert res["width"] == 540 and res["height"] == 960
+    o = media.probe(out)
+    assert abs(o["duration"] - 7.0) < 0.1 and o["has_audio"]
+    # Titel ist im Bild (weiße Pixel in der Titelzeile bei 1,5 s)
+    fr = tmp_path / "f.png"
+    subprocess.run([media.ffmpeg(), "-y", "-loglevel", "error", "-ss", "1.5", "-i", str(out), "-frames:v", "1",
+                    str(fr)], check=True)
+    row = np.asarray(Image.open(fr).convert("L"))[int(0.40 * 960):int(0.48 * 960)]
+    assert (row > 240).sum() > 50
+
+
+def test_store_project_flow_settings_and_music_warning(tmp_path, monkeypatch):
+    monkeypatch.setattr(store, "BASE", tmp_path)
+    st = store.create("Madeira")
+    sid = st["sid"]
+    src = _clip(tmp_path / "a.mp4", dur=8)
+    store.write_chunk(sid, "up12345", 0, src.read_bytes())
+    st = store.finish_upload(sid, "up12345", "a.mp4")
+    assert len(st["clips"]) == 1 and st["clips"][0]["info"]["width"] == 640
+    st = store.set_settings(sid, {"location": "Madeira", "title": {"size": 0.08}})
+    assert st["settings"]["title"]["size"] == 0.08 and st["settings"]["title"]["font"] == "Montserrat ExtraLight"
+    assert store.target_duration({"format": "youtube", "minutes": 3, "length": 15}) == 180
+    assert "Content ID" in music.CONTENT_ID_NOTE
+    json.dumps(store.load(sid))

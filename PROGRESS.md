@@ -96,6 +96,33 @@
     (6) if "text behind me"
     cannot keep ≥70 % of each word, the title goes in front of her with a note instead of hiding letters.
 
+- [ ] **Video Studio – step 2 MVP (18 Nov 2026, branch `video-studio`, waiting for Carina's drone clips + OK)**
+  - Plan approved (CapCut replacement: Drone Cutter + clip editor, 9 build steps). New menu entry "Video Studio"
+    (`#/studio`), code in `backend/editor_app/video_studio/` and `frontend/src/video-studio/StudioPage.tsx`.
+  - Drone Cutter MVP, working end to end:
+    - chunked upload of 1..N clips (drag to reorder);
+    - analysis (cv2 histogram + phase-correlation scene cuts, sharpness relative to the clip, shake, exposure,
+      colourfulness, hero/transit/direction);
+    - numpy beat tracker (±2 ms on a click track, BPM via regression);
+    - planner (reel 1.5–3 s shots, hook = best/hero shot ≥ title length; YouTube 4–10 s; exact length to the frame;
+      cuts on beats, ±25 % fallback; no frame used twice; slow-motion stretch + warning if footage is too short);
+    - colour looks baked into one 33³ .cube (lut3d / haldclut fallback; 11 own looks, Natural+ default,
+      skin protection);
+    - location intro title (Montserrat ExtraLight, caps, 0.62→0.45 em tracking, fade in/out, shadow, optional subtitle,
+      live CSS preview);
+    - music library `assets/music/` (auto BPM/mood/best start, loop, fades, duck under title, own upload with
+      Content-ID warning);
+    - render: segments → concat → title + music, preview 540 px, final 1080×1920 / 1920×1080 / 4K, NVENC or x264;
+      Desktop outbox.
+  - Colour exception to the "never colour-grade" rule recorded in CLAUDE.md (her answer: "I need color grade on it").
+  - Tested on a synthetic 45 s drone clip (`test-media/synthetic_drone.mp4`: push-in, fast pan, shaky, dark, blurred,
+    reveal): all 7 sections detected; shaky/dark/blurred rejected; 15 s reel = 450 frames exactly; final
+    1080×1920 H.264 + AAC 20 MB; 26 s for analysis + preview on the container CPU.
+  - Tests: `tests/test_video_studio.py` (13). Suite total 94 passed.
+  - Limitations / next: centre crop for 9:16 (smart reframing = step 9); hard cuts only (transitions = step 4);
+    no speed ramps yet (step 3); not yet tested on her real DJI footage (D-Log, 4K HEVC); music library empty until
+    she adds tracks.
+
 ### Wartet auf Carina
 - [ ] Neue Version holen (Git: Pull), ein Video mit Buzzwords + eingebrannten Untertiteln rendern und sagen, ob Stil,
   Größe und Position passen

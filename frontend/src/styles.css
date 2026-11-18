@@ -2073,3 +2073,48 @@ a.chip { text-decoration: none; color: inherit; }
 .tm-swatch { display: inline-block; width: 26px; height: 12px; border-radius: 6px; vertical-align: middle; margin-right: 4px; }
 .tm-fix { margin-top: 12px; }
 .tm-fix-canvas { display: block; max-width: 100%; border-radius: 10px; cursor: crosshair; touch-action: none; }
+@font-face { font-family: "Montserrat ExtraLight"; src: url("./fonts/Montserrat-ExtraLight.ttf") format("truetype"); }
+@font-face { font-family: "Montserrat Light"; src: url("./fonts/Montserrat-Light.ttf") format("truetype"); }
+@font-face { font-family: "Raleway Thin"; src: url("./fonts/Raleway-Thin.ttf") format("truetype"); }
+@font-face { font-family: "Raleway ExtraLight"; src: url("./fonts/Raleway-ExtraLight.ttf") format("truetype"); }
+@font-face { font-family: "Josefin Sans Light"; src: url("./fonts/JosefinSans-Light.ttf") format("truetype"); }
+@font-face { font-family: "Inter Light"; src: url("./fonts/Inter-Light.ttf") format("truetype"); }
+
+/* ---------- Video Studio ---------- */
+.vs-page .card { margin-bottom: 16px; }
+.vs-page .btn, .vs-page label.btn { width: auto; flex: 0 0 auto; }
+.vs-page .row-buttons { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 8px 0; }
+.vs-clips { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
+.vs-clip { background: #fff; border: 1px solid rgba(100, 68, 165, 0.18); border-radius: 12px; padding: 8px; display: grid; gap: 6px; cursor: grab; }
+.vs-clip img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 8px; display: block; }
+.vs-clip.dragging { opacity: 0.4; }
+.vs-add { place-items: center; min-height: 140px; cursor: pointer; color: var(--lila); font-weight: 500; border-style: dashed; }
+.vs-bar { height: 6px; background: var(--creme-2); border-radius: 4px; overflow: hidden; }
+.vs-bar.big { height: 10px; margin: 6px 0; }
+.vs-bar span { display: block; height: 100%; background: var(--lila); transition: width 0.4s; }
+.vs-inline { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.vs-inline input[type="number"] { width: 80px; }
+.vs-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px 16px; align-items: end; margin: 8px 0; }
+.vs-grid label { display: grid; gap: 4px; }
+.vs-grid label.check-line { display: flex; }
+.vs-page .chip.on { background: var(--lila); color: #fff; }
+.vs-title-edit { display: flex; gap: 18px; flex-wrap: wrap; align-items: flex-start; }
+.vs-title-edit .vs-grid { flex: 1 1 420px; }
+.vs-title-prev { display: grid; gap: 4px; justify-items: center; }
+.vs-title-frame { position: relative; width: 360px; aspect-ratio: 16 / 9; background: #445 center / cover no-repeat; border-radius: 10px; overflow: hidden; }
+.vs-title-frame.reel { width: 200px; aspect-ratio: 9 / 16; }
+.vs-title-text { position: absolute; left: 0; right: 0; transform: translateY(-50%); text-align: center; white-space: nowrap;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.45); line-height: 1.1; text-indent: var(--sp1); }
+.vs-title-text .sub { text-indent: 0; letter-spacing: 0.3em; margin-top: 0.4em; }
+.vs-title-text.anim > div:first-child { animation: vs-title 3.6s ease-out infinite; }
+.vs-title-text:not(.anim) > div:first-child { letter-spacing: var(--sp1); }
+@keyframes vs-title {
+  0% { opacity: 0; letter-spacing: var(--sp0); text-indent: var(--sp0); }
+  33% { opacity: 1; }
+  77% { opacity: 1; }
+  100% { opacity: 0; letter-spacing: var(--sp1); text-indent: var(--sp1); }
+}
+.vs-result { display: flex; gap: 18px; flex-wrap: wrap; align-items: flex-start; margin-top: 10px; }
+.vs-video { width: 640px; max-width: 100%; border-radius: 10px; background: #000; }
+.vs-video.reel { width: 300px; }
+.vs-shots { margin: 6px 0; padding-left: 20px; max-height: 260px; overflow: auto; }

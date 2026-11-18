@@ -14,3 +14,7 @@ tools/ffmpeg/
 .env
 *.log
 *.tsbuildinfo
+
+# Video Studio: eigene Musik und Testclips bleiben auf dem PC
+assets/music/
+test-media/

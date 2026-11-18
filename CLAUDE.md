@@ -7,7 +7,9 @@ All editing know-how lives in `.claude/skills/`. Before any video task, read
 Rules that always apply:
 - Ideas first (2–4 options), then preview (1280 px), final render only on her go.
 - Text wording: propose, she approves, first person. Second language = translation table first.
-- Never change her originals; never colour-grade her footage; never use other creators' footage.
+- Never change her originals; never colour-grade her footage (exception, her decision 18 Nov 2026: Video Studio /
+  Drone Cutter grades all clips, auto-grade on by default, skin tones protected, adjustable/off); never use other
+  creators' footage.
 - Prevention only: no healing promises, no diagnoses.
 - Check every output by tiling frames (faces, hands/fingers, text edges) before showing it.
 - Every reel ships with caption + exactly 5 hashtags + cover.

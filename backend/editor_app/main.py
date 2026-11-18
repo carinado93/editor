@@ -1613,6 +1613,130 @@ def image_gen_settings_save(body: ImageGenSettingsBody):
     return image_gen.save_settings(body.provider, body.higgsfield_key)
 
 
+# ---------- Video Studio (Drone Cutter) ----------
+class StudioNewBody(BaseModel):
+    name: str = ""
+
+
+class StudioOrderBody(BaseModel):
+    order: list[str] = []
+
+
+@app.get("/api/studio")
+def studio_list():
+    from .video_studio import music, store, text
+    from .video_studio.color import PRESETS
+
+    return {"projects": store.list_all(), "fonts": list(text.FONTS), "looks": list(PRESETS),
+            "lengths": store.LENGTHS, "moods": music.MOODS}
+
+
+@app.post("/api/studio")
+def studio_new(body: StudioNewBody):
+    from .video_studio import store
+
+    return store.create(body.name)
+
+
+@app.get("/api/studio/music")
+def studio_music():
+    from .video_studio import music
+
+    lib = music.library()
+    return {"tracks": [{k: t[k] for k in ("file", "title", "bpm", "duration", "mood", "license")} for t in lib],
+            "folder": str(music.MUSIC_DIR), "content_id_note": music.CONTENT_ID_NOTE}
+
+
+@app.get("/api/studio/{sid}")
+def studio_get(sid: str):
+    from .video_studio import store
+
+    return store.load(sid)
+
+
+@app.delete("/api/studio/{sid}")
+def studio_delete(sid: str):
+    from .video_studio import store
+
+    store.delete(sid)
+    return {"ok": True}
+
+
+@app.put("/api/studio/{sid}/upload/{upload_id}")
+async def studio_upload_chunk(sid: str, upload_id: str, request: Request, offset: int = 0):
+    from .video_studio import store
+
+    return {"uploaded": store.write_chunk(sid, upload_id, offset, await request.body())}
+
+
+@app.post("/api/studio/{sid}/upload/{upload_id}/finish")
+def studio_upload_finish(sid: str, upload_id: str, name: str = "clip.mp4"):
+    from .video_studio import store
+
+    return store.finish_upload(sid, upload_id, name)
+
+
+@app.put("/api/studio/{sid}/order")
+def studio_order(sid: str, body: StudioOrderBody):
+    from .video_studio import store
+
+    return store.reorder(sid, body.order)
+
+
+@app.delete("/api/studio/{sid}/clips/{cid}")
+def studio_clip_delete(sid: str, cid: str):
+    from .video_studio import store
+
+    return store.remove_clip(sid, cid)
+
+
+@app.put("/api/studio/{sid}/settings")
+def studio_settings(sid: str, body: dict):
+    from .video_studio import store
+
+    return store.set_settings(sid, body)
+
+
+@app.put("/api/studio/{sid}/music")
+async def studio_music_upload(sid: str, request: Request, name: str = "music.mp3"):
+    from .video_studio import store
+
+    return store.upload_music(sid, name, await request.body())
+
+
+@app.post("/api/studio/{sid}/generate")
+def studio_generate(sid: str, new_variant: int = 0):
+    from .video_studio import store
+
+    if new_variant:   # andere Reihenfolge/anderer Song aus demselben Material
+        store.update(sid, lambda st: st["settings"].__setitem__("seed", int(st["settings"].get("seed", 0)) + 1))
+    return store.enqueue(sid, "generate")
+
+
+@app.post("/api/studio/{sid}/final")
+def studio_final(sid: str):
+    from .video_studio import store
+
+    return store.enqueue(sid, "final")
+
+
+@app.post("/api/studio/{sid}/cancel")
+def studio_cancel(sid: str):
+    from .video_studio import store
+
+    return store.cancel(sid)
+
+
+@app.get("/api/studio/{sid}/file/{sub}/{name}")
+def studio_file(sid: str, sub: str, name: str, download: int = 0):
+    from .video_studio import store
+
+    f = store.file(sid, sub, name)
+    mt = {".jpg": "image/jpeg", ".png": "image/png", ".mp4": "video/mp4", ".mov": "video/quicktime"}.get(
+        f.suffix.lower(), "application/octet-stream")
+    return FileResponse(f, media_type=mt, filename=name if download else None)
+
+
 # ---------- Karussell-Generator ----------
 
 class CarouselDraftBody(BaseModel):

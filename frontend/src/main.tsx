@@ -15,6 +15,7 @@ import { LetterStudio } from "./LetterStudio";
 import { PlanPage } from "./PlanPage";
 import { Settings } from "./Settings";
 import { ThumbMakerPage } from "./ThumbMaker";
+import { StudioPage } from "./video-studio/StudioPage";
 
 function useHash() {
   const [hash, setHash] = useState(window.location.hash);
@@ -110,7 +111,7 @@ function App() {
           </span>
         </a>
         <nav className="topnav">
-          <a href="#/" className={!hash.startsWith("#/content") && !hash.startsWith("#/einstellungen") && !hash.startsWith("#/karussell") && !hash.startsWith("#/briefe") && !hash.startsWith("#/plan") && !hash.startsWith("#/thumbnail") ? "on" : ""}>
+          <a href="#/" className={!hash.startsWith("#/content") && !hash.startsWith("#/einstellungen") && !hash.startsWith("#/karussell") && !hash.startsWith("#/briefe") && !hash.startsWith("#/plan") && !hash.startsWith("#/thumbnail") && !hash.startsWith("#/studio") ? "on" : ""}>
             Projects
           </a>
           <a href="#/plan" className={hash.startsWith("#/plan") ? "on" : ""}>
@@ -121,6 +122,9 @@ function App() {
           </a>
           <a href="#/briefe" className={hash.startsWith("#/briefe") ? "on" : ""}>
             Letters
+          </a>
+          <a href="#/studio" className={hash.startsWith("#/studio") ? "on" : ""}>
+            Video Studio
           </a>
           <a href="#/thumbnail" className={hash.startsWith("#/thumbnail") ? "on" : ""}>
             Thumbnail
@@ -142,7 +146,9 @@ function App() {
       <UpdateBanner />
       {offline && <div className="banner error page">No connection to the engine. Please start the app with start.bat.</div>}
       {system && !system.ffmpeg && <div className="banner error page">ffmpeg is missing. Please start the app with start.bat, it installs it.</div>}
-      {hash.startsWith("#/thumbnail") ? (
+      {hash.startsWith("#/studio") ? (
+        <StudioPage key={hash} sid={hash.match(/^#\/studio\/([\w-]+)/)?.[1]} />
+      ) : hash.startsWith("#/thumbnail") ? (
         <ThumbMakerPage key={hash} wid={hash.match(/^#\/thumbnail\/([a-z0-9-]+)/)?.[1]} />
       ) : hash.startsWith("#/plan") ? (
         <PlanPage />
