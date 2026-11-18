@@ -252,7 +252,8 @@ def ffmpeg_filter(cube: Path, work: Path) -> tuple[str, list[str]]:
     lut3d wenn vorhanden (Carinas ffmpeg-Build), sonst haldclut mit einem Hald-Bild (zweiter Eingang)."""
     from .. import media
     if media.has_filter("lut3d"):
-        esc = str(cube).replace("\\", "/").replace(":", "\\\\:").replace("'", "\\'")
+        # Windows "C:/…": der Doppelpunkt braucht genau EINEN Backslash (sonst "Invalid argument")
+        esc = str(cube).replace("\\", "/").replace(":", "\\:").replace("'", "\\'")
         return f"lut3d=file='{esc}':interp=tetrahedral", []
     hald = work / (cube.stem + "_hald.png")
     if not hald.exists():

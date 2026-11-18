@@ -1,5 +1,6 @@
 """Video Studio / Drone Cutter: Takt, Schnittplan, Farb-LUT, Titel, Musik, Render."""
 import json
+from pathlib import Path
 import subprocess
 import wave
 
@@ -150,3 +151,10 @@ def test_store_project_flow_settings_and_music_warning(tmp_path, monkeypatch):
     assert store.target_duration({"format": "youtube", "minutes": 3, "length": 15}) == 180
     assert "Content ID" in music.CONTENT_ID_NOTE
     json.dumps(store.load(sid))
+
+
+def test_lut_path_with_windows_drive_letter_is_escaped_once(tmp_path, monkeypatch):
+    """Carinas Fehler 18.11.: C:/… im lut3d-Pfad → genau ein Backslash vor dem Doppelpunkt."""
+    monkeypatch.setattr(media, "has_filter", lambda name: True)
+    f, extra = color.ffmpeg_filter(Path("C:/Users/carin/editor-app/daten/grade.cube"), tmp_path)
+    assert "file='C\\:/Users/carin/editor-app/daten/grade.cube'" in f and not extra
