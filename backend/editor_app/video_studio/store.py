@@ -18,6 +18,7 @@ from .. import media
 from ..config import ROOT
 from ..errors import UserError
 from . import analysis, music, planner, render
+from . import transitions as transmod
 
 BASE = ROOT / "daten" / "studio"
 VIDEO_EXT = {".mp4", ".mov", ".m4v", ".mkv", ".avi", ".mts"}
@@ -25,14 +26,21 @@ MAX_FILE = 40 * 1024 ** 3        # 40 GB pro Clip
 LENGTHS = [15, 30, 45, 60]
 
 DEFAULT_SETTINGS = {
-    "format": "reel",            # reel | youtube | youtube4k
+    "format": "reel",            # reel | youtube | youtube4k | both (Reel 9:16 + YouTube 16:9)
+    "yt4k": False,               # bei "both": YouTube in 4K statt HD
     "length": 15,                # Reel: Sekunden
     "minutes": 3.0,              # YouTube: Minuten
     "location": "",
     "subtitle": "",
     "title": {"enabled": True, "font": "Montserrat ExtraLight", "size": 0.075, "spacing": 0.45,
               "spacing_start": 0.62, "y": 0.44, "color": [255, 255, 255], "animate": True, "start": 0.2,
-              "duration": 3.0},
+              "duration": 3.0, "anim_in": "tracking", "anim_out": "fade", "youtube_card": True},
+    "outro": {"enabled": False, "text": "", "duration": 2.5},
+    "ramps": True,               # Zeitlupen-Rampen auf schönen Momenten
+    "speedup": True,             # schnelle Fahrten doppelt so schnell
+    "smooth_slowmo": True,       # Zeitlupe mit Zwischenbildern (optischer Fluss) im Final
+    "transition": "auto",        # auto | cut | dissolve | … (transitions.TRANSITIONS)
+    "transition_dur": 0.0,       # 0 = Standarddauer des Übergangs
     "grade": {"look": "vivid_travel", "strength": 1.0, "protect_skin": True},
     "music": {"mode": "none", "mood": "", "file": "", "gain_db": 0.0, "duck": True},
     "keep_audio": False,
@@ -62,6 +70,16 @@ def load(sid: str) -> dict:
     with _lock:
         st = json.loads(f.read_text(encoding="utf-8"))
     st["settings"] = _deep(DEFAULT_SETTINGS, st.get("settings") or {})
+    # alte Projekte (ein Plan) → Pläne/Ergebnisse je Format
+    st.setdefault("plans", {})
+    if st.get("plan"):
+        st["plans"].setdefault(st["plan"].get("format", "reel"), st["plan"])
+    st.pop("plan", None)
+    r = st.get("renders") or {}
+    if "preview" in r or "final" in r:
+        fmt = next(iter(st["plans"]), "reel")
+        r = {fmt: {k: v for k, v in r.items() if k in ("preview", "final")}}
+    st["renders"] = r
     job = st.get("job") or {}
     if job.get("status") in ("waiting", "running") and (_worker is None or not _worker.is_alive()):
         job.update(status="error", error="The app was restarted while working – please press the button again.")
@@ -95,7 +113,7 @@ def create(name: str = "") -> dict:
     for sub in ("clips", "analysis", "renders", "work"):
         (pdir(sid) / sub).mkdir(parents=True, exist_ok=True)
     return save(sid, {"name": name.strip() or "Drone video", "created": time.time(), "clips": [],
-                      "settings": dict(DEFAULT_SETTINGS), "plan": None, "renders": {}, "job": None})
+                      "settings": dict(DEFAULT_SETTINGS), "plans": {}, "renders": {}, "job": None})
 
 
 def list_all() -> list[dict]:
@@ -104,7 +122,8 @@ def list_all() -> list[dict]:
         try:
             st = json.loads(f.read_text(encoding="utf-8"))
             out.append({"sid": f.parent.name, "name": st.get("name", ""), "clips": len(st.get("clips", [])),
-                        "has_final": bool((st.get("renders") or {}).get("final"))})
+                        "has_final": any(isinstance(v, dict) and v.get("final")
+                                         for v in (st.get("renders") or {}).values())})
         except (OSError, ValueError):
             continue
     return out
@@ -154,7 +173,7 @@ def finish_upload(sid: str, upload_id: str, name: str) -> dict:
     def add(st):
         st["clips"].append({"id": cid, "name": name, "file": dst.name, "info": info, "thumb": f"{cid}.jpg",
                             "analysed": False})
-        st["plan"] = None
+        st["plans"] = {}
     return update(sid, add)
 
 
@@ -162,7 +181,7 @@ def reorder(sid: str, order: list[str]) -> dict:
     def fn(st):
         by = {c["id"]: c for c in st["clips"]}
         st["clips"] = [by[i] for i in order if i in by] + [c for c in st["clips"] if c["id"] not in order]
-        st["plan"] = None
+        st["plans"] = {}
     return update(sid, fn)
 
 
@@ -174,7 +193,7 @@ def remove_clip(sid: str, cid: str) -> dict:
                     (pdir(sid) / "clips" / f).unlink(missing_ok=True)
             (pdir(sid) / "analysis" / f"{cid}.json").unlink(missing_ok=True)
         st["clips"] = [c for c in st["clips"] if c["id"] != cid]
-        st["plan"] = None
+        st["plans"] = {}
     return update(sid, fn)
 
 
@@ -208,7 +227,7 @@ def upload_music(sid: str, name: str, data: bytes) -> dict:
         st["own_music"] = {"file": fname, "title": Path(name).stem, "bpm": a["bpm"], "duration": a["duration"],
                            "beats": a["beats"], "energy": a["energy"], "path": str(d / fname), "source": "upload"}
         st["settings"]["music"]["mode"] = "own"
-        st["plan"] = None
+        st["plans"] = {}
     return update(sid, fn)
 
 
@@ -258,6 +277,8 @@ def _work() -> None:
                 generate(sid)
             elif kind == "final":
                 render_final(sid)
+            elif kind == "preview":
+                preview_again(sid)
             _set_job(sid, status="done", progress=1.0, message="Done")
         except media.Cancelled:
             _set_job(sid, status="cancelled", message="Cancelled")
@@ -304,13 +325,19 @@ def analyse_all(sid: str, a: float = 0.0, b: float = 0.35) -> list[dict]:
     return out
 
 
-def target_duration(s: dict) -> float:
-    if s["format"] == "reel":
+def formats(s: dict) -> list[str]:
+    if s["format"] == "both":
+        return ["reel", "youtube4k" if s.get("yt4k") else "youtube"]
+    return [s["format"] if s["format"] in render.FORMATS else "reel"]
+
+
+def target_duration(s: dict, fmt: str | None = None) -> float:
+    if (fmt or s["format"]) == "reel":
         return float(s["length"] if s["length"] in LENGTHS else 15)
     return max(0.5, min(60.0, float(s.get("minutes") or 3))) * 60.0
 
 
-def _music_for(st: dict, duration: float) -> dict | None:
+def _music_for(st: dict, duration: float, fmt: str = "reel") -> dict | None:
     m = st["settings"]["music"]
     if m.get("mode") == "none":
         return None
@@ -319,7 +346,7 @@ def _music_for(st: dict, duration: float) -> dict | None:
     elif m.get("mode") == "file" and m.get("file"):
         tr = next((t for t in music.library() if t["file"] == m["file"]), None)
     else:
-        tr = music.pick(duration, m.get("mood") or ("cinematic" if st["settings"]["format"] != "reel" else None),
+        tr = music.pick(duration, m.get("mood") or ("cinematic" if fmt != "reel" else None),
                         seed=int(st["settings"].get("seed", 0)))
     if not tr:
         return None
@@ -329,34 +356,65 @@ def _music_for(st: dict, duration: float) -> dict | None:
             "beats": music.beats_in_window(tr, start, duration), "source": tr.get("source", "library")}
 
 
-def make_plan(sid: str, analyses: list[dict]) -> dict:
-    st = load(sid)
-    s = st["settings"]
-    dur = target_duration(s)
-    mode = "reel" if s["format"] == "reel" else "youtube"
-    key = "moments" if mode == "reel" else "moments_long"
-    moments = [m for a in analyses for m in (a.get(key) or a["moments"])]
-    fps = render.out_fps([c["info"] for c in st["clips"]])
-    mus = _music_for(st, dur)
+def _title(s: dict, mode: str) -> dict:
     title = dict(s["title"])
     title["text"] = s.get("location", "")
     title["subtitle"] = s.get("subtitle", "")
-    if mode != "reel" and not title.get("youtube", False):
-        title["enabled"] = bool(s["title"].get("youtube_card", False))
+    if mode != "reel":
+        title["enabled"] = bool(title.get("enabled", True) and title.get("youtube_card", True))
+    return title
+
+
+def _transitions(s: dict, shots: list[dict], mode: str) -> list[dict]:
+    return transmod.choose(shots, mode, s.get("transition", "auto"), float(s.get("transition_dur") or 0) or None,
+                           int(s.get("seed", 0)))
+
+
+def make_plan(sid: str, analyses: list[dict], fmt: str) -> dict:
+    st = load(sid)
+    s = st["settings"]
+    dur = target_duration(s, fmt)
+    mode = "reel" if fmt == "reel" else "youtube"
+    key = "moments" if mode == "reel" else "moments_long"
+    moments = [m for a in analyses for m in (a.get(key) or a["moments"])]
+    fps = render.out_fps([c["info"] for c in st["clips"]])
+    mus = _music_for(st, dur, fmt)
+    title = _title(s, mode)
     shots = planner.plan(moments, dur, mode, mus["beats"] if mus else None, fps, int(s.get("seed", 0)),
-                         title_len=float(title.get("duration", 3)) if title.get("text") else 0.0)
+                         title_len=float(title.get("duration", 3)) if title.get("text") and title.get("enabled") else 0.0,
+                         ramps=bool(s.get("ramps", True)), speedup=bool(s.get("speedup", True)))
+    if mode == "youtube":   # YouTube erzählt: Reihenfolge der Clips und Zeit im Clip (wie geflogen)
+        shots = _story_order(shots, [c["id"] for c in st["clips"]])
+    shot_dicts = [x.to_dict() for x in shots]
     warnings = []
     usable = sum(m["dur"] for a in analyses for m in a["moments"] if m["score"] >= 0.55 * max(
         [mm["score"] for aa in analyses for mm in aa["moments"]] or [1]))
-    if any(x.speed < 0.99 for x in shots) or usable < dur * 0.9:
+    if any(x.speed < 0.99 and not x.ramp for x in shots) or usable < dur * 0.9:
         warnings.append(f"Your clips have about {int(usable)} s of good footage for a {int(dur)} s video, so some shots "
                         "play in slow motion or repeat. Choose a shorter length or add more clips.")
-    plan = {"format": s["format"], "duration": dur, "warnings": warnings, "fps": fps, "shots": [x.to_dict() for x in shots],
-            "grade": s["grade"], "title": title, "music": {k: v for k, v in (mus or {}).items() if k != "beats"},
+    plan = {"format": fmt, "duration": dur, "warnings": warnings, "fps": fps, "shots": shot_dicts,
+            "transitions": _transitions(s, shot_dicts, mode),
+            "grade": s["grade"], "title": title, "outro": s.get("outro"),
+            "music": {k: v for k, v in (mus or {}).items() if k != "beats"},
             "beats": (mus or {}).get("beats", []), "keep_audio": s.get("keep_audio", False), "codec": s.get("codec"),
-            "created": time.time()}
-    update(sid, lambda st_: st_.__setitem__("plan", plan))
+            "smooth_slowmo": s.get("smooth_slowmo", True), "created": time.time()}
+    update(sid, lambda st_: st_["plans"].__setitem__(fmt, plan))
     return plan
+
+
+def _story_order(shots: list, clip_order: list[str]) -> list:
+    """Aufnahmen nach Clip-Reihenfolge und Zeit im Clip sortieren; Längen bleiben in Taktreihenfolge."""
+    lens = [x.dur for x in shots]
+    rank = {c: i for i, c in enumerate(clip_order)}
+    ordered = sorted(shots, key=lambda x: (rank.get(x.clip, 99), x.src_in))
+    t = 0.0
+    for x, L in zip(ordered, lens):
+        ratio = x.src_dur / x.dur if x.dur else 1.0
+        x.dur = L
+        x.src_dur = round(L * ratio, 3)
+        x.t0 = round(t, 6)
+        t += L
+    return ordered
 
 
 def _clips(st: dict) -> dict:
@@ -364,32 +422,170 @@ def _clips(st: dict) -> dict:
     return {c["id"]: {"path": d / "clips" / c["file"], "info": c["info"]} for c in st["clips"]}
 
 
-def generate(sid: str) -> dict:
+def _live_plan(st: dict, fmt: str) -> dict:
+    """Plan mit den aktuellen Einstellungen für Farbe, Titel, Abspann, Musik-Lautstärke, Übergänge."""
+    s = st["settings"]
+    plan = dict(st["plans"][fmt])
+    mode = "reel" if fmt == "reel" else "youtube"
+    plan["grade"], plan["codec"] = s["grade"], s.get("codec", "h264")
+    plan["title"] = _title(s, mode)
+    plan["outro"] = s.get("outro")
+    plan["keep_audio"] = s.get("keep_audio", False)
+    plan["smooth_slowmo"] = s.get("smooth_slowmo", True)
+    if plan.get("music"):
+        plan["music"] = {**plan["music"], "gain_db": s["music"].get("gain_db", 0.0)}
+    return plan
+
+
+def _render_previews(sid: str, fmts: list[str], a: float, b: float) -> None:
+    for i, fmt in enumerate(fmts):
+        st = load(sid)
+        plan = _live_plan(st, fmt)
+        out = pdir(sid) / "renders" / f"preview_{fmt}_{int(time.time())}.mp4"
+        for old in (pdir(sid) / "renders").glob(f"preview_{fmt}_*.mp4"):
+            old.unlink(missing_ok=True)
+        lo, hi = a + (b - a) * i / len(fmts), a + (b - a) * (i + 1) / len(fmts)
+        label = {"reel": "vertical reel", "youtube": "landscape video", "youtube4k": "landscape video"}[fmt]
+        res = render.render(plan, _clips(st), pdir(sid) / "work", out, "preview",
+                            _progress(sid, lo, hi, f"Making the preview ({label}) …"))
+        update(sid, lambda s, f=fmt, r=res: s["renders"].setdefault(f, {}).__setitem__("preview", r))
+
+
+def generate(sid: str) -> None:
     analyses = analyse_all(sid)
+    st = load(sid)
+    fmts = formats(st["settings"])
     _set_job(sid, message="Choosing the best moments …", progress=0.37)
-    plan = make_plan(sid, analyses)
-    st = load(sid)
-    out = pdir(sid) / "renders" / f"preview_{int(time.time())}.mp4"
-    for old in (pdir(sid) / "renders").glob("preview_*.mp4"):
-        old.unlink(missing_ok=True)
-    res = render.render(plan, _clips(st), pdir(sid) / "work", out, "preview",
-                        _progress(sid, 0.4, 1.0, "Making the preview …"))
-    update(sid, lambda s: s["renders"].__setitem__("preview", res))
-    return res
+    update(sid, lambda s: (s.__setitem__("plans", {}), s.__setitem__("renders", {})))
+    for fmt in fmts:
+        make_plan(sid, analyses, fmt)
+    _render_previews(sid, fmts, 0.4, 1.0)
 
 
-def render_final(sid: str) -> dict:
+def preview_again(sid: str) -> None:
+    """Nach Änderungen in der Zeitleiste: Vorschau aus den vorhandenen Plänen neu rendern (ohne neu zu planen)."""
     st = load(sid)
-    if not st.get("plan"):
+    fmts = [f for f in formats(st["settings"]) if f in st["plans"]] or list(st["plans"])
+    if not fmts:
+        return generate(sid)
+    _render_previews(sid, fmts, 0.0, 1.0)
+
+
+def render_final(sid: str) -> None:
+    st = load(sid)
+    fmts = formats(st["settings"])
+    if not all(f in st["plans"] for f in fmts):
         generate(sid)
         st = load(sid)
-    plan = dict(st["plan"])
-    plan["grade"], plan["codec"] = st["settings"]["grade"], st["settings"].get("codec", "h264")
-    name = re.sub(r"[^\w-]+", "_", (st["settings"].get("location") or st["name"]).strip()).strip("_") or "video"
-    out = pdir(sid) / "renders" / f"{name}_{plan['format']}_{int(plan['duration'])}s_{int(time.time())}.mp4"
-    res = render.render(plan, _clips(st), pdir(sid) / "work", out, "final",
-                        _progress(sid, 0.0, 1.0, "Rendering the final video …"))
-    from .. import outbox
-    outbox.save("reels" if plan["format"] == "reel" else "youtube", out, out.name)
-    update(sid, lambda s: s["renders"].__setitem__("final", res))
-    return res
+    for i, fmt in enumerate(fmts):
+        st = load(sid)
+        plan = _live_plan(st, fmt)
+        name = re.sub(r"[^\w-]+", "_", (st["settings"].get("location") or st["name"]).strip()).strip("_") or "video"
+        tag = {"reel": "reel_9x16", "youtube": "youtube_16x9", "youtube4k": "youtube_4k"}[fmt]
+        out = pdir(sid) / "renders" / f"{name}_{tag}_{int(plan['duration'])}s_{int(time.time())}.mp4"
+        res = render.render(plan, _clips(st), pdir(sid) / "work", out, "final",
+                            _progress(sid, i / len(fmts), (i + 1) / len(fmts),
+                                      f"Rendering the final video {i + 1} of {len(fmts)} …"))
+        from .. import outbox
+        outbox.save("reels" if fmt == "reel" else "youtube", out, out.name)
+        update(sid, lambda s, f=fmt, r=res: s["renders"].setdefault(f, {}).__setitem__("final", r))
+
+
+# ---------------------------------------------------------------- Zeitleiste (einzelne Aufnahmen ändern)
+
+def _src_window(center: float, need: float, clip_dur: float) -> float:
+    start = center - need / 2
+    return round(max(0.0, min(start, clip_dur - need - 0.05)), 3)
+
+
+def edit_shot(sid: str, fmt: str, k: int, action: str, value: str | float | None = None) -> dict:
+    """action: swap (andere Aufnahme) | left | right (verschieben) | speed (1, 0.5, 2 …) | ramp (hero/…/"")
+    | transition (Übergang NACH dieser Aufnahme)."""
+    from . import speed as speedmod
+    st = load(sid)
+    plan = st["plans"].get(fmt)
+    if not plan or not (0 <= k < len(plan["shots"])):
+        raise UserError("Please make the preview first.")
+    shots = plan["shots"]
+    clip_dur = {c["id"]: c["info"]["duration"] for c in st["clips"]}
+    mode = "reel" if fmt == "reel" else "youtube"
+
+    def refit(sh: dict) -> None:
+        need = sh["dur"] * speedmod.mean_speed(sh.get("ramp") or None, sh.get("speed", 1.0))
+        center = sh["src_in"] + sh["src_dur"] / 2
+        sh["src_dur"] = round(min(need, clip_dur.get(sh["clip"], need) - 0.1), 3)
+        sh["src_in"] = _src_window(center, sh["src_dur"], clip_dur.get(sh["clip"], 1e9))
+
+    if action in ("left", "right"):
+        j = k - 1 if action == "left" else k + 1
+        if not 0 <= j < len(shots):
+            raise UserError("This shot is already at the edge.")
+        a, b = shots[k], shots[j]
+        for key in ("clip", "src_in", "src_dur", "speed", "score", "hero", "transit", "direction", "ramp"):
+            a[key], b[key] = b.get(key), a.get(key)
+        refit(a)
+        refit(b)
+    elif action == "speed":
+        shots[k]["speed"] = max(0.25, min(4.0, float(value or 1)))
+        shots[k]["ramp"] = ""
+        refit(shots[k])
+    elif action == "ramp":
+        shots[k]["ramp"] = str(value or "") if (value or "") in speedmod.RAMPS else ""
+        shots[k]["speed"] = 1.0
+        refit(shots[k])
+    elif action == "transition":
+        if k >= len(shots) - 1:
+            raise UserError("There is no cut after the last shot.")
+        tid = str(value or "cut")
+        t = transmod.TRANSITIONS.get(tid, transmod.TRANSITIONS["cut"])
+        d = 0.0 if tid == "cut" else min(t["dur"], 0.45 * min(shots[k]["dur"], shots[k + 1]["dur"]))
+        plan.setdefault("transitions", [{"id": "cut", "dur": 0.0}] * (len(shots) - 1))[k] = {"id": tid, "dur": round(d, 3)}
+    elif action == "swap":
+        analyses = analyse_all(sid, 0, 0) if False else [analysis.refresh_moments(json.loads(f.read_text(encoding="utf-8")))
+                                                          for f in sorted((pdir(sid) / "analysis").glob("*.json"))]
+        key = "moments" if mode == "reel" else "moments_long"
+        cands = sorted((m for a in analyses for m in (a.get(key) or a["moments"])), key=lambda m: m["score"], reverse=True)
+        cur = shots[k]
+        used = [(x["clip"], x["src_in"], x["src_in"] + x["src_dur"]) for x in shots]
+        need = cur["dur"] * speedmod.mean_speed(cur.get("ramp") or None, cur.get("speed", 1.0))
+        tried = set(cur.get("swapped") or [])
+        pick = None
+        for m in cands:
+            if m["dur"] < need or f"{m['clip']}@{m['start']}" in tried:
+                continue
+            c = m["start"] + m["dur"] / 2
+            if any(cl == m["clip"] and abs(c - (a0 + a1) / 2) < max(4.0, need * 1.5) for cl, a0, a1 in used):
+                continue
+            pick = m
+            break
+        if pick is None:
+            raise UserError("No other good shot left – add more clips or choose a shorter length.")
+        cur.update(clip=pick["clip"], src_dur=round(need, 3),
+                   src_in=_src_window(pick["start"] + pick["dur"] / 2, need, clip_dur.get(pick["clip"], 1e9)),
+                   score=pick["score"], hero=pick.get("hero", False), transit=pick.get("transit", False),
+                   direction=pick.get("direction", ""), swapped=sorted(tried | {f"{pick['clip']}@{pick['start']}"}))
+    else:
+        raise UserError("Unknown action.")
+    plan["edited"] = True
+    update(sid, lambda s: s["plans"].__setitem__(fmt, plan))
+    return load(sid)
+
+
+def shot_thumb(sid: str, fmt: str, k: int) -> Path:
+    """Kleines Vorschaubild einer Aufnahme (Mitte des Ausschnitts), zwischengespeichert."""
+    st = load(sid)
+    plan = st["plans"].get(fmt)
+    if not plan or not (0 <= k < len(plan["shots"])):
+        raise UserError("File not found.")
+    sh = plan["shots"][k]
+    c = next(c for c in st["clips"] if c["id"] == sh["clip"])
+    t = sh["src_in"] + sh["src_dur"] / 2
+    d = pdir(sid) / "work" / "thumbs"
+    d.mkdir(parents=True, exist_ok=True)
+    f = d / f"{sh['clip']}_{int(t * 10)}.jpg"
+    if not f.exists():
+        media.run([media.ffmpeg(), "-hide_banner", "-y", "-ss", f"{t:.2f}", "-i", str(pdir(sid) / "clips" / c["file"]),
+                   "-frames:v", "1", "-vf", "scale=320:-2", "-q:v", "5", str(f)])
+    if not f.exists():
+        raise UserError("File not found.")
+    return f

@@ -16,7 +16,9 @@ from pathlib import Path
 from .. import media
 from . import color as colormod
 from . import music as musicmod
+from . import speed as speedmod
 from . import text as textmod
+from . import transitions as transmod
 
 FORMATS = {"reel": (1080, 1920), "youtube": (1920, 1080), "youtube4k": (3840, 2160)}
 
@@ -73,28 +75,53 @@ def _crop_filter(info: dict, W: int, H: int, xpos: float = 0.5) -> str:
 
 
 def render_shot(src: Path, info: dict, shot: dict, out: Path, W: int, H: int, fps: float, lut: Path | None,
-                work: Path, keep_audio: bool = False) -> None:
-    n_frames = max(1, int(round(shot["dur"] * fps)))
-    speed = float(shot.get("speed", 1.0) or 1.0)
-    vf = [media.sdr_filter(info).rstrip(","), f"setpts=(PTS-STARTPTS)/{speed:.6f}", f"fps={fps:g}",
-          _crop_filter(info, W, H, float(shot.get("xpos", 0.5)))]
-    vf = [x for x in vf if x]
+                work: Path, keep_audio: bool = False, head: float = 0.0, tail: float = 0.0,
+                smooth: bool = False) -> None:
+    """Eine Aufnahme rendern. head/tail = zusätzliche Ausgabe-Sekunden vor/nach der Aufnahme für Übergänge.
+    Tempo: fest (speed) oder Kurve (ramp) – in Stücke zerlegt; smooth = Zeitlupe mit Zwischenbildern (optischer Fluss)."""
+    ramp = shot.get("ramp") or ""
+    sp = float(shot.get("speed", 1.0) or 1.0)
+    s0, s1 = speedmod.end_speeds(ramp, sp)
+    parts = ([(head, s0)] if head > 0 else []) + speedmod.pieces(ramp, sp, shot["dur"]) + \
+        ([(tail, s1)] if tail > 0 else [])
+    src_start = max(0.0, float(shot["src_in"]) - head * s0)
+    src_total = sum(L * v for L, v in parts)
+    out_total = head + shot["dur"] + tail
+    n_frames = max(1, int(round(out_total * fps)))
+    pre = [x for x in (media.sdr_filter(info).rstrip(","), _crop_filter(info, W, H, float(shot.get("xpos", 0.5)))) if x]
+    chain = [f"[0:v:0]{','.join(pre)}[base]"]
+    if len(parts) == 1:
+        chain.append(f"[base]setpts=(PTS-STARTPTS)/{parts[0][1]:.6f}[sp]")
+    else:
+        labels = "".join(f"[i{k}]" for k in range(len(parts)))
+        chain.append(f"[base]split={len(parts)}{labels}")
+        t = 0.0
+        outs = ""
+        for k, (L, v) in enumerate(parts):
+            a, b = t, t + L * v
+            chain.append(f"[i{k}]trim=start={a:.4f}:end={b:.4f},setpts=(PTS-STARTPTS)/{v:.6f}[p{k}]")
+            outs += f"[p{k}]"
+            t = b
+        chain.append(f"{outs}concat=n={len(parts)}:v=1:a=0[sp]")
+    slow = min(v for _, v in parts) < 0.75
+    tail_f = [f"minterpolate=fps={fps:g}:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:vsbmc=1" if smooth and slow
+              else f"fps={fps:g}"]
     extra_inputs: list[str] = []
     if lut is not None:
         lf, extra = colormod.ffmpeg_filter(lut, work)
         if lf == "HALD":
             extra_inputs = extra
         else:
-            vf.append(lf)
-    vf.append("format=yuv420p")
-    args = ["-ss", f"{shot['src_in']:.3f}", "-t", f"{shot['src_dur'] + 0.5:.3f}", "-i", str(src)]
+            tail_f.append(lf)
+    args = ["-ss", f"{src_start:.3f}", "-t", f"{src_total + 0.5:.3f}", "-i", str(src)]
     if extra_inputs:
         args += ["-i", extra_inputs[0]]
-        fc = f"[0:v:0]{','.join(vf[:-1])}[g];[g][1:v]haldclut,format=yuv420p[v]"
+        chain.append(f"[sp]{','.join(tail_f)}[g];[g][1:v]haldclut,format=yuv420p[v]")
     else:
-        fc = f"[0:v:0]{','.join(vf)}[v]"
+        chain.append(f"[sp]{','.join(tail_f)},format=yuv420p[v]")
+    fc = ";".join(chain)
     if keep_audio and info.get("has_audio"):
-        at = speed
+        at = src_total / out_total   # mittleres Tempo (Ton bei Rampen nur ungefähr – unter Musik unauffällig)
         tempo = []
         while at > 2.0:
             tempo.append("atempo=2.0")
@@ -104,7 +131,7 @@ def render_shot(src: Path, info: dict, shot: dict, out: Path, W: int, H: int, fp
             at /= 0.5
         tempo.append(f"atempo={at:.4f}")
         fc += f";[0:a:0]asetpts=PTS-STARTPTS,{','.join(tempo)},aformat=sample_rates=48000:channel_layouts=stereo," \
-              f"atrim=0:{shot['dur']:.4f},apad=whole_dur={shot['dur']:.4f}[a]"
+              f"atrim=0:{out_total:.4f},apad=whole_dur={out_total:.4f}[a]"
     args += ["-filter_complex", fc, "-map", "[v]"]
     if keep_audio and info.get("has_audio"):
         args += ["-map", "[a]", "-c:a", "pcm_s16le"]
@@ -112,7 +139,45 @@ def render_shot(src: Path, info: dict, shot: dict, out: Path, W: int, H: int, fp
         args += ["-an"]
     args += ["-frames:v", str(n_frames), *encoder("intermediate"), "-r", f"{fps:g}", "-g", str(int(fps)),
              str(out)]
-    media._run_with_progress(args, shot["dur"], None)
+    media._run_with_progress(args, out_total, None)
+
+
+def _join(segs: list[Path], shots: list[dict], trans: list[dict], body: Path, fps: float, keep: bool,
+          heads: list[float]) -> None:
+    """Aufnahmen verbinden: harte Schnitte per concat (ohne neu zu kodieren), sonst xfade-Kette."""
+    total = sum(s["dur"] for s in shots)
+    if not any(t.get("dur", 0) > 0 for t in trans):
+        lst = body.parent / "list.txt"
+        lst.write_text("".join(f"file '{s.name}'\n" for s in segs), encoding="utf-8")
+        media._run_with_progress(["-f", "concat", "-safe", "0", "-i", str(lst), "-c", "copy", str(body)], total, None)
+        return
+    args: list[str] = []
+    for f in segs:
+        args += ["-i", str(f)]
+    fc, cur = [], "[0:v]"
+    for k in range(1, len(segs)):
+        t = trans[k - 1]
+        d = float(t.get("dur", 0))
+        nxt = f"[x{k}]"
+        if d > 0:
+            xf = transmod.TRANSITIONS.get(t["id"], transmod.TRANSITIONS["dissolve"])["xfade"] or "fade"
+            off = shots[k]["t0"] - d / 2
+            fc.append(f"{cur}[{k}:v]xfade=transition={xf}:duration={d:.4f}:offset={off:.4f}{nxt}")
+        else:
+            fc.append(f"{cur}[{k}:v]concat=n=2:v=1:a=0{nxt}")
+        cur = nxt
+    fc.append(f"{cur}fps={fps:g},format=yuv420p[v]")
+    maps = ["-map", "[v]"]
+    if keep:
+        aparts = "".join(f"[a{k}]" for k in range(len(segs)))
+        for k, sh in enumerate(shots):
+            fc.append(f"[{k}:a]atrim=start={heads[k]:.4f}:end={heads[k] + sh['dur']:.4f},asetpts=PTS-STARTPTS[a{k}]")
+        fc.append(f"{aparts}concat=n={len(segs)}:v=0:a=1[a]")
+        maps += ["-map", "[a]", "-c:a", "pcm_s16le"]
+    script = body.parent / "join_filter.txt"
+    script.write_text(";".join(fc), encoding="utf-8")
+    media._run_with_progress([*args, *media.filter_script_args(script), *maps, *encoder("intermediate"),
+                              "-r", f"{fps:g}", "-t", f"{total:.4f}", str(body)], total, None)
 
 
 def render(plan: dict, clips: dict[str, dict], work: Path, out: Path, quality: str = "preview",
@@ -138,18 +203,23 @@ def render(plan: dict, clips: dict[str, dict], work: Path, out: Path, quality: s
                                 bool(g.get("protect_skin", True)))
         lut = colormod.lut_file(p, work / "luts")
     keep = bool(plan.get("keep_audio"))
-    segs = []
+    trans = list(plan.get("transitions") or [])
+    trans = (trans + [{"id": "cut", "dur": 0.0}] * len(shots))[: max(0, len(shots) - 1)]
+    smooth = bool(plan.get("smooth_slowmo", True)) and quality != "preview"
+    segs, heads = [], []
     for k, sh in enumerate(shots):
         media.check_cancel()
         c = clips[sh["clip"]]
+        head = float(trans[k - 1]["dur"]) / 2 if k > 0 else 0.0
+        tail = float(trans[k]["dur"]) / 2 if k < len(shots) - 1 else 0.0
         f = segdir / f"seg_{k:03d}.mov" if keep else segdir / f"seg_{k:03d}.mp4"
-        render_shot(c["path"], c["info"], sh, f, W, H, fps, lut, work, keep)
+        render_shot(c["path"], c["info"], sh, f, W, H, fps, lut, work, keep, head, tail, smooth)
         segs.append(f)
-        prog(0.8 * (k + 1) / len(shots))
-    lst = segdir / "list.txt"
-    lst.write_text("".join(f"file '{s.name}'\n" for s in segs), encoding="utf-8")
+        heads.append(head)
+        prog(0.75 * (k + 1) / len(shots))
     body = segdir / ("body.mov" if keep else "body.mp4")
-    media._run_with_progress(["-f", "concat", "-safe", "0", "-i", str(lst), "-c", "copy", str(body)], total, None)
+    _join(segs, shots, trans, body, fps, keep, heads)
+    prog(0.8)
 
     # ---------- Endfassung: Titel + Musik
     args = ["-i", str(body)]
@@ -163,6 +233,21 @@ def render(plan: dict, clips: dict[str, dict], work: Path, out: Path, quality: s
                  "-i", str(tdir / "t_%05d.png")]
         fc.append(f"[0:v][{n_in}:v]overlay=0:0:eof_action=pass:format=auto,format=yuv420p[v]")
         vlabel, n_in = "[v]", n_in + 1
+    outro = plan.get("outro") or {}
+    if outro.get("enabled") and (outro.get("text") or "").strip():
+        od = float(outro.get("duration", 2.5))
+        t = textmod.Title.from_dict({"text": outro["text"], "subtitle": outro.get("subtitle", ""),
+                                     "font": (title or {}).get("font", "Montserrat ExtraLight"), "size": 0.05,
+                                     "spacing": 0.25, "spacing_start": 0.32, "y": 0.5, "start": max(0.0, total - od),
+                                     "duration": od, "fade_in": 0.6, "fade_out": 0.5, "anim_in": "fade",
+                                     "keep_case": True})
+        odir = work / f"outro_{quality}"
+        start, n = textmod.render_sequence(t, W, H, fps, odir)
+        args += ["-framerate", f"{fps:g}", "-start_number", "0", "-itsoffset", f"{start:.3f}",
+                 "-i", str(odir / "t_%05d.png")]
+        src = vlabel if vlabel.startswith("[") else "[0:v]"
+        fc.append(f"{src}[{n_in}:v]overlay=0:0:eof_action=pass:format=auto,format=yuv420p[vo]")
+        vlabel, n_in = "[vo]", n_in + 1
     m = plan.get("music") or {}
     alabel = None
     if m.get("file"):

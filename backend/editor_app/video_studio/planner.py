@@ -30,6 +30,7 @@ class Shot:
     hero: bool = False
     transit: bool = False
     direction: str = ""
+    ramp: str = ""     # Tempo-Kurve (speed.RAMPS), z. B. "hero" = Zeitlupe in der Mitte
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -93,7 +94,8 @@ def _window(m: dict, L: float, used: dict) -> float | None:
 
 
 def plan(moments: list[dict], duration: float, mode: str = "reel", beats: list[float] | None = None,
-         fps: float = 30.0, seed: int = 0, title_len: float = 0.0) -> list[Shot]:
+         fps: float = 30.0, seed: int = 0, title_len: float = 0.0, ramps: bool = True,
+         speedup: bool = True) -> list[Shot]:
     """moments: aus analysis (alle Clips), nach Punkten sortiert. Gibt die Aufnahmen in Reihenfolge zurück."""
     if not moments:
         raise ValueError("No usable moments found – the clips may be too dark, too shaky or too short.")
@@ -158,6 +160,10 @@ def plan(moments: list[dict], duration: float, mode: str = "reel", beats: list[f
                     continue   # zu nah an einer schon gewählten Aufnahme (sähe gleich aus)
                 if pass_ == 2 and not far_enough(m, 0.3):
                     continue
+                if speedup and m.get("transit") and i not in (0, len(slots) - 1):
+                    sh = take(m, L, speed=2.0)   # schnelle Fahrt: doppelt so schnell (wirkt dynamisch)
+                    if sh:
+                        break
                 sh = take(m, L)
                 if sh:
                     break
@@ -185,6 +191,18 @@ def plan(moments: list[dict], duration: float, mode: str = "reel", beats: list[f
             sh = Shot(m["clip"], m["start"], round(min(m["dur"], L * speed), 3), 0.0, L, round(speed, 3), m["score"],
                       m.get("hero", False), m.get("transit", False), m.get("direction", ""))
         placed[i] = sh
+    if ramps:   # Zeitlupen-Rampe auf den schönsten ruhigen Aufnahmen (höchstens jede dritte/vierte)
+        from . import speed as speedmod
+        limit = max(1, len(slots) // (3 if mode == "reel" else 4))
+        heroes = sorted((i for i in placed if placed[i].hero and placed[i].speed == 1.0 and i != 0
+                         and placed[i].src_dur >= 1.2),
+                        key=lambda i: placed[i].score, reverse=True)[:limit]
+        for i in heroes:
+            sh = placed[i]
+            need = slots[i] * speedmod.mean_speed("hero")
+            sh.src_in = round(sh.src_in + (sh.src_dur - need) / 2, 3)   # mittiger Ausschnitt, etwas kürzer
+            sh.src_dur = round(need, 3)
+            sh.ramp = "hero"
     t = 0.0
     for i in range(len(slots)):
         sh = placed[i]
