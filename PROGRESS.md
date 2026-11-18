@@ -147,6 +147,16 @@
     - auto-reframe for vertical (saliency window);
     - brightness matching across shots;
     - "Drone crisp".
+  - 19 Nov additions:
+    - curves (5-point RGB/R/G/B) and colour wheels (shadows/midtones/highlights) baked into the LUT;
+    - masks (`masks.py`: linear/mirror/circle/rectangle/heart/star/sky, feather/invert/rotate) rendered with
+      maskedmerge (graded copy inside the mask);
+    - auto captions (`captions.py`: Whisper → ASS clean/bold/karaoke/boxed, filler words dropped, .srt next to the
+      final, needs keep_audio);
+    - local AI tools in `ai_tools.py`: background blur/colour behind people (MediaPipe), object removal in a box
+      (cv2 inpaint), enhance (CAS).
+    - Still need an external provider or a large model: upscaling (Real-ESRGAN), SAM2/LaMa object removal,
+      extend, remix, AI stylize, relight, lip-sync, eye contact.
   - Step 7 (partly): text templates (location pin, cinematic, caption, subscribe, thank you); loudness normalise
     −14 LUFS. Auto captions not added to Video Studio (drone clips have no speech; the project editor already has
     Whisper subtitles).

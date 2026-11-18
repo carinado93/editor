@@ -129,11 +129,19 @@ Was die App automatisch macht:
   - **HSL:** Sättigung und Farbton pro Farbe.
   - **Effects:** Schärfe, Klarheit, Vignette, Körnung, Entrauschen, Flackern entfernen, Stabilisieren.
   - **Crop & zoom:** Bildausschnitt (bei Hochkant sucht die App ihn automatisch) und langsames Heranfahren.
+  - **Curves:** Kurven für Helligkeit und für Rot, Grün, Blau.
+  - **Colour wheels:** Farbe und Helligkeit für Tiefen, Mitteltöne und Lichter.
+  - **Mask:** Farbe nur in einem Bereich ändern (Himmel, Verlauf, Streifen, Kreis, Rechteck, Herz, Stern;
+    weiche Kante, umkehren).
+  - **AI tools** (laufen auf deinem PC, kostenlos): Hintergrund hinter Personen weichzeichnen oder einfärben,
+    kleines Objekt entfernen (Kasten), Bild verbessern.
   - **Text:** Vorlagen (Ort mit Pin, Kino-Titel, Untertitel, Abonnieren-Knopf, Danke fürs Zuschauen).
   - „Auf alle Aufnahmen übertragen“.
 - **Übergänge:** 25 Stück plus Automatik (meist harte Schnitte auf dem Takt, Wisch in Bewegungsrichtung,
   Zoom vor schönen Momenten, ruhige Überblendungen bei YouTube).
 - **Titel:** 5 Einblend- und 3 Ausblend-Animationen, optionaler Abspann (z. B. dein Account).
+- **Untertitel:** automatisch aus dem gesprochenen Ton (Whisper), 4 Stile, Füllwörter weglassen,
+  `.srt`-Datei neben dem fertigen Video. Dafür muss „Keep original sound“ an sein.
 - **Stil:** Schärfe, Klarheit, Vignette, Körnung, „Drone crisp“, alle Aufnahmen stabilisieren, Entrauschen,
   Helligkeit der Aufnahmen angleichen, Lautstärke auf −14 LUFS.
 - Nach Änderungen auf **„Update preview (keep shots)“** klicken. Bei anderem Format oder anderer Länge auf **„Make new preview“**.

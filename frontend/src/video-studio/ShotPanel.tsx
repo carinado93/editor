@@ -33,7 +33,8 @@ export function ShotPanel({ sid, fmt, k, plan, st, meta, onState, onErr }: {
   sid: string; fmt: string; k: number; plan: StudioPlan; st: StudioProject; meta: StudioMeta;
   onState: (s: StudioProject) => void; onErr: (m: string) => void;
 }) {
-  const [tab, setTab] = useState<"filters" | "adjust" | "hsl" | "effects" | "frame" | "text">("filters");
+  const [tab, setTab] = useState<"filters" | "adjust" | "hsl" | "curves" | "wheels" | "mask" | "effects" | "frame" | "ai" | "text">("filters");
+  const [curveCh, setCurveCh] = useState<"rgb" | "r" | "g" | "b">("rgb");
   const [looks, setLooks] = useState<{ look: string; file: string }[]>([]);
   const [strength, setStrength] = useState(1);
   const [compare, setCompare] = useState(50);
@@ -75,9 +76,10 @@ export function ShotPanel({ sid, fmt, k, plan, st, meta, onState, onErr }: {
       <div className="vs-panel-head">
         <strong>Shot {k + 1}</strong>
         <span className="seg">
-          {(["filters", "adjust", "hsl", "effects", "frame", "text"] as const).map((t) => (
+          {(["filters", "adjust", "hsl", "curves", "wheels", "mask", "effects", "frame", "ai", "text"] as const).map((t) => (
             <button key={t} className={tab === t ? "on" : ""} onClick={() => setTab(t)}>
-              {{ filters: "Filters", adjust: "Adjust", hsl: "HSL", effects: "Effects", frame: "Crop & zoom", text: "Text" }[t]}
+              {{ filters: "Filters", adjust: "Adjust", hsl: "HSL", curves: "Curves", wheels: "Colour wheels", mask: "Mask",
+                effects: "Effects", frame: "Crop & zoom", ai: "AI tools", text: "Text" }[t]}
             </button>
           ))}
         </span>
@@ -136,6 +138,104 @@ export function ShotPanel({ sid, fmt, k, plan, st, meta, onState, onErr }: {
           ))}
         </div>
       )}
+
+      {tab === "curves" && (() => {
+        const curves = (sh.adjust?.curves as unknown as Record<string, number[]>) ?? {};
+        const pts = curves[curveCh] ?? [0, 0, 0, 0, 0];
+        const setPt = (i: number, v: number | null) => {
+          const np = [...pts]; np[i] = v ?? 0;
+          void send("set", { adjust: { ...adj, curves: { ...curves, [curveCh]: np } } });
+        };
+        return (
+          <div className="vs-knobs">
+            <span className="seg">{(["rgb", "r", "g", "b"] as const).map((c) => (
+              <button key={c} className={curveCh === c ? "on" : ""} onClick={() => setCurveCh(c)}>{c.toUpperCase()}</button>))}</span>
+            <svg viewBox="0 0 100 100" className="vs-curve">
+              <line x1="0" y1="100" x2="100" y2="0" stroke="#ccc" strokeDasharray="2" />
+              <polyline fill="none" stroke={{ rgb: "#6a4c9c", r: "#d33", g: "#3a3", b: "#36d" }[curveCh]} strokeWidth="2"
+                points={pts.map((v, i) => `${i * 25},${100 - Math.max(0, Math.min(100, i * 25 + v * 0.25))}`).join(" ")} />
+            </svg>
+            {["Blacks", "Shadows", "Midtones", "Lights", "Whites"].map((l, i) => (
+              <Knob key={l} label={`${l} point`} value={pts[i] ?? 0} min={-100} max={100} step={1} onCommit={(v) => setPt(i, v)} />
+            ))}
+          </div>
+        );
+      })()}
+
+      {tab === "wheels" && (() => {
+        const wheels = (sh.adjust?.wheels as unknown as Record<string, number[]>) ?? {};
+        const setW = (zone: string, i: number, v: number | null) => {
+          const cur = [...(wheels[zone] ?? [30, 0, 0])]; cur[i] = v ?? (i === 0 ? 30 : 0);
+          void send("set", { adjust: { ...adj, wheels: { ...wheels, [zone]: cur } } });
+        };
+        return (
+          <div className="vs-knobs">
+            {["shadows", "midtones", "highlights"].map((z) => (
+              <div key={z} className="vs-hsl">
+                <span><span className="vs-dot" style={{ background: `hsl(${(wheels[z] ?? [30])[0]},80%,55%)` }} /> {z}</span>
+                <Knob label="colour (hue °)" value={(wheels[z] ?? [30, 0, 0])[0]} min={0} max={360} step={1} onCommit={(v) => setW(z, 0, v)} />
+                <Knob label="amount" value={(wheels[z] ?? [30, 0, 0])[1]} min={0} max={100} step={1} onCommit={(v) => setW(z, 1, v)} />
+                <Knob label="brightness" value={(wheels[z] ?? [30, 0, 0])[2]} min={-100} max={100} step={1} onCommit={(v) => setW(z, 2, v)} />
+              </div>
+            ))}
+          </div>
+        );
+      })()}
+
+      {tab === "mask" && (() => {
+        const m = sh.mask ?? {};
+        const setM = (patch: Record<string, unknown>) => void send("set", { mask: { ...m, ...patch } });
+        const madj = (m.adjust ?? {}) as Record<string, number>;
+        return (
+          <div className="vs-knobs">
+            <label>Shape
+              <select value={m.shape ?? ""} onChange={(e) => setM({ shape: e.target.value })}>
+                <option value="">no mask</option><option value="sky">Sky (top down to horizon)</option><option value="linear">Linear</option>
+                <option value="mirror">Mirror (band)</option><option value="circle">Circle</option><option value="rectangle">Rectangle</option>
+                <option value="heart">Heart</option><option value="star">Star</option>
+              </select>
+            </label>
+            {m.shape && <>
+              <Knob label="Position x %" value={Math.round((m.x ?? 0.5) * 100)} min={0} max={100} step={1} onCommit={(v) => setM({ x: (v ?? 50) / 100 })} />
+              <Knob label="Position y % (horizon)" value={Math.round((m.y ?? 0.45) * 100)} min={0} max={100} step={1} onCommit={(v) => setM({ y: (v ?? 45) / 100 })} />
+              <Knob label="Size %" value={Math.round((m.size ?? 0.5) * 100)} min={5} max={150} step={1} onCommit={(v) => setM({ size: (v ?? 50) / 100 })} />
+              <Knob label="Rotation °" value={m.rot ?? 0} min={-180} max={180} step={1} onCommit={(v) => setM({ rot: v ?? 0 })} />
+              <Knob label="Feather (soft edge) %" value={Math.round((m.feather ?? 0.3) * 100)} min={0} max={100} step={1} onCommit={(v) => setM({ feather: (v ?? 30) / 100 })} />
+              <label className="check-line"><input type="checkbox" checked={!!m.invert} onChange={(e) => setM({ invert: e.target.checked })} /> Invert</label>
+              <p className="muted">Colour only inside the mask:</p>
+              {[["exposure", "Exposure", -2, 2, 0.05], ["contrast", "Contrast", -100, 100, 1], ["temp", "Temperature", -100, 100, 1],
+                ["sat", "Saturation", -100, 100, 1], ["highlights", "Highlights", -100, 100, 1]].map(([k2, l, mn, mx, st2]) => (
+                <Knob key={k2 as string} label={l as string} value={Number(madj[k2 as string] ?? 0)} min={mn as number} max={mx as number} step={st2 as number}
+                  onCommit={(v) => setM({ adjust: { ...madj, [k2 as string]: v ?? 0 } })} />
+              ))}
+            </>}
+          </div>
+        );
+      })()}
+
+      {tab === "ai" && (() => {
+        const ai = sh.ai ?? {};
+        const setAi = (patch: Record<string, unknown>) => void send("set", { ai: { ...ai, ...patch } });
+        const r = ai.remove ?? null;
+        return (
+          <div className="vs-knobs">
+            <label>Background (people in the shot)
+              <select value={ai.bg ?? ""} onChange={(e) => setAi({ bg: e.target.value })}>
+                <option value="">keep</option><option value="blur">blur the background (portrait look)</option>
+                <option value="color">replace with a colour</option>
+              </select>
+            </label>
+            <label className="check-line"><input type="checkbox" checked={!!fx.enhance} onChange={(e) => setFx("enhance", e.target.checked)} /> Enhance quality (adaptive sharpening)</label>
+            <label className="check-line"><input type="checkbox" checked={!!r} onChange={(e) => setAi({ remove: e.target.checked ? [0.4, 0.4, 0.2, 0.2] : null })} /> Remove an object (box)</label>
+            {r && ["left %", "top %", "width %", "height %"].map((l, i) => (
+              <Knob key={l} label={`Box ${l}`} value={Math.round(r[i] * 100)} min={0} max={100} step={1}
+                onCommit={(v) => { const nr = [...r]; nr[i] = (v ?? 0) / 100; setAi({ remove: nr }); }} />
+            ))}
+            <p className="muted">Works on your PC, free. Object removal is best for small, still things (a logo, a drone leg). Bigger AI tools
+              (AI styles, extend the picture, relight, lip-sync) need an external AI service – not included yet.</p>
+          </div>
+        );
+      })()}
 
       {tab === "effects" && (
         <div className="vs-knobs">

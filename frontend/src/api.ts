@@ -333,6 +333,8 @@ export interface StudioShot {
   clip: string; src_in: number; src_dur: number; t0: number; dur: number; speed: number; score: number; hero: boolean; transit: boolean; ramp?: string;
   adjust?: Record<string, number | Record<string, number>>; fx?: Record<string, number | boolean>; look?: string; strength?: number;
   xpos?: number; ypos?: number; zoom?: number; zoom_end?: number; stabilize?: string; auto?: Record<string, number>;
+  mask?: { shape?: string; x?: number; y?: number; size?: number; rot?: number; feather?: number; invert?: boolean; adjust?: Record<string, number> };
+  ai?: { bg?: string; remove?: number[] | null; color?: number[] };
 }
 export interface StudioTitle { enabled: boolean; font: string; size: number; spacing: number; spacing_start: number; y: number; color: number[]; animate: boolean; start: number; duration: number; anim_in: string; anim_out: string; youtube_card: boolean }
 export interface StudioPlan { format: string; shots: StudioShot[]; texts?: { tpl: string; text: string; t0: number; dur: number }[]; transitions: { id: string; dur: number }[]; duration: number; warnings?: string[]; music: { title?: string; bpm?: number; source?: string }; fps: number; edited?: boolean }
@@ -341,7 +343,7 @@ export interface StudioSettings {
   outro: { enabled: boolean; text: string; duration: number }; ramps: boolean; speedup: boolean; smooth_slowmo: boolean;
   transition: string; transition_dur: number;
   title: StudioTitle; grade: { look: string; strength: number; protect_skin: boolean; match: boolean; fx: Record<string, number | boolean>; stabilize: string };
-  normalize: boolean;
+  normalize: boolean; captions: { enabled: boolean; style: string; language: string; drop_fillers: boolean };
   music: { mode: "auto" | "file" | "own" | "none"; mood: string; file: string; gain_db: number; duck: boolean };
   keep_audio: boolean; codec: "h264" | "h265"; seed: number;
 }

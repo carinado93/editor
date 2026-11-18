@@ -193,6 +193,21 @@ function DroneCutter({ sid, meta }: { sid: string; meta: StudioMeta }) {
           </label>
           <label className="check-line"><input type="checkbox" checked={!!s.grade.fx?.denoise} onChange={(e) => set({ grade: { fx: { denoise: e.target.checked } } })} /> Denoise (cleaner sky and water)</label>
           <label className="check-line"><input type="checkbox" checked={s.normalize} onChange={(e) => set({ normalize: e.target.checked })} /> Normalize loudness (−14 LUFS)</label>
+          <label className="check-line"><input type="checkbox" checked={s.captions.enabled} onChange={(e) => set({ captions: { enabled: e.target.checked }, ...(e.target.checked ? { keep_audio: true } : {}) })} /> Auto captions from the spoken words (needs original sound)</label>
+          {s.captions.enabled && <>
+            <label>Caption style
+              <select value={s.captions.style} onChange={(e) => set({ captions: { style: e.target.value } })}>
+                <option value="clean">Clean (white)</option><option value="bold">Bold (big caps)</option>
+                <option value="karaoke">Word by word (lilac)</option><option value="boxed">Boxed</option>
+              </select>
+            </label>
+            <label>Language
+              <select value={s.captions.language} onChange={(e) => set({ captions: { language: e.target.value } })}>
+                <option value="auto">automatic</option><option value="de">German</option><option value="en">English</option>
+              </select>
+            </label>
+            <label className="check-line"><input type="checkbox" checked={s.captions.drop_fillers} onChange={(e) => set({ captions: { drop_fillers: e.target.checked } })} /> Leave out filler words (äh, ähm, um)</label>
+          </>}
         </div>
         <div className="vs-grid small">
           <label>Transitions
