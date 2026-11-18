@@ -247,6 +247,33 @@ def lut_file(p: dict, cache_dir: Path) -> Path:
     return f
 
 
+def custom_lut_file(cube: Path, strength: float, adj: dict, cache_dir: Path) -> Path:
+    """Eigene .cube-LUT (importiert) mit Stärke 0..1 (Mischung mit dem Original) + eigene Regler darüber."""
+    key = hashlib.sha1(json.dumps([str(cube), cube.stat().st_mtime if cube.exists() else 0, strength, adj],
+                                  sort_keys=True).encode()).hexdigest()[:12]
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    f = cache_dir / f"custom_{key}.cube"
+    if f.exists():
+        return f
+    src = read_cube(cube)
+    n = src.shape[0]
+    x = np.linspace(0, 1, n)
+    ident = np.stack(np.meshgrid(x, x, x, indexing="ij")[::-1], -1)
+    mixed = ident + (src - ident) * max(0.0, min(1.5, strength))
+    if any(v for v in adj.values() if isinstance(v, (int, float))):
+        mixed = grade(np.clip(mixed, 0, 1), {**adj, "protect_skin": True})
+    write_cube(np.clip(mixed, 0, 1), f)
+    return f
+
+
+def preview_image(img, p: dict | None = None, cube: np.ndarray | None = None):
+    """Vorschaubild mit Look (für das Filter-Raster mit Carinas eigenem Bild)."""
+    from PIL import Image
+    arr = np.asarray(img.convert("RGB"))
+    lut = cube if cube is not None else bake(p or {}, 17)
+    return Image.fromarray(apply_lut(arr, lut))
+
+
 def ffmpeg_filter(cube: Path, work: Path) -> tuple[str, list[str]]:
     """ffmpeg-Filter für die LUT. Gibt (Filtertext, zusätzliche Eingaben) zurück.
     lut3d wenn vorhanden (Carinas ffmpeg-Build), sonst haldclut mit einem Hald-Bild (zweiter Eingang)."""

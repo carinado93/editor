@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { ShotPanel } from "./ShotPanel";
 import { api, formatTime, type StudioMeta, type StudioPlan, type StudioProject, type StudioSettings, type StudioTrack } from "../api";
 
 const LOOK_NAMES: Record<string, string> = {
@@ -178,6 +179,20 @@ function DroneCutter({ sid, meta }: { sid: string; meta: StudioMeta }) {
             <input type="range" min={0} max={1.5} step={0.05} value={s.grade.strength} onChange={(e) => set({ grade: { strength: Number(e.target.value) } })} />
           </label>
           <label className="check-line"><input type="checkbox" checked={s.grade.protect_skin} onChange={(e) => set({ grade: { protect_skin: e.target.checked } })} /> Protect skin tones</label>
+          <label className="check-line"><input type="checkbox" checked={s.grade.match} onChange={(e) => set({ grade: { match: e.target.checked } })} /> Match brightness of all shots (auto-grade)</label>
+          {(["sharpen", "clarity", "vignette", "grain"] as const).map((k) => (
+            <label key={k}>{{ sharpen: "Sharpen", clarity: "Clarity", vignette: "Vignette", grain: "Grain" }[k]} {Number(s.grade.fx?.[k] ?? 0)}
+              <input type="range" min={0} max={100} step={1} value={Number(s.grade.fx?.[k] ?? 0)} onChange={(e) => set({ grade: { fx: { [k]: Number(e.target.value) } } })} />
+            </label>
+          ))}
+          <button className="link" onClick={() => set({ grade: { fx: { sharpen: 30, clarity: 15, denoise: true } } })}>“Drone crisp” preset</button>
+          <label>Stabilize all shots
+            <select value={s.grade.stabilize} onChange={(e) => set({ grade: { stabilize: e.target.value } })}>
+              <option value="">off</option><option value="minimal">minimal</option><option value="recommended">recommended</option><option value="most">most stable</option>
+            </select>
+          </label>
+          <label className="check-line"><input type="checkbox" checked={!!s.grade.fx?.denoise} onChange={(e) => set({ grade: { fx: { denoise: e.target.checked } } })} /> Denoise (cleaner sky and water)</label>
+          <label className="check-line"><input type="checkbox" checked={s.normalize} onChange={(e) => set({ normalize: e.target.checked })} /> Normalize loudness (−14 LUFS)</label>
         </div>
         <div className="vs-grid small">
           <label>Transitions
@@ -299,6 +314,7 @@ function FormatResult({ sid, fmt, st, meta, busy, onState, onErr }: {
 }) {
   const plan: StudioPlan = st.plans[fmt];
   const r = st.renders[fmt] ?? {};
+  const [sel, setSel] = useState<number | null>(null);
   const reel = fmt === "reel";
   const edit = async (k: number, action: string, value?: string | number) => {
     try { onState(await api.studioShot(sid, fmt, k, action, value)); } catch (e) { onErr((e as Error).message); }
@@ -318,8 +334,9 @@ function FormatResult({ sid, fmt, st, meta, busy, onState, onErr }: {
       </div>
       <div className="vs-timeline">
         {plan.shots.map((x, k) => (
-          <div key={k} className="vs-shot small">
-            <img src={api.studioShotThumb(sid, fmt, k, `${x.clip}${x.src_in}`)} alt={`Shot ${k + 1}`} loading="lazy" />
+          <div key={k} className={`vs-shot small ${sel === k ? "sel" : ""}`}>
+            <img src={api.studioShotThumb(sid, fmt, k, `${x.clip}${x.src_in}`)} alt={`Shot ${k + 1}`} loading="lazy"
+              title="click to edit this shot" onClick={() => setSel(sel === k ? null : k)} />
             <div><strong>{k + 1}</strong> · {formatTime(x.t0)} · {x.dur.toFixed(1)} s{k === 0 ? " · hook" : ""}{x.hero ? " · ★" : ""}</div>
             <select value={x.ramp ? `ramp:${x.ramp}` : String(x.speed)} disabled={busy}
               onChange={(e) => (e.target.value.startsWith("ramp:") ? edit(k, "ramp", e.target.value.slice(5)) : edit(k, "speed", Number(e.target.value)))}>
@@ -346,6 +363,10 @@ function FormatResult({ sid, fmt, st, meta, busy, onState, onErr }: {
           </div>
         ))}
       </div>
+      {sel !== null && sel < plan.shots.length && (
+        <ShotPanel sid={sid} fmt={fmt} k={sel} plan={plan} st={st} meta={meta} onState={onState} onErr={onErr} />
+      )}
+      {sel === null && <p className="small muted">Click a shot picture to edit it (filters, colour, HSL, effects, crop and zoom, text).</p>}
     </div>
   );
 }

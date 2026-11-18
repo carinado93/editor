@@ -6,8 +6,10 @@ Schwere Arbeit läuft in einem eigenen Hintergrund-Thread (eine Warteschlange), 
 from __future__ import annotations
 
 import json
+import numpy as np
 import queue
 import re
+import subprocess
 import shutil
 import threading
 import time
@@ -41,7 +43,9 @@ DEFAULT_SETTINGS = {
     "smooth_slowmo": True,       # Zeitlupe mit Zwischenbildern (optischer Fluss) im Final
     "transition": "auto",        # auto | cut | dissolve | … (transitions.TRANSITIONS)
     "transition_dur": 0.0,       # 0 = Standarddauer des Übergangs
-    "grade": {"look": "vivid_travel", "strength": 1.0, "protect_skin": True},
+    "grade": {"look": "vivid_travel", "strength": 1.0, "protect_skin": True, "match": True,
+              "fx": {"sharpen": 15, "clarity": 10, "vignette": 0, "grain": 0}, "stabilize": ""},
+    "normalize": True,           # Lautheit auf −14 LUFS (YouTube/Instagram)
     "music": {"mode": "none", "mood": "", "file": "", "gain_db": 0.0, "duck": True},
     "keep_audio": False,
     "codec": "h264",
@@ -204,9 +208,9 @@ def set_settings(sid: str, s: dict) -> dict:
 
 
 def file(sid: str, sub: str, name: str) -> Path:
-    if sub not in ("clips", "renders", "music") or not re.fullmatch(r"[\w.-]+", name):
+    if sub not in ("clips", "renders", "music", "looks") or not re.fullmatch(r"[\w.-]+", name):
         raise UserError("File not found.")
-    f = pdir(sid) / sub / name
+    f = (pdir(sid) / "work" / "looks" / name) if sub == "looks" else (pdir(sid) / sub / name)
     if not f.exists():
         raise UserError("File not found.")
     return f
@@ -386,6 +390,7 @@ def make_plan(sid: str, analyses: list[dict], fmt: str) -> dict:
     if mode == "youtube":   # YouTube erzählt: Reihenfolge der Clips und Zeit im Clip (wie geflogen)
         shots = _story_order(shots, [c["id"] for c in st["clips"]])
     shot_dicts = [x.to_dict() for x in shots]
+    _auto_shot_settings(sid, st, shot_dicts, analyses, fmt)
     warnings = []
     usable = sum(m["dur"] for a in analyses for m in a["moments"] if m["score"] >= 0.55 * max(
         [mm["score"] for aa in analyses for mm in aa["moments"]] or [1]))
@@ -401,6 +406,46 @@ def make_plan(sid: str, analyses: list[dict], fmt: str) -> dict:
             "smooth_slowmo": s.get("smooth_slowmo", True), "created": time.time()}
     update(sid, lambda st_: st_["plans"].__setitem__(fmt, plan))
     return plan
+
+
+def grab(sid: str, clip_id: str, t: float, width: int = 480):
+    """Ein Bild aus einem Clip (für Auto-Ausschnitt und Filter-Vorschau)."""
+    import io
+    from PIL import Image
+    st = load(sid)
+    c = next(c for c in st["clips"] if c["id"] == clip_id)
+    r = subprocess.run([media.ffmpeg(), "-hide_banner", "-loglevel", "error", "-ss", f"{max(0.0, t):.2f}", "-i",
+                        str(pdir(sid) / "clips" / c["file"]), "-frames:v", "1",
+                        "-vf", f"{media.sdr_filter(c['info'])}scale={width}:-2", "-f", "image2pipe", "-vcodec", "png", "-"],
+                       capture_output=True)
+    if r.returncode != 0 or not r.stdout:
+        return None
+    return Image.open(io.BytesIO(r.stdout)).convert("RGB")
+
+
+def _auto_shot_settings(sid: str, st: dict, shots: list[dict], analyses: list[dict], fmt: str) -> None:
+    """Auto-Reframe (Hochkant: Ausschnitt dort, wo am meisten los ist) + Belichtung der Aufnahmen angleichen."""
+    by_clip = {a["clip"]: a for a in analyses}
+    brights = []
+    for sh in shots:
+        a = by_clip.get(sh["clip"])
+        c = sh["src_in"] + sh["src_dur"] / 2
+        b = None
+        if a and a.get("samples"):
+            b = min(a["samples"], key=lambda x: abs(x["t"] - c))["bright"]
+        brights.append(b)
+    vals = sorted(b for b in brights if b)
+    med = vals[len(vals) // 2] if vals else None
+    for sh, b in zip(shots, brights):
+        if med and b and b > 0.03:
+            import math
+            d = max(-0.4, min(0.4, math.log2(med / b) * 0.6))
+            if abs(d) > 0.05:
+                sh["auto"] = {"exposure": round(d, 3)}
+        if fmt == "reel":
+            img = grab(sid, sh["clip"], sh["src_in"] + sh["src_dur"] / 2, 480)
+            if img is not None:
+                sh["xpos"] = analysis.best_xpos(img, 9 / 16)
 
 
 def _story_order(shots: list, clip_order: list[str]) -> list:
@@ -433,6 +478,7 @@ def _live_plan(st: dict, fmt: str) -> dict:
     plan["outro"] = s.get("outro")
     plan["keep_audio"] = s.get("keep_audio", False)
     plan["smooth_slowmo"] = s.get("smooth_slowmo", True)
+    plan["normalize"] = s.get("normalize", True)
     key = [s.get("transition", "auto"), s.get("transition_dur", 0)]
     if plan.get("transition_key") != key and not plan.get("trans_edited"):   # Übergangs-Einstellung geändert
         plan["transitions"] = _transitions(s, plan["shots"], mode)
@@ -545,6 +591,33 @@ def edit_shot(sid: str, fmt: str, k: int, action: str, value: str | float | None
         d = 0.0 if tid == "cut" else min(t["dur"], 0.45 * min(shots[k]["dur"], shots[k + 1]["dur"]))
         plan.setdefault("transitions", [{"id": "cut", "dur": 0.0}] * (len(shots) - 1))[k] = {"id": tid, "dur": round(d, 3)}
         plan["trans_edited"] = True
+    elif action == "set":   # Regler einer Aufnahme (Farbe, Effekte, Look, Ausschnitt, Zoom, Stabilisieren)
+        allowed = {"adjust", "fx", "look", "strength", "xpos", "ypos", "zoom", "zoom_end", "stabilize"}
+        for key2, v2 in (value or {}).items() if isinstance(value, dict) else []:
+            if key2 in allowed:
+                if v2 is None or v2 == "":
+                    shots[k].pop(key2, None)
+                else:
+                    shots[k][key2] = v2
+    elif action == "apply_all":   # Farbe/Effekte dieser Aufnahme auf alle übertragen
+        src_sh = shots[k]
+        for other in shots:
+            for key2 in ("adjust", "fx", "look", "strength", "stabilize"):
+                if key2 in src_sh:
+                    other[key2] = json.loads(json.dumps(src_sh[key2]))
+                else:
+                    other.pop(key2, None)
+    elif action == "add_text":
+        v = value if isinstance(value, dict) else {}
+        tpl = v.get("tpl", "caption")
+        start = float(v.get("t0", shots[k]["t0"]))
+        dur = float(v.get("dur", min(3.0, plan["duration"] - start)))
+        plan.setdefault("texts", []).append({"tpl": tpl, "text": str(v.get("text", "")), "t0": round(start, 3),
+                                             "dur": round(max(0.5, dur), 3)})
+    elif action == "remove_text":
+        texts = plan.get("texts") or []
+        if 0 <= int(value or 0) < len(texts):
+            texts.pop(int(value or 0))
     elif action == "swap":
         analyses = [analysis.refresh_moments(json.loads(f.read_text(encoding="utf-8")))
                     for f in sorted((pdir(sid) / "analysis").glob("*.json"))]
@@ -573,6 +646,47 @@ def edit_shot(sid: str, fmt: str, k: int, action: str, value: str | float | None
         raise UserError("Unknown action.")
     plan["edited"] = True
     update(sid, lambda s: s["plans"].__setitem__(fmt, plan))
+    return load(sid)
+
+
+def looks_preview(sid: str, fmt: str, k: int, strength: float = 1.0) -> list[dict]:
+    """Filter-Raster: Carinas eigenes Bild (Aufnahme k) mit jedem Look – zum Ausprobieren vor dem Rendern."""
+    from PIL import Image
+    from . import color as colormod
+    thumb = shot_thumb(sid, fmt, k)
+    img = Image.open(thumb).convert("RGB")
+    d = pdir(sid) / "work" / "looks"
+    d.mkdir(parents=True, exist_ok=True)
+    out = []
+    names = list(colormod.PRESETS) + [f"file:{f.name}" for f in sorted((pdir(sid) / "luts").glob("*.cube"))]
+    for look in names:
+        f = d / f"{thumb.stem}_{re.sub(r'[^\w.-]', '_', look)}_{int(strength * 100)}.jpg"
+        if not f.exists():
+            if look.startswith("file:"):
+                src = colormod.read_cube(pdir(sid) / "luts" / look[5:])
+                n = src.shape[0]
+                x = np.linspace(0, 1, n)
+                ident = np.stack(np.meshgrid(x, x, x, indexing="ij")[::-1], -1)
+                im = colormod.preview_image(img, cube=np.clip(ident + (src - ident) * strength, 0, 1))
+            else:
+                im = colormod.preview_image(img, colormod.params_for(look, strength))
+            im.save(f, quality=86)
+        out.append({"look": look, "file": f.name})
+    return out
+
+
+def import_lut(sid: str, name: str, data: bytes) -> dict:
+    from . import color as colormod
+    d = pdir(sid) / "luts"
+    d.mkdir(exist_ok=True)
+    fname = re.sub(r"[^\w.-]", "_", Path(name).stem)[:50] + ".cube"
+    f = d / fname
+    f.write_bytes(data)
+    try:
+        colormod.read_cube(f)
+    except ValueError as exc:
+        f.unlink(missing_ok=True)
+        raise UserError("This file is not a 3D .cube LUT.") from exc
     return load(sid)
 
 

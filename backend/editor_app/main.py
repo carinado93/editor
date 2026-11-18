@@ -1630,7 +1630,8 @@ def studio_list():
     return {"projects": store.list_all(), "fonts": list(text.FONTS), "looks": list(PRESETS),
             "lengths": store.LENGTHS, "moods": music.MOODS,
             "transitions": {k: v["label"] for k, v in transitions.TRANSITIONS.items()},
-            "ramps": speed.LABELS, "anims_in": text.ANIMS_IN, "anims_out": text.ANIMS_OUT}
+            "ramps": speed.LABELS, "anims_in": text.ANIMS_IN, "anims_out": text.ANIMS_OUT,
+            "templates": text.TEMPLATES}
 
 
 @app.post("/api/studio")
@@ -1717,7 +1718,7 @@ def studio_generate(sid: str, new_variant: int = 0):
 
 class StudioShotEdit(BaseModel):
     action: str
-    value: str | float | None = None
+    value: str | float | dict | None = None
 
 
 @app.put("/api/studio/{sid}/plan/{fmt}/shot/{k}")
@@ -1732,6 +1733,20 @@ def studio_shot_thumb(sid: str, fmt: str, k: int):
     from .video_studio import store
 
     return FileResponse(store.shot_thumb(sid, fmt, k), media_type="image/jpeg")
+
+
+@app.get("/api/studio/{sid}/looks/{fmt}/{k}")
+def studio_looks(sid: str, fmt: str, k: int, strength: float = 1.0):
+    from .video_studio import store
+
+    return {"looks": store.looks_preview(sid, fmt, k, max(0.0, min(1.5, strength)))}
+
+
+@app.put("/api/studio/{sid}/lut")
+async def studio_lut(sid: str, request: Request, name: str = "look.cube"):
+    from .video_studio import store
+
+    return store.import_lut(sid, name, await request.body())
 
 
 @app.post("/api/studio/{sid}/preview")

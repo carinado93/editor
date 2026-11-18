@@ -25,6 +25,20 @@ TRANSITIONS: dict[str, dict] = {
     "zoom_in": {"xfade": "zoomin", "dur": 0.5, "family": "camera", "label": "Zoom in"},
     "blur": {"xfade": "hblur", "dur": 0.5, "family": "blur", "label": "Blur"},
     "circle": {"xfade": "circleopen", "dur": 0.6, "family": "mask", "label": "Circle reveal"},
+    # Schritt 8: erweiterte Bibliothek
+    "circle_close": {"xfade": "circleclose", "dur": 0.6, "family": "mask", "label": "Circle close"},
+    "wipe_left": {"xfade": "wipeleft", "dur": 0.5, "family": "simple", "label": "Wipe left"},
+    "wipe_right": {"xfade": "wiperight", "dur": 0.5, "family": "simple", "label": "Wipe right"},
+    "slide_left": {"xfade": "slideleft", "dur": 0.5, "family": "slide", "label": "Slide left"},
+    "slide_up": {"xfade": "slideup", "dur": 0.5, "family": "slide", "label": "Slide up"},
+    "open_horizontal": {"xfade": "horzopen", "dur": 0.6, "family": "mask", "label": "Open (horizontal)"},
+    "open_vertical": {"xfade": "vertopen", "dur": 0.6, "family": "mask", "label": "Open (vertical)"},
+    "diagonal": {"xfade": "diagtl", "dur": 0.6, "family": "mask", "label": "Diagonal"},
+    "radial": {"xfade": "radial", "dur": 0.6, "family": "mask", "label": "Radial (clock)"},
+    "pixelize": {"xfade": "pixelize", "dur": 0.6, "family": "glitch", "label": "Pixelize"},
+    "fade_grays": {"xfade": "fadegrays", "dur": 0.8, "family": "light", "label": "Fade through grey"},
+    "squeeze": {"xfade": "squeezeh", "dur": 0.5, "family": "distortion", "label": "Squeeze"},
+    "distance": {"xfade": "distance", "dur": 0.6, "family": "distortion", "label": "Distance (melt)"},
 }
 # Bewegungsrichtung der Kamera → Wisch in dieselbe Richtung (Inhalt wandert mit)
 MATCH = {"left": "swipe_right", "right": "swipe_left", "up": "swipe_down", "down": "swipe_up", "in": "zoom_in"}

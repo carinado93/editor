@@ -194,9 +194,10 @@ def plan(moments: list[dict], duration: float, mode: str = "reel", beats: list[f
     if ramps:   # Zeitlupen-Rampe auf den schönsten ruhigen Aufnahmen (höchstens jede dritte/vierte)
         from . import speed as speedmod
         limit = max(1, len(slots) // (3 if mode == "reel" else 4))
-        heroes = sorted((i for i in placed if placed[i].hero and placed[i].speed == 1.0 and i != 0
+        # beste ruhige Aufnahmen (Helden zuerst), nicht der Hook mit dem Titel, keine schnellen Fahrten
+        heroes = sorted((i for i in placed if placed[i].speed == 1.0 and i != 0 and not placed[i].transit
                          and placed[i].src_dur >= 1.2),
-                        key=lambda i: placed[i].score, reverse=True)[:limit]
+                        key=lambda i: (placed[i].hero, placed[i].score), reverse=True)[:limit]
         for i in heroes:
             sh = placed[i]
             need = slots[i] * speedmod.mean_speed("hero")

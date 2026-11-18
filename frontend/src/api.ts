@@ -329,14 +329,19 @@ export interface ImageGenSettings {
 }
 
 export interface StudioClip { id: string; name: string; file: string; thumb: string; analysed: boolean; info: VideoInfo & { fps: number } }
-export interface StudioShot { clip: string; src_in: number; src_dur: number; t0: number; dur: number; speed: number; score: number; hero: boolean; transit: boolean; ramp?: string }
+export interface StudioShot {
+  clip: string; src_in: number; src_dur: number; t0: number; dur: number; speed: number; score: number; hero: boolean; transit: boolean; ramp?: string;
+  adjust?: Record<string, number | Record<string, number>>; fx?: Record<string, number | boolean>; look?: string; strength?: number;
+  xpos?: number; ypos?: number; zoom?: number; zoom_end?: number; stabilize?: string; auto?: Record<string, number>;
+}
 export interface StudioTitle { enabled: boolean; font: string; size: number; spacing: number; spacing_start: number; y: number; color: number[]; animate: boolean; start: number; duration: number; anim_in: string; anim_out: string; youtube_card: boolean }
-export interface StudioPlan { format: string; shots: StudioShot[]; transitions: { id: string; dur: number }[]; duration: number; warnings?: string[]; music: { title?: string; bpm?: number; source?: string }; fps: number; edited?: boolean }
+export interface StudioPlan { format: string; shots: StudioShot[]; texts?: { tpl: string; text: string; t0: number; dur: number }[]; transitions: { id: string; dur: number }[]; duration: number; warnings?: string[]; music: { title?: string; bpm?: number; source?: string }; fps: number; edited?: boolean }
 export interface StudioSettings {
   format: "reel" | "youtube" | "youtube4k" | "both"; yt4k: boolean; length: number; minutes: number; location: string; subtitle: string;
   outro: { enabled: boolean; text: string; duration: number }; ramps: boolean; speedup: boolean; smooth_slowmo: boolean;
   transition: string; transition_dur: number;
-  title: StudioTitle; grade: { look: string; strength: number; protect_skin: boolean };
+  title: StudioTitle; grade: { look: string; strength: number; protect_skin: boolean; match: boolean; fx: Record<string, number | boolean>; stabilize: string };
+  normalize: boolean;
   music: { mode: "auto" | "file" | "own" | "none"; mood: string; file: string; gain_db: number; duck: boolean };
   keep_audio: boolean; codec: "h264" | "h265"; seed: number;
 }
@@ -348,7 +353,7 @@ export interface StudioProject {
   renders: Record<string, { preview?: StudioRender; final?: StudioRender }>; job: StudioJob | null; own_music?: { title: string; bpm: number };
 }
 export interface StudioMeta { projects: { sid: string; name: string; clips: number; has_final: boolean }[]; fonts: string[]; looks: string[]; lengths: number[]; moods: string[];
-  transitions: Record<string, string>; ramps: Record<string, string>; anims_in: Record<string, string>; anims_out: Record<string, string> }
+  transitions: Record<string, string>; ramps: Record<string, string>; anims_in: Record<string, string>; anims_out: Record<string, string>; templates: Record<string, string> }
 export interface StudioTrack { file: string; title: string; bpm: number; duration: number; mood: string; license: string }
 
 async function call<T>(url: string, init?: RequestInit): Promise<T> {
@@ -585,9 +590,12 @@ export const api = {
     call<StudioProject>(`/api/studio/${sid}/music?name=${encodeURIComponent(f.name)}`, { method: "PUT", body: f }),
   studioGenerate: (sid: string, newVariant = false) => call<StudioProject>(`/api/studio/${sid}/generate?new_variant=${newVariant ? 1 : 0}`, { method: "POST" }),
   studioFinal: (sid: string) => call<StudioProject>(`/api/studio/${sid}/final`, { method: "POST" }),
-  studioShot: (sid: string, fmt: string, k: number, action: string, value?: string | number) =>
+  studioShot: (sid: string, fmt: string, k: number, action: string, value?: string | number | Record<string, unknown>) =>
     call<StudioProject>(`/api/studio/${sid}/plan/${fmt}/shot/${k}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, value }) }),
   studioShotThumb: (sid: string, fmt: string, k: number, v: string) => `/api/studio/${sid}/shot-thumb/${fmt}/${k}?v=${encodeURIComponent(v)}`,
+  studioLooks: (sid: string, fmt: string, k: number, strength: number) =>
+    call<{ looks: { look: string; file: string }[] }>(`/api/studio/${sid}/looks/${fmt}/${k}?strength=${strength}`),
+  studioLut: (sid: string, f: File) => call<StudioProject>(`/api/studio/${sid}/lut?name=${encodeURIComponent(f.name)}`, { method: "PUT", body: f }),
   studioPreview: (sid: string) => call<StudioProject>(`/api/studio/${sid}/preview`, { method: "POST" }),
   studioCancel: (sid: string) => call<StudioProject>(`/api/studio/${sid}/cancel`, { method: "POST" }),
   studioFile: (sid: string, sub: string, name: string, download = false) => `/api/studio/${sid}/file/${sub}/${encodeURIComponent(name)}${download ? "?download=1" : ""}`,

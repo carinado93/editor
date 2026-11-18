@@ -255,3 +255,27 @@ def refresh_moments(res: dict) -> dict:
     res["moments"] = [m.to_dict() for m in moments(res["clip"], samples, cuts)]
     res["moments_long"] = [m.to_dict() for m in moments(res["clip"], samples, cuts, 4.0, 10.0, 1.0)]
     return res
+
+
+def best_xpos(img, target_aspect: float) -> float:
+    """Automatischer Bildausschnitt für Hochkant (Auto-Reframe): wo im breiten Bild ist am meisten los?
+    Auffälligkeit = Kanten (Struktur) + Farbsättigung, leicht zur Mitte gewichtet. Gibt die Lage 0..1 zurück."""
+    import cv2
+    a = np.asarray(img.convert("RGB").resize((320, max(2, int(320 * img.height / img.width)))))
+    h, w = a.shape[:2]
+    win = int(round(h * target_aspect))
+    if win >= w - 2:
+        return 0.5
+    gray = cv2.cvtColor(a, cv2.COLOR_RGB2GRAY).astype(np.float32)
+    edges = cv2.magnitude(cv2.Sobel(gray, cv2.CV_32F, 1, 0), cv2.Sobel(gray, cv2.CV_32F, 0, 1))
+    sat = cv2.cvtColor(a, cv2.COLOR_RGB2HSV)[..., 1].astype(np.float32)
+    sal = edges / (edges.mean() + 1e-3) * 0.6 + sat / (sat.mean() + 1e-3) * 0.4
+    col = sal.sum(axis=0)
+    csum = np.concatenate([[0], np.cumsum(col)])
+    best, bx = -1.0, (w - win) // 2
+    for x in range(0, w - win + 1, 2):
+        c = (x + win / 2) / w
+        v = (csum[x + win] - csum[x]) * (1 - 0.35 * abs(c - 0.5) * 2)
+        if v > best:
+            best, bx = v, x
+    return round(bx / max(1, w - win), 3)

@@ -2127,3 +2127,31 @@ a.chip { text-decoration: none; color: inherit; }
 .vs-shot-btns { display: flex; gap: 3px; }
 .vs-shot-btns button { flex: 1; border: 1px solid rgba(100, 68, 165, 0.35); background: #fff; color: var(--lila); border-radius: 6px; cursor: pointer; font-size: 0.75rem; padding: 2px; }
 .vs-trans { color: var(--lila-2); }
+.vs-shot.sel { outline: 2px solid var(--lila); }
+.vs-shot img { cursor: pointer; }
+.vs-panel { background: #fff; border: 1px solid rgba(100, 68, 165, 0.2); border-radius: 12px; padding: 10px 12px; margin-top: 8px; }
+.vs-panel-head { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+.vs-panel .seg { display: inline-flex; border: 1px solid rgba(100, 68, 165, 0.3); border-radius: 999px; overflow: hidden; }
+.vs-panel .seg button { border: 0; background: #fff; padding: 3px 10px; font: inherit; cursor: pointer; color: var(--lila); }
+.vs-panel .seg button.on { background: var(--lila); color: #fff; }
+.vs-knobs { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 6px 16px; }
+.vs-knob { display: grid; grid-template-columns: 1fr; gap: 2px; }
+.vs-knob > span { font-size: 0.78rem; }
+.vs-knob { grid-template-columns: 1fr 64px 26px; grid-template-areas: "l l l" "r n b"; align-items: center; }
+.vs-knob > span { grid-area: l; }
+.vs-knob input[type="range"] { grid-area: r; width: 100%; }
+.vs-knob input[type="number"] { grid-area: n; width: 60px; }
+.vs-knob button { grid-area: b; border: 0; background: none; color: var(--lila); cursor: pointer; }
+.vs-hsl { display: grid; gap: 2px; text-transform: capitalize; }
+.vs-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 4px; }
+.c-red { background: #e23; } .c-orange { background: #f80; } .c-yellow { background: #fd2; } .c-green { background: #3b4; }
+.c-cyan { background: #2cd; } .c-blue { background: #36e; } .c-purple { background: #84c; } .c-magenta { background: #e3b; }
+.vs-filters { display: grid; gap: 8px; }
+.vs-compare { position: relative; width: 420px; max-width: 100%; }
+.vs-compare img { width: 100%; display: block; border-radius: 8px; }
+.vs-compare img.after { position: absolute; top: 0; left: 0; }
+.vs-compare input { width: 100%; }
+.vs-look-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 6px; }
+.vs-look { border: 2px solid transparent; background: none; padding: 0; cursor: pointer; border-radius: 8px; text-align: center; font-size: 0.72rem; text-transform: capitalize; }
+.vs-look.on { border-color: var(--lila); }
+.vs-look img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 6px; display: block; }

@@ -60,18 +60,65 @@ def encoder(quality: str, codec: str = "h264") -> list[str]:
             else ["-c:v", "libx264", "-preset", "medium", "-crf", "18", "-profile:v", "high"])
 
 
-def _crop_filter(info: dict, W: int, H: int, xpos: float = 0.5) -> str:
-    """Auf das Zielformat zuschneiden (ohne Balken), dann skalieren. xpos = horizontale Lage 0..1 (Mitte 0,5)."""
+def _crop_filter(info: dict, W: int, H: int, xpos: float = 0.5, zoom: float = 1.0, zoom_end: float | None = None,
+                 dur: float = 1.0, ypos: float = 0.5) -> str:
+    """Auf das Zielformat zuschneiden (ohne Balken), dann skalieren. xpos/ypos = Lage des Ausschnitts 0..1,
+    zoom = Vergrößerung (1 = ganzes Bild), zoom_end = Zoom am Ende der Aufnahme (langsames Heranfahren, Keyframe)."""
     sw, sh = info["width"], info["height"]
     target = W / H
+    z = max(1.0, float(zoom or 1.0))
     if sw / sh > target:          # Quelle breiter → links/rechts abschneiden
-        cw = int(sh * target / 2) * 2
-        x = int(max(0, min(sw - cw, (sw - cw) * xpos)) / 2) * 2
-        crop = f"crop={cw}:{sh}:{x}:0"
+        cw, ch = int(sh * target), sh
     else:                         # Quelle höher → oben/unten abschneiden
-        ch = int(sw / target / 2) * 2
-        crop = f"crop={sw}:{ch}:0:{int((sh - ch) / 4) * 2}"
+        cw, ch = sw, int(sw / target)
+    zmax = max(z, float(zoom_end or z))
+    # erst auf den größten Zoom zuschneiden, dann bei Animation skalieren und mittig ausschneiden
+    cw2, ch2 = int(cw / z / 2) * 2, int(ch / z / 2) * 2
+    x = int(max(0, min(sw - cw2, (sw - cw2) * xpos)) / 2) * 2
+    y = int(max(0, min(sh - ch2, (sh - ch2) * (ypos if sw / sh > target else 0.5 * ypos + 0.25))) / 2) * 2
+    crop = f"crop={cw2}:{ch2}:{x}:{y}"
+    if zoom_end and abs(zoom_end - z) > 0.005:
+        k = zmax / z
+        a, b = (1.0, k) if zoom_end > z else (k, 1.0)
+        zexpr = f"({a:.4f}+({b:.4f}-{a:.4f})*min(1,t/{max(0.1, dur):.3f}))"
+        return (f"{crop},scale=w='trunc({W}*{zexpr}/2)*2':h='trunc({H}*{zexpr}/2)*2':eval=frame:flags=bicubic,"
+                f"crop={W}:{H}:(iw-{W})/2:(ih-{H})/2,setsar=1")
     return f"{crop},scale={W}:{H}:flags=lanczos,setsar=1"
+
+
+def fx_filters(fx: dict, W: int) -> list[str]:
+    """Effekte (0..100): Schärfe, Klarheit (lokaler Kontrast), Vignette, Körnung, Entrauschen, Flackern entfernen."""
+    out = []
+    g = lambda k: float(fx.get(k, 0) or 0)  # noqa: E731
+    if fx.get("denoise") and media.has_filter("hqdn3d"):
+        out.append("hqdn3d=2:1.5:4:3")
+    elif fx.get("denoise") and media.has_filter("nlmeans"):
+        out.append("nlmeans=s=2:p=5:r=9")
+    if fx.get("deflicker") and media.has_filter("deflicker"):
+        out.append("deflicker=size=5")
+    if g("clarity"):
+        r = 13 if W >= 1000 else 9
+        out.append(f"unsharp={r}:{r}:{g('clarity') / 100 * 0.9:.3f}:{r}:{r}:0")
+    if g("sharpen"):
+        out.append(f"unsharp=5:5:{g('sharpen') / 100 * 1.4:.3f}:5:5:0")
+    if g("vignette"):
+        out.append(f"vignette=angle={0.25 + g('vignette') / 100 * 0.55:.3f}")
+    if g("grain"):
+        out.append(f"noise=alls={g('grain') / 100 * 18:.1f}:allf=t")
+    return out
+
+
+def _stabilized_input(src: Path, start: float, length: float, work: Path, key: str, level: str) -> str:
+    """vidstab 1. Durchgang (Bewegung messen) → Datei mit Transformationen; gibt den Filter für den 2. Durchgang."""
+    shak, smooth = {"minimal": (4, 10), "recommended": (6, 20), "most": (9, 40)}.get(level, (6, 20))
+    trf = work / f"stab_{key}.trf"
+    if not trf.exists():
+        esc = str(trf).replace("\\", "/").replace(":", "\\:")
+        media._run_with_progress(["-ss", f"{start:.3f}", "-t", f"{length:.3f}", "-i", str(src),
+                                  "-vf", f"scale=-2:720,vidstabdetect=shakiness={shak}:accuracy=12:result='{esc}'",
+                                  "-f", "null", "-"], length, None)
+    esc = str(trf).replace("\\", "/").replace(":", "\\:")
+    return f"vidstabtransform=input='{esc}':smoothing={smooth}:zoom=3:optzoom=0:interpol=bicubic"
 
 
 def render_shot(src: Path, info: dict, shot: dict, out: Path, W: int, H: int, fps: float, lut: Path | None,
@@ -88,7 +135,14 @@ def render_shot(src: Path, info: dict, shot: dict, out: Path, W: int, H: int, fp
     src_total = sum(L * v for L, v in parts)
     out_total = head + shot["dur"] + tail
     n_frames = max(1, int(round(out_total * fps)))
-    pre = [x for x in (media.sdr_filter(info).rstrip(","), _crop_filter(info, W, H, float(shot.get("xpos", 0.5)))) if x]
+    stab = ""
+    if shot.get("stabilize") and media.has_filter("vidstabdetect"):
+        key = f"{shot['clip']}_{int(src_start * 1000)}_{int(src_total * 1000)}_{shot['stabilize']}"
+        stab = _stabilized_input(src, src_start, src_total + 0.5, work, key, str(shot["stabilize"]))
+    pre = [x for x in (media.sdr_filter(info).rstrip(","), stab,
+                       _crop_filter(info, W, H, float(shot.get("xpos", 0.5)), float(shot.get("zoom", 1.0) or 1.0),
+                                    shot.get("zoom_end"), out_total, float(shot.get("ypos", 0.5))),
+                       *fx_filters(shot.get("fx") or {}, W)) if x]
     chain = [f"[0:v:0]{','.join(pre)}[base]"]
     if len(parts) == 1:
         chain.append(f"[base]setpts=(PTS-STARTPTS)/{parts[0][1]:.6f}[sp]")
@@ -199,11 +253,25 @@ def render(plan: dict, clips: dict[str, dict], work: Path, out: Path, quality: s
         shutil.rmtree(segdir)
     segdir.mkdir()
     g = plan.get("grade") or {}
-    lut = None
-    if g.get("look", "vivid_travel") != "none" and g.get("strength", 1) > 0:
-        p = colormod.params_for(g.get("look", "vivid_travel"), float(g.get("strength", 1.0)), g.get("overrides"),
-                                bool(g.get("protect_skin", True)))
-        lut = colormod.lut_file(p, work / "luts")
+    base_fx = g.get("fx") or {}
+
+    def shot_lut(sh: dict) -> Path | None:
+        """LUT je Aufnahme: Look + Stärke + eigene Regler der Aufnahme + Belichtungs-Angleich (Shot-Matching)."""
+        look = (sh.get("look") or g.get("look", "vivid_travel"))
+        strength = float(sh.get("strength", g.get("strength", 1.0)))
+        adj = dict(g.get("overrides") or {})
+        for k2, v2 in (sh.get("adjust") or {}).items():
+            adj[k2] = adj.get(k2, 0) + v2 if isinstance(v2, (int, float)) else v2
+        if g.get("match", True) and sh.get("auto"):
+            for k2, v2 in sh["auto"].items():
+                adj[k2] = adj.get(k2, 0) + v2
+        if (look == "none" or strength <= 0) and not any(adj.values()):
+            return None
+        if look.startswith("file:"):
+            return colormod.custom_lut_file(work.parent / "luts" / look[5:], strength, adj, work / "luts")
+        p = colormod.params_for(look if look != "none" else "natural_plus", strength if look != "none" else 0.0,
+                                adj, bool(g.get("protect_skin", True)))
+        return colormod.lut_file(p, work / "luts")
     keep = bool(plan.get("keep_audio"))
     trans = list(plan.get("transitions") or [])
     trans = (trans + [{"id": "cut", "dur": 0.0}] * len(shots))[: max(0, len(shots) - 1)]
@@ -215,7 +283,10 @@ def render(plan: dict, clips: dict[str, dict], work: Path, out: Path, quality: s
         head = float(trans[k - 1]["dur"]) / 2 if k > 0 else 0.0
         tail = float(trans[k]["dur"]) / 2 if k < len(shots) - 1 else 0.0
         f = segdir / f"seg_{k:03d}.mov" if keep else segdir / f"seg_{k:03d}.mp4"
-        render_shot(c["path"], c["info"], sh, f, W, H, fps, lut, work, keep, head, tail, smooth)
+        sh2 = {**sh, "fx": {**base_fx, **(sh.get("fx") or {})}}
+        if g.get("stabilize") and not sh.get("stabilize"):
+            sh2["stabilize"] = g["stabilize"]
+        render_shot(c["path"], c["info"], sh2, f, W, H, fps, shot_lut(sh2), work, keep, head, tail, smooth)
         segs.append(f)
         heads.append(head)
         prog(0.75 * (k + 1) / len(shots))
@@ -250,6 +321,14 @@ def render(plan: dict, clips: dict[str, dict], work: Path, out: Path, quality: s
         src = vlabel if vlabel.startswith("[") else "[0:v]"
         fc.append(f"{src}[{n_in}:v]overlay=0:0:eof_action=pass:format=auto,format=yuv420p[vo]")
         vlabel, n_in = "[vo]", n_in + 1
+    for i, tx in enumerate(plan.get("texts") or []):   # Text-Vorlagen (Ort mit Pin, Abonnieren, Kino-Titel …)
+        tdir = work / f"text{i}_{quality}"
+        textmod.render_template_sequence(tx["tpl"], tx.get("text", ""), float(tx.get("dur", 3.0)), W, H, fps, tdir)
+        args += ["-framerate", f"{fps:g}", "-start_number", "0", "-itsoffset", f"{float(tx.get('t0', 0)):.3f}",
+                 "-i", str(tdir / "t_%05d.png")]
+        src = vlabel if vlabel.startswith("[") else "[0:v]"
+        fc.append(f"{src}[{n_in}:v]overlay=0:0:eof_action=pass:format=auto,format=yuv420p[vt{i}]")
+        vlabel, n_in = f"[vt{i}]", n_in + 1
     m = plan.get("music") or {}
     alabel = None
     if m.get("file"):
@@ -268,6 +347,10 @@ def render(plan: dict, clips: dict[str, dict], work: Path, out: Path, quality: s
             alabel = "[a]"
     elif keep:
         alabel = "0:a"
+    if alabel and plan.get("normalize", True) and quality != "preview":   # Lautheit wie YouTube/Instagram (−14 LUFS)
+        src = alabel if alabel.startswith("[") else f"[{alabel}]"
+        fc.append(f"{src}loudnorm=I=-14:TP=-1.5:LRA=11,aformat=sample_rates=48000[aout]")
+        alabel = "[aout]"
     if fc:
         args += ["-filter_complex", ";".join(fc)]
     args += ["-map", vlabel]
