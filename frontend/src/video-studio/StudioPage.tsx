@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { api, formatTime, type StudioMeta, type StudioProject, type StudioSettings, type StudioTrack } from "../api";
 
 const LOOK_NAMES: Record<string, string> = {
-  none: "No grade", natural_plus: "Natural+ (subtle)", tropical_pop: "Tropical Pop", golden_hour: "Golden Hour",
+  none: "No grade", vivid_travel: "Vivid Travel (rich colours)", natural_plus: "Natural+ (subtle)", tropical_pop: "Tropical Pop", golden_hour: "Golden Hour",
   teal_orange: "Teal & Orange Cinema", epic_mountains: "Epic Mountains", deep_blue_ocean: "Deep Blue Ocean",
   emerald_jungle: "Emerald Jungle", moody_dusk: "Moody Dusk", bw_drama: "B&W Drama", vintage_film: "Vintage Film",
 };
@@ -167,7 +167,7 @@ function DroneCutter({ sid, meta }: { sid: string; meta: StudioMeta }) {
             </select>
           </label>
           <label>Strength {Math.round(s.grade.strength * 100)} %
-            <input type="range" min={0} max={1} step={0.05} value={s.grade.strength} onChange={(e) => set({ grade: { strength: Number(e.target.value) } })} />
+            <input type="range" min={0} max={1.5} step={0.05} value={s.grade.strength} onChange={(e) => set({ grade: { strength: Number(e.target.value) } })} />
           </label>
           <label className="check-line"><input type="checkbox" checked={s.grade.protect_skin} onChange={(e) => set({ grade: { protect_skin: e.target.checked } })} /> Protect skin tones</label>
         </div>

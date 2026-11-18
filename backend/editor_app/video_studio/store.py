@@ -33,7 +33,7 @@ DEFAULT_SETTINGS = {
     "title": {"enabled": True, "font": "Montserrat ExtraLight", "size": 0.075, "spacing": 0.45,
               "spacing_start": 0.62, "y": 0.44, "color": [255, 255, 255], "animate": True, "start": 0.2,
               "duration": 3.0},
-    "grade": {"look": "natural_plus", "strength": 1.0, "protect_skin": True},
+    "grade": {"look": "vivid_travel", "strength": 1.0, "protect_skin": True},
     "music": {"mode": "none", "mood": "", "file": "", "gain_db": 0.0, "duck": True},
     "keep_audio": False,
     "codec": "h264",

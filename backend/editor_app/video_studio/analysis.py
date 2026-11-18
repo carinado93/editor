@@ -189,10 +189,12 @@ def moments(clip_id: str, samples: list[Sample], cuts: list[int], min_len: float
         t0, t1 = t[a] - 0.5 / SAMPLE_FPS, t[b - 1] + 0.5 / SAMPLE_FPS
         # 0,25 s Abstand zu Szenengrenzen (keine halben Bilder vom Wechsel)
         t0, t1 = t0 + (0.25 if a else 0.05), t1 - (0.25 if b < len(samples) else 0.05)
-        # Start und Landung der Drohne (Boden nah, Kamera kippt) weglassen: bei längeren Clips
-        # die ersten 2 s und die letzten 6 s nicht verwenden
+        # Start und Landung der Drohne (Boden nah, Kamera kippt) weglassen. Ein Landeanflug dauert oft 10 s
+        # und mehr: lange Clips (>60 s) ohne die ersten 5 s und letzten 12 s, mittlere ohne 2 s / 6 s
         clip_end = t[-1] + 0.5 / SAMPLE_FPS
-        if clip_end > 25:
+        if clip_end > 60:
+            t0, t1 = max(t0, 5.0), min(t1, clip_end - 12.0)
+        elif clip_end > 25:
             t0, t1 = max(t0, 2.0), min(t1, clip_end - 6.0)
         L = min(max_len, t1 - t0)
         if L < min(min_len, 1.2):

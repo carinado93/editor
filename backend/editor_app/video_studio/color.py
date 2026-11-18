@@ -20,6 +20,9 @@ N = 33
 # Eigene Looks (Parameter, keine fremden Dateien). "natural_plus" = dezent, wie Explore-the-World-Videos.
 PRESETS: dict[str, dict] = {
     "none": {},
+    # Standard (Carinas Wunsch 18.11.: "intensivere Farben"): satt, aber Lichter weich und Haut geschützt
+    "vivid_travel": {"contrast": 16, "highlights": -22, "shadows": 10, "vibrance": 34, "sat": 12, "temp": 4,
+                     "sat_by": {"orange": 12, "yellow": 8, "cyan": 10, "blue": 8, "green": 6}, "darks": -4},
     "natural_plus": {"contrast": 10, "highlights": -18, "shadows": 8, "sat": 6, "vibrance": 14, "temp": 3},
     "tropical_pop": {"contrast": 12, "highlights": -20, "shadows": 6, "vibrance": 26, "sat": 6, "temp": 4,
                      "hue_shift": {"cyan": -4}, "sat_by": {"cyan": 18, "blue": 10, "green": 8}},

@@ -133,8 +133,8 @@ def render(plan: dict, clips: dict[str, dict], work: Path, out: Path, quality: s
     segdir.mkdir()
     g = plan.get("grade") or {}
     lut = None
-    if g.get("look", "natural_plus") != "none" and g.get("strength", 1) > 0:
-        p = colormod.params_for(g.get("look", "natural_plus"), float(g.get("strength", 1.0)), g.get("overrides"),
+    if g.get("look", "vivid_travel") != "none" and g.get("strength", 1) > 0:
+        p = colormod.params_for(g.get("look", "vivid_travel"), float(g.get("strength", 1.0)), g.get("overrides"),
                                 bool(g.get("protect_skin", True)))
         lut = colormod.lut_file(p, work / "luts")
     keep = bool(plan.get("keep_audio"))

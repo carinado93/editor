@@ -109,6 +109,19 @@ def plan(moments: list[dict], duration: float, mode: str = "reel", beats: list[f
     pool = sorted(good, key=jitter, reverse=True) + sorted(weak, key=jitter, reverse=True)
     used: dict[str, list[tuple[float, float]]] = {}
     shots: list[Shot] = []
+    # Abwechslung: Aufnahmen aus demselben Clip müssen zeitlich weit auseinander liegen (bei Drohnenflügen
+    # zeigen nahe Zeitpunkte fast dasselbe Bild). Mindestabstand ~ nutzbare Cliplänge / Anzahl Aufnahmen.
+    clip_len: dict[str, float] = {}
+    for m in moments:
+        clip_len[m["clip"]] = max(clip_len.get(m["clip"], 0.0), m["start"] + m["dur"])
+    n_clips = max(1, len(clip_len))
+    per_clip = max(1.0, len(slots) / n_clips)
+    sep = {c: min(30.0, max(4.0, L / (per_clip * 1.4))) for c, L in clip_len.items()}
+    centers: dict[str, list[float]] = {}
+
+    def far_enough(m: dict, factor: float = 1.0) -> bool:
+        c = m["start"] + m["dur"] / 2
+        return all(abs(c - x) >= sep[m["clip"]] * factor for x in centers.get(m["clip"], []))
 
     def take(m: dict, L: float, speed: float = 1.0) -> Shot | None:
         src_L = L * speed
@@ -116,6 +129,7 @@ def plan(moments: list[dict], duration: float, mode: str = "reel", beats: list[f
         if s is None:
             return None
         used.setdefault(m["clip"], []).append((s, s + src_L))
+        centers.setdefault(m["clip"], []).append(s + src_L / 2)
         return Shot(m["clip"], round(s, 3), round(src_L, 3), 0.0, L, speed, m["score"], m.get("hero", False),
                     m.get("transit", False), m.get("direction", ""))
 
@@ -132,17 +146,24 @@ def plan(moments: list[dict], duration: float, mode: str = "reel", beats: list[f
             cands = sorted(pool, key=lambda m: (m in good, m.get("hero", False), m["score"]), reverse=True)
         elif i == len(slots) - 1 and len(slots) > 1:   # Ende: ruhig (keine schnelle Fahrt)
             cands = sorted(pool, key=lambda m: (m in good, not m.get("transit", False), m["score"]), reverse=True)
+        # mehrere Clips: abwechseln (der Clip der vorigen Aufnahme rutscht nach hinten)
+        if prev and n_clips > 1:
+            cands = sorted(cands, key=lambda m: m["clip"] == prev.clip)
         sh = None
-        for pass_ in range(3):
+        for pass_ in range(4):
             for m in cands:
                 if pass_ == 0 and prev and m.get("scene") == _scene_of(prev, pool) and m["clip"] == prev.clip:
                     continue   # nicht zweimal hintereinander dieselbe Szene
+                if pass_ < 2 and not far_enough(m, 1.0 if pass_ == 0 else 0.6):
+                    continue   # zu nah an einer schon gewählten Aufnahme (sähe gleich aus)
+                if pass_ == 2 and not far_enough(m, 0.3):
+                    continue
                 sh = take(m, L)
                 if sh:
                     break
             if sh:
                 break
-            if pass_ == 1:   # nichts frei: etwas schneller abspielen (bis 1,5×), damit es passt
+            if pass_ == 2:   # nichts frei: etwas schneller abspielen (bis 1,5×), damit es passt
                 for m in cands:
                     sh = take(m, L, speed=min(1.5, max(1.0, m["dur"] / L)))
                     if sh and sh.speed <= 1.5:
