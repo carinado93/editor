@@ -285,3 +285,65 @@ def test_shot_panel_edits(tmp_path, monkeypatch):
     assert st["plans"]["reel"]["texts"][0]["tpl"] == "subscribe"
     looks = store.looks_preview(sid, "reel", 0, 1.0)
     assert len(looks) >= 10 and (tmp_path / sid / "work" / "looks" / looks[0]["file"]).exists()
+
+
+def test_curves_and_colour_wheels():
+    s_curve = color.curve_lut([0, -40, 0, 40, 0], 9)
+    assert s_curve[2] < 0.25 and s_curve[6] > 0.75 and abs(s_curve[4] - 0.5) < 1e-6 and np.all(np.diff(s_curve) >= 0)
+    g = color.grade(np.array([[[0.2, 0.2, 0.2], [0.8, 0.8, 0.8]]]),
+                    {"wheels": {"shadows": [220, 60, 0], "highlights": [35, 60, 0]}, "protect_skin": False})
+    assert g[0, 0, 2] > g[0, 0, 0] and g[0, 1, 0] > g[0, 1, 2]     # Tiefen blau, Lichter orange
+
+
+def test_masks_shapes_and_masked_render(tmp_path):
+    from editor_app.video_studio import masks
+    for shape in masks.SHAPES:
+        m = np.asarray(masks.make({"shape": shape, "size": 0.6, "feather": 0.2}, 320, 180))
+        assert 0 < (m > 128).mean() < 1, shape
+    inv = np.asarray(masks.make({"shape": "circle", "invert": True}, 320, 180))
+    assert inv[90, 160] < 50 and inv[2, 2] > 200
+    src = _clip(tmp_path / "a.mp4", dur=4)
+    info = media.probe(src)
+    shots = [{"clip": "a", "src_in": 0.2, "src_dur": 2.0, "t0": 0, "dur": 2.0, "speed": 1.0,
+              "mask": {"shape": "sky", "y": 0.5, "feather": 0.2, "adjust": {"exposure": -1.0}}}]
+    out = tmp_path / "m.mp4"
+    render.render({"format": "youtube", "shots": shots, "grade": {"look": "none"}}, {"a": {"path": src, "info": info}},
+                  tmp_path / "w", out, "preview")
+    fr = tmp_path / "f.png"
+    subprocess.run([media.ffmpeg(), "-y", "-loglevel", "error", "-ss", "1", "-i", str(out), "-frames:v", "1", str(fr)],
+                   check=True)
+    a = np.asarray(Image.open(fr).convert("L")).astype(float)
+    ref = tmp_path / "r.png"
+    subprocess.run([media.ffmpeg(), "-y", "-loglevel", "error", "-ss", "1.2", "-i", str(src), "-frames:v", "1",
+                    "-vf", "scale=960:540", str(ref)], check=True)
+    b = np.asarray(Image.open(ref).convert("L")).astype(float)
+    assert a[:100].mean() < b[:100].mean() - 15            # oben (Himmel-Maske) dunkler
+    assert abs(a[-100:].mean() - b[-100:].mean()) < 12      # unten unverändert
+
+
+def test_captions_ass_styles_and_fillers():
+    from editor_app.video_studio import captions
+    tr = {"segments": [{"words": [{"w": "Hello", "s": 0.0, "e": 0.4}, {"w": "äh", "s": 0.4, "e": 0.6},
+                                  {"w": "Madeira!", "s": 0.6, "e": 1.2}]}]}
+    words = captions.words_from(tr)
+    assert [w["w"] for w in words] == ["Hello", "Madeira!"]
+    for style in captions.STYLES:
+        a = captions.ass(words, 1080, 1920, style)
+        assert "Dialogue:" in a and "PlayResY: 1920" in a
+    assert "\\kf" in captions.ass(words, 1080, 1920, "karaoke") and "MADEIRA" in captions.ass(words, 1080, 1920, "bold")
+    f = captions.ffmpeg_filter(Path("C:/x/captions.ass"))
+    assert "filename='C\\:/x/captions.ass'" in f
+
+
+def test_ai_object_removal_inpaints_box(tmp_path):
+    from editor_app.video_studio import ai_tools
+    seg = tmp_path / "s.mp4"
+    subprocess.run([media.ffmpeg(), "-y", "-loglevel", "error", "-f", "lavfi", "-i", "color=c=0x406080:s=320x180:d=1:r=10",
+                    "-vf", "drawbox=x=140:y=70:w=40:h=40:color=red:t=fill", "-pix_fmt", "yuv420p", str(seg)], check=True)
+    out = tmp_path / "o.mp4"
+    ai_tools.process_segment(seg, out, {"remove": [0.4, 0.35, 0.2, 0.3]}, 10)
+    fr = tmp_path / "f.png"
+    subprocess.run([media.ffmpeg(), "-y", "-loglevel", "error", "-i", str(out), "-frames:v", "1", str(fr)], check=True)
+    px = np.asarray(Image.open(fr).convert("RGB"))[90, 160].astype(int)
+    assert px[0] < 150 and abs(px[2] - 0x80) < 40               # rotes Kästchen verschwunden
+    assert ai_tools.status()["remove_object"]["status"] == "ready"

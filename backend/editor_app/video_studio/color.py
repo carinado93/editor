@@ -135,11 +135,56 @@ def grade(c: np.ndarray, p: dict) -> np.ndarray:
             tint = _hsv_to_rgb(np.array(hue * 360.0), np.array(1.0), np.array(1.0)) - 0.5
             w = (np.clip((0.5 - L) * 2, 0, 1) if zone == "shadows" else np.clip((L - 0.5) * 2, 0, 1))
             c = np.clip(c + tint * w * strength * 0.25, 0, 1)
+    # Kurven: 5 Stützpunkte (0, ¼, ½, ¾, 1) als Verschiebung −100..100 je Kanal ("rgb" = alle, "r", "g", "b")
+    curves = p.get("curves") or {}
+    if any(any(v for v in pts) for pts in curves.values() if pts):
+        c = apply_curves(c, curves)
+    # Farbräder: Tiefen / Mitteltöne / Lichter je [Farbton°, Stärke 0..100, Helligkeit −100..100]
+    wheels = p.get("wheels") or {}
+    if wheels:
+        L = _luma(c)[..., None]
+        zones = {"shadows": np.clip(1 - L, 0, 1) ** 2, "midtones": 4 * L * (1 - L), "highlights": np.clip(L, 0, 1) ** 2}
+        for zone, val in wheels.items():
+            if zone not in zones or not val:
+                continue
+            hue, amt, lum = (list(val) + [0, 0, 0])[:3]
+            tint = _hsv_to_rgb(np.array(float(hue)), np.array(1.0), np.array(1.0)) - 0.5
+            c = np.clip(c + zones[zone] * (tint * float(amt) / 100 * 0.35 + float(lum) / 100 * 0.25), 0, 1)
     # Verblassen (angehobenes Schwarz)
     f = g("fade") / 100
     if f:
         c = c * (1 - 0.25 * f) + 0.25 * f * 0.35
     return np.clip(c, 0, 1)
+
+
+def curve_lut(pts: list[float], n: int = 1024) -> np.ndarray:
+    """Weiche Kurve durch 5 Punkte (x = 0, ¼, ½, ¾, 1; y = x + Verschiebung), monoton steigend gehalten."""
+    xs = np.linspace(0, 1, 5)
+    ys = np.clip(xs + np.array((list(pts) + [0] * 5)[:5], float) / 100 * 0.25, 0, 1)
+    ys = np.maximum.accumulate(ys)
+    x = np.linspace(0, 1, n)
+    # Catmull-Rom zwischen den Punkten
+    m = np.gradient(ys, xs)
+    out = np.empty(n)
+    for i, t in enumerate(x):
+        k = min(3, int(t * 4))
+        h = 0.25
+        u = (t - xs[k]) / h
+        h00, h10, h01, h11 = 2 * u**3 - 3 * u**2 + 1, u**3 - 2 * u**2 + u, -2 * u**3 + 3 * u**2, u**3 - u**2
+        out[i] = h00 * ys[k] + h10 * h * m[k] + h01 * ys[k + 1] + h11 * h * m[k + 1]
+    return np.clip(np.maximum.accumulate(out), 0, 1)
+
+
+def apply_curves(c: np.ndarray, curves: dict) -> np.ndarray:
+    n = 1024
+    if curves.get("rgb"):
+        lut = curve_lut(curves["rgb"], n)
+        c = lut[np.clip((c * (n - 1)).round().astype(int), 0, n - 1)]
+    for i, ch in enumerate("rgb"):
+        if curves.get(ch) and any(curves[ch]):
+            lut = curve_lut(curves[ch], n)
+            c[..., i] = lut[np.clip((c[..., i] * (n - 1)).round().astype(int), 0, n - 1)]
+    return c
 
 
 def _hsv_to_rgb(h, s, v):

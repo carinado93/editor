@@ -31,9 +31,11 @@ TOOLS = {
     "sharpen": {"status": "ready", "engine": "ffmpeg unsharp"},
     "auto_grade": {"status": "ready", "engine": "brightness matching"},
     "loudness": {"status": "ready", "engine": "ffmpeg loudnorm"},
-    "enhance": {"status": "planned", "engine": "Real-ESRGAN (ncnn-vulkan)", "license": "BSD-3"},
-    "remove_object": {"status": "planned", "engine": "SAM2 + LaMa", "license": "Apache-2.0"},
-    "matting": {"status": "planned", "engine": "RVM / MediaPipe", "license": "GPL-3.0 / Apache-2.0"},
+    "enhance": {"status": "ready", "engine": "ffmpeg CAS + denoise (Real-ESRGAN upscale later)", "license": "LGPL"},
+    "remove_object": {"status": "ready", "engine": "OpenCV inpainting in a box (small/static objects); "
+                      "SAM2 + LaMa later", "license": "Apache-2.0"},
+    "matting": {"status": "ready", "engine": "MediaPipe person segmentation: blur or colour background",
+                "license": "Apache-2.0"},
     "extend": {"status": "provider", "engine": "external API"},
     "remix": {"status": "provider", "engine": "external API"},
     "stylize": {"status": "provider", "engine": "external API", "consent": True},
@@ -56,3 +58,59 @@ PROVIDERS: dict[str, Provider] = {"none": Provider()}
 
 def status() -> dict:
     return TOOLS
+
+
+def needs_frames(ai: dict | None) -> bool:
+    return bool(ai) and (ai.get("bg") in ("blur", "color") or bool(ai.get("remove")))
+
+
+def process_segment(seg: "Path", out: "Path", ai: dict, fps: float) -> None:
+    """Bild-für-Bild-Werkzeuge auf einer gerenderten Aufnahme:
+    bg = blur|color (Person freistellen, Hintergrund weich bzw. einfarbig), remove = [x, y, w, h] (0..1, Inpainting)."""
+    import subprocess
+
+    import cv2
+    import numpy as np
+    from PIL import Image
+
+    from .. import fx, media
+    from .render import encoder
+    info = media.probe(seg)
+    W, H = info["width"], info["height"]
+    rd = subprocess.Popen([media.ffmpeg(), "-v", "error", "-i", str(seg), "-f", "rawvideo", "-pix_fmt", "rgb24", "-"],
+                          stdout=subprocess.PIPE)
+    wr = subprocess.Popen([media.ffmpeg(), "-v", "error", "-y", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{W}x{H}",
+                           "-r", f"{fps:g}", "-i", "-", *encoder("intermediate"), "-pix_fmt", "yuv420p", str(out)],
+                          stdin=subprocess.PIPE)
+    seg_model = fx.Segmenter() if ai.get("bg") in ("blur", "color") else None
+    box = None
+    if ai.get("remove"):
+        x, y, w, h = [float(v) for v in ai["remove"]]
+        box = np.zeros((H, W), np.uint8)
+        box[int(y * H):int((y + h) * H), int(x * W):int((x + w) * W)] = 255
+        box = cv2.dilate(box, np.ones((9, 9), np.uint8))
+    col = tuple(int(v) for v in (ai.get("color") or [201, 179, 236]))
+    try:
+        n = W * H * 3
+        while True:
+            buf = rd.stdout.read(n)
+            if len(buf) < n:
+                break
+            fr = np.frombuffer(buf, np.uint8).reshape(H, W, 3).copy()
+            if box is not None:
+                fr = cv2.inpaint(fr, box, 7, cv2.INPAINT_TELEA)
+            if seg_model is not None:
+                m = np.asarray(seg_model.mask(Image.fromarray(fr))).astype(np.float32)[..., None] / 255
+                if ai["bg"] == "blur":
+                    bgf = cv2.GaussianBlur(fr, (0, 0), max(6, W / 60))
+                else:
+                    bgf = np.empty_like(fr)
+                    bgf[:] = col
+                fr = (fr * m + bgf * (1 - m)).astype(np.uint8)
+            wr.stdin.write(fr.tobytes())
+    finally:
+        if seg_model is not None:
+            seg_model.close()
+        wr.stdin.close()
+        wr.wait()
+        rd.wait()

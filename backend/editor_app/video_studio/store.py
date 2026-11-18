@@ -45,6 +45,7 @@ DEFAULT_SETTINGS = {
     "transition_dur": 0.0,       # 0 = Standarddauer des Übergangs
     "grade": {"look": "vivid_travel", "strength": 1.0, "protect_skin": True, "match": True,
               "fx": {"sharpen": 15, "clarity": 10, "vignette": 0, "grain": 0}, "stabilize": ""},
+    "captions": {"enabled": False, "style": "clean", "language": "auto", "drop_fillers": True},
     "normalize": True,           # Lautheit auf −14 LUFS (YouTube/Instagram)
     "music": {"mode": "none", "mood": "", "file": "", "gain_db": 0.0, "duck": True},
     "keep_audio": False,
@@ -479,6 +480,7 @@ def _live_plan(st: dict, fmt: str) -> dict:
     plan["keep_audio"] = s.get("keep_audio", False)
     plan["smooth_slowmo"] = s.get("smooth_slowmo", True)
     plan["normalize"] = s.get("normalize", True)
+    plan["captions"] = s.get("captions")
     key = [s.get("transition", "auto"), s.get("transition_dur", 0)]
     if plan.get("transition_key") != key and not plan.get("trans_edited"):   # Übergangs-Einstellung geändert
         plan["transitions"] = _transitions(s, plan["shots"], mode)
@@ -592,7 +594,7 @@ def edit_shot(sid: str, fmt: str, k: int, action: str, value: str | float | None
         plan.setdefault("transitions", [{"id": "cut", "dur": 0.0}] * (len(shots) - 1))[k] = {"id": tid, "dur": round(d, 3)}
         plan["trans_edited"] = True
     elif action == "set":   # Regler einer Aufnahme (Farbe, Effekte, Look, Ausschnitt, Zoom, Stabilisieren)
-        allowed = {"adjust", "fx", "look", "strength", "xpos", "ypos", "zoom", "zoom_end", "stabilize"}
+        allowed = {"adjust", "fx", "look", "strength", "xpos", "ypos", "zoom", "zoom_end", "stabilize", "mask", "ai"}
         for key2, v2 in (value or {}).items() if isinstance(value, dict) else []:
             if key2 in allowed:
                 if v2 is None or v2 == "":
@@ -602,7 +604,7 @@ def edit_shot(sid: str, fmt: str, k: int, action: str, value: str | float | None
     elif action == "apply_all":   # Farbe/Effekte dieser Aufnahme auf alle übertragen
         src_sh = shots[k]
         for other in shots:
-            for key2 in ("adjust", "fx", "look", "strength", "stabilize"):
+            for key2 in ("adjust", "fx", "look", "strength", "stabilize", "mask"):
                 if key2 in src_sh:
                     other[key2] = json.loads(json.dumps(src_sh[key2]))
                 else:

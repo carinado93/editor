@@ -15,6 +15,8 @@ from pathlib import Path
 
 from .. import media
 from . import color as colormod
+from . import ai_tools as aimod
+from . import masks as masksmod
 from . import music as musicmod
 from . import speed as speedmod
 from . import text as textmod
@@ -103,6 +105,8 @@ def fx_filters(fx: dict, W: int) -> list[str]:
         out.append(f"unsharp=5:5:{g('sharpen') / 100 * 1.4:.3f}:5:5:0")
     if g("vignette"):
         out.append(f"vignette=angle={0.25 + g('vignette') / 100 * 0.55:.3f}")
+    if fx.get("enhance"):   # "Bild verbessern": adaptives Schärfen (CAS) + leichtes Entrauschen
+        out.append("cas=strength=0.6" if media.has_filter("cas") else "unsharp=5:5:0.8:5:5:0")
     if g("grain"):
         out.append(f"noise=alls={g('grain') / 100 * 18:.1f}:allf=t")
     return out
@@ -123,7 +127,7 @@ def _stabilized_input(src: Path, start: float, length: float, work: Path, key: s
 
 def render_shot(src: Path, info: dict, shot: dict, out: Path, W: int, H: int, fps: float, lut: Path | None,
                 work: Path, keep_audio: bool = False, head: float = 0.0, tail: float = 0.0,
-                smooth: bool = False) -> None:
+                smooth: bool = False, mask: tuple[Path, Path] | None = None) -> None:
     """Eine Aufnahme rendern. head/tail = zusätzliche Ausgabe-Sekunden vor/nach der Aufnahme für Übergänge.
     Tempo: fest (speed) oder Kurve (ramp) – in Stücke zerlegt; smooth = Zeitlupe mit Zwischenbildern (optischer Fluss)."""
     ramp = shot.get("ramp") or ""
@@ -168,11 +172,24 @@ def render_shot(src: Path, info: dict, shot: dict, out: Path, W: int, H: int, fp
         else:
             tail_f.append(lf)
     args = ["-ss", f"{src_start:.3f}", "-t", f"{src_total + 0.5:.3f}", "-i", str(src)]
+    vout = "[v]" if not mask else "[vm]"
     if extra_inputs:
         args += ["-i", extra_inputs[0]]
-        chain.append(f"[sp]{','.join(tail_f)}[g];[g][1:v]haldclut,format=yuv420p[v]")
+        chain.append(f"[sp]{','.join(tail_f)}[g];[g][1:v]haldclut,format=yuv420p{vout}")
     else:
-        chain.append(f"[sp]{','.join(tail_f)},format=yuv420p[v]")
+        chain.append(f"[sp]{','.join(tail_f)},format=yuv420p{vout}")
+    if mask:   # Korrektur nur im Maskenbereich: zweite Fassung mit Masken-LUT, per maskedmerge gemischt
+        mlut, mpng = mask
+        mi = 1 + (1 if extra_inputs else 0)
+        args += ["-loop", "1", "-i", str(mpng)]
+        lf, extra = colormod.ffmpeg_filter(mlut, work)
+        if lf == "HALD":
+            args += ["-i", extra[0]]
+            graded = f"[mb]format=rgb24[mb1];[mb1][{mi + 1}:v]haldclut,format=gbrp[mg]"
+        else:
+            graded = f"[mb]{lf},format=gbrp[mg]"
+        chain.append(f"[vm]format=gbrp,split[ma][mb];{graded};[{mi}:v]format=gbrp,scale={W}:{H}[mk];"
+                     f"[ma][mg][mk]maskedmerge,format=yuv420p[v]")
     fc = ";".join(chain)
     if keep_audio and info.get("has_audio"):
         at = src_total / out_total   # mittleres Tempo (Ton bei Rampen nur ungefähr – unter Musik unauffällig)
@@ -286,7 +303,17 @@ def render(plan: dict, clips: dict[str, dict], work: Path, out: Path, quality: s
         sh2 = {**sh, "fx": {**base_fx, **(sh.get("fx") or {})}}
         if g.get("stabilize") and not sh.get("stabilize"):
             sh2["stabilize"] = g["stabilize"]
-        render_shot(c["path"], c["info"], sh2, f, W, H, fps, shot_lut(sh2), work, keep, head, tail, smooth)
+        mk = None
+        if (sh.get("mask") or {}).get("shape"):
+            m = sh["mask"]
+            mlut = shot_lut({**sh2, "adjust": {**(sh2.get("adjust") or {}), **(m.get("adjust") or {})}})
+            if mlut is not None:
+                mk = (mlut, masksmod.mask_file(m, W, H, work / "masks"))
+        render_shot(c["path"], c["info"], sh2, f, W, H, fps, shot_lut(sh2), work, keep, head, tail, smooth, mk)
+        if aimod.needs_frames(sh.get("ai")) and not keep:   # KI-Werkzeuge Bild für Bild (Hintergrund, Objekt entfernen)
+            f2 = f.with_name(f.stem + "_ai.mp4")
+            aimod.process_segment(f, f2, sh["ai"], fps)
+            f2.replace(f)
         segs.append(f)
         heads.append(head)
         prog(0.75 * (k + 1) / len(shots))
@@ -321,6 +348,17 @@ def render(plan: dict, clips: dict[str, dict], work: Path, out: Path, quality: s
         src = vlabel if vlabel.startswith("[") else "[0:v]"
         fc.append(f"{src}[{n_in}:v]overlay=0:0:eof_action=pass:format=auto,format=yuv420p[vo]")
         vlabel, n_in = "[vo]", n_in + 1
+    cap = plan.get("captions") or {}
+    if cap.get("enabled") and keep:   # Untertitel aus dem Originalton (Whisper)
+        from . import captions as capmod
+        made = capmod.make(body, work / f"cap_{quality}", W, H, cap.get("style", "clean"), cap.get("language", "auto"),
+                           bool(cap.get("drop_fillers", True)))
+        if made:
+            ass_f, srt_f, _n = made
+            src = vlabel if vlabel.startswith("[") else "[0:v]"
+            fc.append(f"{src}{capmod.ffmpeg_filter(ass_f)}[vc]")
+            vlabel = "[vc]"
+            shutil.copy(srt_f, out.with_suffix(".srt"))
     for i, tx in enumerate(plan.get("texts") or []):   # Text-Vorlagen (Ort mit Pin, Abonnieren, Kino-Titel …)
         tdir = work / f"text{i}_{quality}"
         textmod.render_template_sequence(tx["tpl"], tx.get("text", ""), float(tx.get("dur", 3.0)), W, H, fps, tdir)
