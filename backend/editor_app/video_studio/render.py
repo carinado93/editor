@@ -154,7 +154,9 @@ def _join(segs: list[Path], shots: list[dict], trans: list[dict], body: Path, fp
     args: list[str] = []
     for f in segs:
         args += ["-i", str(f)]
-    fc, cur = [], "[0:v]"
+    # alle Eingänge auf dieselbe Zeitbasis/Bildrate (sonst lehnt xfade nach einem concat ab)
+    fc = [f"[{k}:v]setpts=PTS-STARTPTS,fps={fps:g},settb=AVTB[n{k}]" for k in range(len(segs))]
+    cur = "[n0]"
     for k in range(1, len(segs)):
         t = trans[k - 1]
         d = float(t.get("dur", 0))
@@ -162,9 +164,9 @@ def _join(segs: list[Path], shots: list[dict], trans: list[dict], body: Path, fp
         if d > 0:
             xf = transmod.TRANSITIONS.get(t["id"], transmod.TRANSITIONS["dissolve"])["xfade"] or "fade"
             off = shots[k]["t0"] - d / 2
-            fc.append(f"{cur}[{k}:v]xfade=transition={xf}:duration={d:.4f}:offset={off:.4f}{nxt}")
+            fc.append(f"{cur}[n{k}]xfade=transition={xf}:duration={d:.4f}:offset={off:.4f}{nxt}")
         else:
-            fc.append(f"{cur}[{k}:v]concat=n=2:v=1:a=0{nxt}")
+            fc.append(f"{cur}[n{k}]concat=n=2:v=1:a=0,settb=AVTB{nxt}")
         cur = nxt
     fc.append(f"{cur}fps={fps:g},format=yuv420p[v]")
     maps = ["-map", "[v]"]

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { api, formatTime, type StudioMeta, type StudioProject, type StudioSettings, type StudioTrack } from "../api";
+import { api, formatTime, type StudioMeta, type StudioPlan, type StudioProject, type StudioSettings, type StudioTrack } from "../api";
 
 const LOOK_NAMES: Record<string, string> = {
   none: "No grade", vivid_travel: "Vivid Travel (rich colours)", natural_plus: "Natural+ (subtle)", tropical_pop: "Tropical Pop", golden_hour: "Golden Hour",
@@ -96,8 +96,12 @@ function DroneCutter({ sid, meta }: { sid: string; meta: StudioMeta }) {
     ids.splice(ids.indexOf(target), 0, drag);
     void act(() => api.studioOrder(sid, ids));
   };
-  const prev = st.renders.preview, fin = st.renders.final;
   const isReel = s.format === "reel";
+  const hasReel = s.format === "reel" || s.format === "both";
+  const hasYt = s.format !== "reel";
+  const fmts = Object.keys(st.plans).sort((a, b) => (a === "reel" ? -1 : b === "reel" ? 1 : 0));
+  const anyPreview = fmts.some((f) => st.renders[f]?.preview);
+  const edited = fmts.some((f) => st.plans[f]?.edited);
   const firstThumb = st.clips[0] ? api.studioFile(sid, "clips", st.clips[0].thumb) : "";
 
   return (
@@ -140,20 +144,24 @@ function DroneCutter({ sid, meta }: { sid: string; meta: StudioMeta }) {
       <section className="card">
         <h3>2 · Format and length</h3>
         <div className="row-buttons small">
-          <button className={`btn small-btn ${isReel ? "" : "ghost"}`} onClick={() => set({ format: "reel" })}>Reel / Short 9:16</button>
-          <button className={`btn small-btn ${s.format === "youtube" ? "" : "ghost"}`} onClick={() => set({ format: "youtube" })}>YouTube 16:9 (HD)</button>
-          <button className={`btn small-btn ${s.format === "youtube4k" ? "" : "ghost"}`} onClick={() => set({ format: "youtube4k" })}>YouTube 16:9 (4K)</button>
+          <button className={`btn small-btn ${isReel ? "" : "ghost"}`} onClick={() => set({ format: "reel" })}>Vertical · Reel / Short 9:16</button>
+          <button className={`btn small-btn ${s.format === "youtube" ? "" : "ghost"}`} onClick={() => set({ format: "youtube" })}>Landscape · YouTube 16:9 (HD)</button>
+          <button className={`btn small-btn ${s.format === "youtube4k" ? "" : "ghost"}`} onClick={() => set({ format: "youtube4k" })}>Landscape · YouTube 16:9 (4K)</button>
+          <button className={`btn small-btn ${s.format === "both" ? "" : "ghost"}`} onClick={() => set({ format: "both" })}>Both: vertical + landscape</button>
         </div>
-        {isReel ? (
+        {hasReel && (
           <div className="row-buttons small">
+            <span className="muted">Vertical length:</span>
             {meta.lengths.map((L) => (
               <button key={L} className={`chip ${s.length === L ? "on" : ""}`} onClick={() => set({ length: L })}>{L} s</button>
             ))}
           </div>
-        ) : (
-          <label className="small vs-inline">Length in minutes
+        )}
+        {hasYt && (
+          <label className="small vs-inline">Landscape length in minutes
             <input type="number" min={0.5} max={60} step={0.5} value={s.minutes} onChange={(e) => set({ minutes: Number(e.target.value) })} />
-            <input type="range" min={1} max={20} step={0.5} value={s.minutes} onChange={(e) => set({ minutes: Number(e.target.value) })} />
+            <input type="range" min={0.5} max={20} step={0.5} value={s.minutes} onChange={(e) => set({ minutes: Number(e.target.value) })} />
+            {s.format === "both" && <span className="check-line"><input type="checkbox" checked={s.yt4k} onChange={(e) => set({ yt4k: e.target.checked })} /> landscape in 4K</span>}
           </label>
         )}
       </section>
@@ -170,6 +178,20 @@ function DroneCutter({ sid, meta }: { sid: string; meta: StudioMeta }) {
             <input type="range" min={0} max={1.5} step={0.05} value={s.grade.strength} onChange={(e) => set({ grade: { strength: Number(e.target.value) } })} />
           </label>
           <label className="check-line"><input type="checkbox" checked={s.grade.protect_skin} onChange={(e) => set({ grade: { protect_skin: e.target.checked } })} /> Protect skin tones</label>
+        </div>
+        <div className="vs-grid small">
+          <label>Transitions
+            <select value={s.transition} onChange={(e) => set({ transition: e.target.value })}>
+              <option value="auto">Automatic (fits the shots and the beat)</option>
+              {Object.entries(meta.transitions).map(([k, l]) => <option key={k} value={k}>{k === "cut" ? "Hard cuts only" : `${l} on every cut`}</option>)}
+            </select>
+          </label>
+          <label>Transition length {s.transition_dur ? `${s.transition_dur.toFixed(1)} s` : "(standard)"}
+            <input type="range" min={0} max={2} step={0.1} value={s.transition_dur} onChange={(e) => set({ transition_dur: Number(e.target.value) })} />
+          </label>
+          <label className="check-line"><input type="checkbox" checked={s.ramps} onChange={(e) => set({ ramps: e.target.checked })} /> Speed ramps (slow motion on the best moments)</label>
+          <label className="check-line"><input type="checkbox" checked={s.speedup} onChange={(e) => set({ speedup: e.target.checked })} /> Faster flights (2× on long, steady flights)</label>
+          <label className="check-line"><input type="checkbox" checked={s.smooth_slowmo} onChange={(e) => set({ smooth_slowmo: e.target.checked })} /> Smooth slow motion in the final video (in-between frames, slower to render)</label>
         </div>
         <div className="vs-grid small">
           <label>Music
@@ -204,7 +226,7 @@ function DroneCutter({ sid, meta }: { sid: string; meta: StudioMeta }) {
       </section>
 
       <section className="card">
-        <h3>4 · Intro title {isReel ? "" : "(optional title card)"}</h3>
+        <h3>4 · Intro title and outro</h3>
         <div className="vs-title-edit">
           <div className="vs-grid small">
             <label>Location<input value={loc} placeholder="SRI LANKA" onChange={(e) => setDraft({ location: e.target.value, subtitle: sub })} onBlur={(e) => set({ location: e.target.value })} /></label>
@@ -224,10 +246,23 @@ function DroneCutter({ sid, meta }: { sid: string; meta: StudioMeta }) {
               <input type="range" min={0.2} max={0.8} step={0.01} value={s.title.y} onChange={(e) => set({ title: { y: Number(e.target.value) } })} />
             </label>
             <label>Colour<input type="color" value={rgbHex(s.title.color)} onChange={(e) => set({ title: { color: hexRgb(e.target.value) } })} /></label>
-            <label className="check-line"><input type="checkbox" checked={s.title.animate} onChange={(e) => set({ title: { animate: e.target.checked } })} /> Animation (fade in, spacing tightens)</label>
+            <label>Animation in
+              <select value={s.title.animate ? s.title.anim_in : "off"} onChange={(e) => set({ title: e.target.value === "off" ? { animate: false } : { animate: true, anim_in: e.target.value } })}>
+                {Object.entries(meta.anims_in).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+                <option value="off">No animation</option>
+              </select>
+            </label>
+            <label>Animation out
+              <select value={s.title.anim_out} onChange={(e) => set({ title: { anim_out: e.target.value } })}>
+                {Object.entries(meta.anims_out).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+              </select>
+            </label>
             <label className="check-line"><input type="checkbox" checked={s.title.enabled} onChange={(e) => set({ title: { enabled: e.target.checked } })} /> Show title</label>
+            {hasYt && <label className="check-line"><input type="checkbox" checked={s.title.youtube_card} onChange={(e) => set({ title: { youtube_card: e.target.checked } })} /> Title also on the landscape video</label>}
+            <label className="check-line"><input type="checkbox" checked={s.outro.enabled} onChange={(e) => set({ outro: { enabled: e.target.checked } })} /> Outro at the end</label>
+            {s.outro.enabled && <label>Outro text (e.g. your account)<input defaultValue={s.outro.text} placeholder="@youraccount" onBlur={(e) => set({ outro: { text: e.target.value } })} /></label>}
           </div>
-          <TitlePreview thumb={firstThumb} s={s} reel={isReel} />
+          <TitlePreview thumb={firstThumb} s={s} reel={hasReel} />
         </div>
       </section>
 
@@ -235,42 +270,82 @@ function DroneCutter({ sid, meta }: { sid: string; meta: StudioMeta }) {
         <h3>5 · Make the video</h3>
         <div className="row-buttons">
           <button className="btn" disabled={!!running || !st.clips.length || !!uploads.length} onClick={() => act(() => api.studioGenerate(sid))}>
-            {prev ? "↻ Make preview again" : "✨ Generate preview"}
+            {anyPreview ? "↻ Make new preview" : "✨ Generate preview"}
           </button>
-          {prev && <button className="btn ghost" disabled={!!running} onClick={() => act(() => api.studioGenerate(sid, true))}>🎲 Other version (order + music)</button>}
-          {prev && <button className="btn" disabled={!!running} onClick={() => act(() => api.studioFinal(sid))}>⬆ Render final ({isReel ? "1080×1920" : s.format === "youtube4k" ? "4K" : "1920×1080"})</button>}
+          {anyPreview && <button className="btn ghost" disabled={!!running} onClick={() => act(() => api.studioGenerate(sid, true))}>🎲 Other version (order + music)</button>}
+          {anyPreview && <button className={`btn ${edited ? "" : "ghost"}`} disabled={!!running} onClick={() => act(() => api.studioPreview(sid))}>↻ Update preview (keep shots)</button>}
+          {anyPreview && <button className="btn" disabled={!!running} onClick={() => act(() => api.studioFinal(sid))}>⬆ Render final video{fmts.length > 1 ? "s" : ""}</button>}
           {running && <button className="link" onClick={() => act(() => api.studioCancel(sid))}>cancel</button>}
         </div>
+        <p className="small muted">Changed colour, title, outro, volume, transitions or a shot? Press “Update preview” – your shots stay. Changed the format or length? Press “Make new preview”.</p>
         {st.job && st.job.status !== "done" && (
           <div className="small">
             {running && <div className="vs-bar big"><span style={{ width: `${Math.round(st.job.progress * 100)}%` }} /></div>}
             <span className={st.job.status === "error" ? "banner error" : "muted"}>{st.job.error ?? `${st.job.message} ${running ? Math.round(st.job.progress * 100) + " %" : ""}`}</span>
           </div>
         )}
-        {prev && (
-          <div className="vs-result">
-            <video key={prev.file} className={isReel ? "vs-video reel" : "vs-video"} src={api.studioFile(sid, "renders", prev.file)} controls playsInline />
-            <div className="small">
-              <p><strong>Preview</strong> (small, fast) · {prev.duration.toFixed(1)} s · {st.plan?.shots.length ?? 0} shots
-                {st.plan?.music?.title ? ` · ♪ ${st.plan.music.title}${st.plan.music.bpm ? ` (${Math.round(st.plan.music.bpm)} BPM)` : ""}` : " · no music"}</p>
-              {!!st.plan?.warnings?.length && <div className="banner small">⚠ {st.plan.warnings.join(" ")}</div>}
-              {st.plan && (
-                <ol className="vs-shots">
-                  {st.plan.shots.map((x, k) => (
-                    <li key={k}>{formatTime(x.t0)} · {x.dur.toFixed(2)} s from {st.clips.find((c) => c.id === x.clip)?.name ?? x.clip} at {x.src_in.toFixed(1)} s
-                      {x.speed < 0.99 ? ` · slow motion ${Math.round(x.speed * 100)} %` : x.speed > 1.01 ? ` · ${x.speed.toFixed(1)}×` : ""}
-                      {x.hero ? " · ★ hero" : ""}{k === 0 ? " · hook" : ""}</li>
-                  ))}
-                </ol>
-              )}
-              {fin && (
-                <p><a className="btn" href={api.studioFile(sid, "renders", fin.file, true)} download>⬇ Download final MP4</a>{" "}
-                  <span className="muted">{fin.width}×{fin.height} · {fin.fps} fps · {Math.round(fin.size / 1e6)} MB · also on your Desktop</span></p>
-              )}
-            </div>
-          </div>
-        )}
+        {fmts.map((f) => (
+          <FormatResult key={f} sid={sid} fmt={f} st={st} meta={meta} busy={!!running} onState={setSt} onErr={setErr} />
+        ))}
       </section>
+    </div>
+  );
+}
+
+/** Ergebnis eines Formats: Vorschau-Video, Zeitleiste (Aufnahmen tauschen/verschieben/Tempo/Übergang), Download. */
+function FormatResult({ sid, fmt, st, meta, busy, onState, onErr }: {
+  sid: string; fmt: string; st: StudioProject; meta: StudioMeta; busy: boolean;
+  onState: (s: StudioProject) => void; onErr: (m: string) => void;
+}) {
+  const plan: StudioPlan = st.plans[fmt];
+  const r = st.renders[fmt] ?? {};
+  const reel = fmt === "reel";
+  const edit = async (k: number, action: string, value?: string | number) => {
+    try { onState(await api.studioShot(sid, fmt, k, action, value)); } catch (e) { onErr((e as Error).message); }
+  };
+  const label = reel ? "Vertical reel 9:16" : fmt === "youtube4k" ? "Landscape 16:9 (4K)" : "Landscape 16:9 (HD)";
+  return (
+    <div className="vs-format">
+      <h4>{label} · {plan.duration >= 60 ? `${(plan.duration / 60).toFixed(1)} min` : `${plan.duration} s`} · {plan.shots.length} shots
+        {plan.music?.title ? ` · ♪ ${plan.music.title}` : ""}{plan.edited ? " · changed (press “Update preview”)" : ""}</h4>
+      {!!plan.warnings?.length && <div className="banner small">⚠ {plan.warnings.join(" ")}</div>}
+      <div className="vs-result">
+        {r.preview && <video key={r.preview.file} className={reel ? "vs-video reel" : "vs-video"} src={api.studioFile(sid, "renders", r.preview.file)} controls playsInline />}
+        {r.final && (
+          <p className="small"><a className="btn" href={api.studioFile(sid, "renders", r.final.file, true)} download>⬇ Download final MP4</a><br />
+            <span className="muted">{r.final.width}×{r.final.height} · {r.final.fps} fps · {Math.round(r.final.size / 1e6)} MB · also on your Desktop</span></p>
+        )}
+      </div>
+      <div className="vs-timeline">
+        {plan.shots.map((x, k) => (
+          <div key={k} className="vs-shot small">
+            <img src={api.studioShotThumb(sid, fmt, k, `${x.clip}${x.src_in}`)} alt={`Shot ${k + 1}`} loading="lazy" />
+            <div><strong>{k + 1}</strong> · {formatTime(x.t0)} · {x.dur.toFixed(1)} s{k === 0 ? " · hook" : ""}{x.hero ? " · ★" : ""}</div>
+            <select value={x.ramp ? `ramp:${x.ramp}` : String(x.speed)} disabled={busy}
+              onChange={(e) => (e.target.value.startsWith("ramp:") ? edit(k, "ramp", e.target.value.slice(5)) : edit(k, "speed", Number(e.target.value)))}>
+              <option value="1">Normal speed</option>
+              <option value="0.5">Slow motion 50 %</option>
+              <option value="0.75">Slow 75 %</option>
+              <option value="1.5">Fast 1.5×</option>
+              <option value="2">Fast 2×</option>
+              <option value="3">Fast 3×</option>
+              {Object.entries(meta.ramps).map(([id, l]) => <option key={id} value={`ramp:${id}`}>Ramp: {l}</option>)}
+              {!["0.5", "0.75", "1", "1.5", "2", "3"].includes(String(x.speed)) && !x.ramp && <option value={String(x.speed)}>{x.speed}×</option>}
+            </select>
+            <div className="vs-shot-btns">
+              <button disabled={busy || k === 0} title="move earlier" onClick={() => edit(k, "left")}>←</button>
+              <button disabled={busy} title="use another shot here" onClick={() => edit(k, "swap")}>⇄ swap</button>
+              <button disabled={busy || k === plan.shots.length - 1} title="move later" onClick={() => edit(k, "right")}>→</button>
+            </div>
+            {k < plan.shots.length - 1 && (
+              <select className="vs-trans" value={plan.transitions?.[k]?.id ?? "cut"} disabled={busy} title="transition after this shot"
+                onChange={(e) => edit(k, "transition", e.target.value)}>
+                {Object.entries(meta.transitions).map(([id, l]) => <option key={id} value={id}>→ {l}</option>)}
+              </select>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

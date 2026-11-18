@@ -329,10 +329,13 @@ export interface ImageGenSettings {
 }
 
 export interface StudioClip { id: string; name: string; file: string; thumb: string; analysed: boolean; info: VideoInfo & { fps: number } }
-export interface StudioShot { clip: string; src_in: number; src_dur: number; t0: number; dur: number; speed: number; score: number; hero: boolean; transit: boolean }
-export interface StudioTitle { enabled: boolean; font: string; size: number; spacing: number; spacing_start: number; y: number; color: number[]; animate: boolean; start: number; duration: number }
+export interface StudioShot { clip: string; src_in: number; src_dur: number; t0: number; dur: number; speed: number; score: number; hero: boolean; transit: boolean; ramp?: string }
+export interface StudioTitle { enabled: boolean; font: string; size: number; spacing: number; spacing_start: number; y: number; color: number[]; animate: boolean; start: number; duration: number; anim_in: string; anim_out: string; youtube_card: boolean }
+export interface StudioPlan { format: string; shots: StudioShot[]; transitions: { id: string; dur: number }[]; duration: number; warnings?: string[]; music: { title?: string; bpm?: number; source?: string }; fps: number; edited?: boolean }
 export interface StudioSettings {
-  format: "reel" | "youtube" | "youtube4k"; length: number; minutes: number; location: string; subtitle: string;
+  format: "reel" | "youtube" | "youtube4k" | "both"; yt4k: boolean; length: number; minutes: number; location: string; subtitle: string;
+  outro: { enabled: boolean; text: string; duration: number }; ramps: boolean; speedup: boolean; smooth_slowmo: boolean;
+  transition: string; transition_dur: number;
   title: StudioTitle; grade: { look: string; strength: number; protect_skin: boolean };
   music: { mode: "auto" | "file" | "own" | "none"; mood: string; file: string; gain_db: number; duck: boolean };
   keep_audio: boolean; codec: "h264" | "h265"; seed: number;
@@ -341,10 +344,11 @@ export interface StudioRender { file: string; width: number; height: number; fps
 export interface StudioJob { kind: string; status: "waiting" | "running" | "done" | "error" | "cancelled"; progress: number; message: string; error: string | null }
 export interface StudioProject {
   sid: string; name: string; clips: StudioClip[]; settings: StudioSettings;
-  plan: { shots: StudioShot[]; duration: number; warnings?: string[]; music: { title?: string; bpm?: number; source?: string }; fps: number } | null;
-  renders: { preview?: StudioRender; final?: StudioRender }; job: StudioJob | null; own_music?: { title: string; bpm: number };
+  plans: Record<string, StudioPlan>;
+  renders: Record<string, { preview?: StudioRender; final?: StudioRender }>; job: StudioJob | null; own_music?: { title: string; bpm: number };
 }
-export interface StudioMeta { projects: { sid: string; name: string; clips: number; has_final: boolean }[]; fonts: string[]; looks: string[]; lengths: number[]; moods: string[] }
+export interface StudioMeta { projects: { sid: string; name: string; clips: number; has_final: boolean }[]; fonts: string[]; looks: string[]; lengths: number[]; moods: string[];
+  transitions: Record<string, string>; ramps: Record<string, string>; anims_in: Record<string, string>; anims_out: Record<string, string> }
 export interface StudioTrack { file: string; title: string; bpm: number; duration: number; mood: string; license: string }
 
 async function call<T>(url: string, init?: RequestInit): Promise<T> {
@@ -581,6 +585,10 @@ export const api = {
     call<StudioProject>(`/api/studio/${sid}/music?name=${encodeURIComponent(f.name)}`, { method: "PUT", body: f }),
   studioGenerate: (sid: string, newVariant = false) => call<StudioProject>(`/api/studio/${sid}/generate?new_variant=${newVariant ? 1 : 0}`, { method: "POST" }),
   studioFinal: (sid: string) => call<StudioProject>(`/api/studio/${sid}/final`, { method: "POST" }),
+  studioShot: (sid: string, fmt: string, k: number, action: string, value?: string | number) =>
+    call<StudioProject>(`/api/studio/${sid}/plan/${fmt}/shot/${k}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, value }) }),
+  studioShotThumb: (sid: string, fmt: string, k: number, v: string) => `/api/studio/${sid}/shot-thumb/${fmt}/${k}?v=${encodeURIComponent(v)}`,
+  studioPreview: (sid: string) => call<StudioProject>(`/api/studio/${sid}/preview`, { method: "POST" }),
   studioCancel: (sid: string) => call<StudioProject>(`/api/studio/${sid}/cancel`, { method: "POST" }),
   studioFile: (sid: string, sub: string, name: string, download = false) => `/api/studio/${sid}/file/${sub}/${encodeURIComponent(name)}${download ? "?download=1" : ""}`,
   tmList: () => call<{ own: { wid: string; name: string; count: number }[] }>("/api/thumbmaker"),

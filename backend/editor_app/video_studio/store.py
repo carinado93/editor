@@ -394,6 +394,7 @@ def make_plan(sid: str, analyses: list[dict], fmt: str) -> dict:
                         "play in slow motion or repeat. Choose a shorter length or add more clips.")
     plan = {"format": fmt, "duration": dur, "warnings": warnings, "fps": fps, "shots": shot_dicts,
             "transitions": _transitions(s, shot_dicts, mode),
+            "transition_key": [s.get("transition", "auto"), s.get("transition_dur", 0)],
             "grade": s["grade"], "title": title, "outro": s.get("outro"),
             "music": {k: v for k, v in (mus or {}).items() if k != "beats"},
             "beats": (mus or {}).get("beats", []), "keep_audio": s.get("keep_audio", False), "codec": s.get("codec"),
@@ -432,6 +433,9 @@ def _live_plan(st: dict, fmt: str) -> dict:
     plan["outro"] = s.get("outro")
     plan["keep_audio"] = s.get("keep_audio", False)
     plan["smooth_slowmo"] = s.get("smooth_slowmo", True)
+    key = [s.get("transition", "auto"), s.get("transition_dur", 0)]
+    if plan.get("transition_key") != key and not plan.get("trans_edited"):   # Übergangs-Einstellung geändert
+        plan["transitions"] = _transitions(s, plan["shots"], mode)
     if plan.get("music"):
         plan["music"] = {**plan["music"], "gain_db": s["music"].get("gain_db", 0.0)}
     return plan
@@ -540,9 +544,10 @@ def edit_shot(sid: str, fmt: str, k: int, action: str, value: str | float | None
         t = transmod.TRANSITIONS.get(tid, transmod.TRANSITIONS["cut"])
         d = 0.0 if tid == "cut" else min(t["dur"], 0.45 * min(shots[k]["dur"], shots[k + 1]["dur"]))
         plan.setdefault("transitions", [{"id": "cut", "dur": 0.0}] * (len(shots) - 1))[k] = {"id": tid, "dur": round(d, 3)}
+        plan["trans_edited"] = True
     elif action == "swap":
-        analyses = analyse_all(sid, 0, 0) if False else [analysis.refresh_moments(json.loads(f.read_text(encoding="utf-8")))
-                                                          for f in sorted((pdir(sid) / "analysis").glob("*.json"))]
+        analyses = [analysis.refresh_moments(json.loads(f.read_text(encoding="utf-8")))
+                    for f in sorted((pdir(sid) / "analysis").glob("*.json"))]
         key = "moments" if mode == "reel" else "moments_long"
         cands = sorted((m for a in analyses for m in (a.get(key) or a["moments"])), key=lambda m: m["score"], reverse=True)
         cur = shots[k]

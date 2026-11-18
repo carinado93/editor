@@ -158,3 +158,77 @@ def test_lut_path_with_windows_drive_letter_is_escaped_once(tmp_path, monkeypatc
     monkeypatch.setattr(media, "has_filter", lambda name: True)
     f, extra = color.ffmpeg_filter(Path("C:/Users/carin/editor-app/daten/grade.cube"), tmp_path)
     assert "file='C\\:/Users/carin/editor-app/daten/grade.cube'" in f and not extra
+
+
+def test_speed_ramp_pieces_sum_and_mean():
+    from editor_app.video_studio import speed
+    ps = speed.pieces("hero", 1.0, 2.4)
+    assert abs(sum(L for L, _ in ps) - 2.4) < 1e-9
+    assert min(v for _, v in ps) < 0.5 and max(v for _, v in ps) > 0.9   # Zeitlupe in der Mitte, Ränder normal
+    assert 0.6 < speed.mean_speed("hero") < 0.75
+    assert speed.pieces("", 2.0, 3.0) == [(3.0, 2.0)]
+
+
+def test_auto_transitions_match_cut_and_youtube_dissolves():
+    from editor_app.video_studio import transitions
+    shots = [{"dur": 2.0, "direction": "left", "hero": False}, {"dur": 2.0, "direction": "left", "hero": False},
+             {"dur": 2.0, "direction": "", "hero": True}, {"dur": 2.0, "direction": "", "hero": False}]
+    yt = transitions.auto(shots, "youtube")
+    assert [t["id"] for t in yt] == ["dissolve", "dissolve", "fade_black"]
+    assert all(t["dur"] <= 0.9 for t in yt)                          # nie länger als knapp die halbe Aufnahme
+    reel = transitions.auto(shots * 3, "reel", seed=1)
+    assert {t["id"] for t in reel} - {"cut"}                         # einige Übergänge …
+    assert sum(t["id"] == "cut" for t in reel) >= len(reel) / 2      # … aber meist harte Schnitte
+
+
+def test_title_animations_differ():
+    t_rise = text.Title(text="Madeira", anim_in="rise")
+    t_letters = text.Title(text="Madeira", anim_in="letters")
+    a = np.asarray(text.render_frame(t_rise, 540, 960, 0.5).getchannel("A"))
+    b = np.asarray(text.render_frame(t_letters, 540, 960, 0.5).getchannel("A"))
+    assert np.where(a > 30)[0].mean() > 0.44 * 960        # steigt von unten auf
+    assert (b > 30).sum() < (a > 30).sum()                 # erst ein Teil der Buchstaben sichtbar
+    o = text.Title(text="@carina.dorca", keep_case=True, anim_in="fade", start=0, duration=2)
+    assert text.render_frame(o, 540, 960, 1.0) is not None
+
+
+def test_render_with_transitions_ramp_and_outro(tmp_path):
+    src = _clip(tmp_path / "a.mp4", dur=14)
+    info = media.probe(src)
+    shots = [{"clip": "a", "src_in": 0.5, "src_dur": 2.5, "t0": 0, "dur": 2.5, "speed": 1.0},
+             {"clip": "a", "src_in": 4.0, "src_dur": 1.4, "t0": 2.5, "dur": 2.0, "speed": 1.0, "ramp": "hero"},
+             {"clip": "a", "src_in": 7.0, "src_dur": 4.0, "t0": 4.5, "dur": 2.0, "speed": 2.0}]
+    plan = {"format": "youtube", "shots": shots, "grade": {"look": "none"},
+            "transitions": [{"id": "dissolve", "dur": 0.5}, {"id": "swipe_left", "dur": 0.4}],
+            "outro": {"enabled": True, "text": "@test", "duration": 1.5}}
+    out = tmp_path / "o.mp4"
+    render.render(plan, {"a": {"path": src, "info": info}}, tmp_path / "w", out, "preview")
+    r = subprocess.run([media.ffprobe(), "-v", "error", "-count_frames", "-select_streams", "v", "-show_entries",
+                        "stream=nb_read_frames,width,height", "-of", "json", str(out)], capture_output=True, text=True)
+    s = json.loads(r.stdout)["streams"][0]
+    assert (s["width"], s["height"]) == (960, 540)
+    assert abs(int(s["nb_read_frames"]) - 6.5 * 30) <= 1           # Länge bleibt trotz Übergängen exakt
+
+
+def test_both_formats_and_timeline_edits(tmp_path, monkeypatch):
+    monkeypatch.setattr(store, "BASE", tmp_path)
+    sid = store.create("Both")["sid"]
+    src = _clip(tmp_path / "a.mp4", dur=40, size="480x270")
+    store.write_chunk(sid, "up12345", 0, src.read_bytes())
+    store.finish_upload(sid, "up12345", "a.mp4")
+    store.set_settings(sid, {"format": "both", "length": 15, "minutes": 0.5, "location": "Test"})
+    assert store.formats(store.load(sid)["settings"]) == ["reel", "youtube"]
+    analyses = store.analyse_all(sid)
+    for f in ("reel", "youtube"):
+        p = store.make_plan(sid, analyses, f)
+        assert abs(sum(x["dur"] for x in p["shots"]) - store.target_duration(store.load(sid)["settings"], f)) < 0.04
+        assert len(p["transitions"]) == len(p["shots"]) - 1
+    st = store.edit_shot(sid, "reel", 1, "speed", 2)
+    sh = st["plans"]["reel"]["shots"][1]
+    assert sh["speed"] == 2 and abs(sh["src_dur"] - sh["dur"] * 2) < 0.15 or sh["src_dur"] < sh["dur"] * 2
+    before = [dict(x) for x in st["plans"]["reel"]["shots"]]
+    st = store.edit_shot(sid, "reel", 2, "left")
+    after = st["plans"]["reel"]["shots"]
+    assert after[1]["clip"] == before[2]["clip"] and abs(after[1]["dur"] - before[1]["dur"]) < 1e-9
+    st = store.edit_shot(sid, "reel", 0, "transition", "flash")
+    assert st["plans"]["reel"]["transitions"][0]["id"] == "flash" and st["plans"]["reel"]["edited"]

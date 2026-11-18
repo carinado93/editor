@@ -1624,11 +1624,13 @@ class StudioOrderBody(BaseModel):
 
 @app.get("/api/studio")
 def studio_list():
-    from .video_studio import music, store, text
+    from .video_studio import music, speed, store, text, transitions
     from .video_studio.color import PRESETS
 
     return {"projects": store.list_all(), "fonts": list(text.FONTS), "looks": list(PRESETS),
-            "lengths": store.LENGTHS, "moods": music.MOODS}
+            "lengths": store.LENGTHS, "moods": music.MOODS,
+            "transitions": {k: v["label"] for k, v in transitions.TRANSITIONS.items()},
+            "ramps": speed.LABELS, "anims_in": text.ANIMS_IN, "anims_out": text.ANIMS_OUT}
 
 
 @app.post("/api/studio")
@@ -1711,6 +1713,32 @@ def studio_generate(sid: str, new_variant: int = 0):
     if new_variant:   # andere Reihenfolge/anderer Song aus demselben Material
         store.update(sid, lambda st: st["settings"].__setitem__("seed", int(st["settings"].get("seed", 0)) + 1))
     return store.enqueue(sid, "generate")
+
+
+class StudioShotEdit(BaseModel):
+    action: str
+    value: str | float | None = None
+
+
+@app.put("/api/studio/{sid}/plan/{fmt}/shot/{k}")
+def studio_shot_edit(sid: str, fmt: str, k: int, body: StudioShotEdit):
+    from .video_studio import store
+
+    return store.edit_shot(sid, fmt, k, body.action, body.value)
+
+
+@app.get("/api/studio/{sid}/shot-thumb/{fmt}/{k}")
+def studio_shot_thumb(sid: str, fmt: str, k: int):
+    from .video_studio import store
+
+    return FileResponse(store.shot_thumb(sid, fmt, k), media_type="image/jpeg")
+
+
+@app.post("/api/studio/{sid}/preview")
+def studio_preview(sid: str):
+    from .video_studio import store
+
+    return store.enqueue(sid, "preview")
 
 
 @app.post("/api/studio/{sid}/final")
