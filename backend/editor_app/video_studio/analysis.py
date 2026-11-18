@@ -189,6 +189,11 @@ def moments(clip_id: str, samples: list[Sample], cuts: list[int], min_len: float
         t0, t1 = t[a] - 0.5 / SAMPLE_FPS, t[b - 1] + 0.5 / SAMPLE_FPS
         # 0,25 s Abstand zu Szenengrenzen (keine halben Bilder vom Wechsel)
         t0, t1 = t0 + (0.25 if a else 0.05), t1 - (0.25 if b < len(samples) else 0.05)
+        # Start und Landung der Drohne (Boden nah, Kamera kippt) weglassen: bei längeren Clips
+        # die ersten 2 s und die letzten 6 s nicht verwenden
+        clip_end = t[-1] + 0.5 / SAMPLE_FPS
+        if clip_end > 25:
+            t0, t1 = max(t0, 2.0), min(t1, clip_end - 6.0)
         L = min(max_len, t1 - t0)
         if L < min(min_len, 1.2):
             continue
@@ -235,3 +240,16 @@ def analyse(clip_id: str, path: Path, info: dict | None = None) -> dict:
             "samples": [asdict(s) for s in samples], "moments": [m.to_dict() for m in ms],
             # längere Momente (4–10 s) für YouTube-Aufnahmen
             "moments_long": [m.to_dict() for m in moments(clip_id, samples, cuts, 4.0, 10.0, 1.0)]}
+
+
+def refresh_moments(res: dict) -> dict:
+    """Momente aus gespeicherten Messwerten neu berechnen (ohne das Video erneut zu lesen),
+    damit verbesserte Regeln auch für schon analysierte Clips gelten."""
+    samples = [Sample(**x) for x in res.get("samples", [])]
+    if not samples:
+        return res
+    ts = [s.t for s in samples]
+    cuts = [min(range(len(ts)), key=lambda i: abs(ts[i] - c)) for c in res.get("scenes", [])]
+    res["moments"] = [m.to_dict() for m in moments(res["clip"], samples, cuts)]
+    res["moments_long"] = [m.to_dict() for m in moments(res["clip"], samples, cuts, 4.0, 10.0, 1.0)]
+    return res

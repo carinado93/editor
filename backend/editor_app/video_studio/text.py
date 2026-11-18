@@ -91,12 +91,26 @@ def _draw_tracked(draw: ImageDraw.ImageDraw, text: str, f: ImageFont.FreeTypeFon
     return int(cx - total / 2), int(y), int(cx + total / 2), int(y + asc + desc)
 
 
+def fit_size(t: Title, W: int, max_width: float = 0.86) -> int:
+    """Schriftgröße so, dass der Titel auch mit der weitesten Laufweite (Anfang der Animation) ins Bild passt."""
+    text = " ".join(t.text.upper().split())
+    size = max(10, int(W * t.size))
+    sp = max(t.spacing, t.spacing_start if t.animate else t.spacing)
+    for _ in range(30):
+        f = ImageFont.truetype(str(font_path(t.font)), size)
+        total = sum(f.getlength(ch) for ch in text) + sp * size * max(0, len(text) - 1)
+        if total <= W * max_width or size <= 10:
+            break
+        size = max(10, int(size * 0.94))
+    return size
+
+
 def render_frame(t: Title, W: int, H: int, time: float) -> Image.Image | None:
     alpha, sp = state(t, time)
     if alpha <= 0.003:
         return None
     text = " ".join(t.text.upper().split())
-    size = max(10, int(W * t.size))
+    size = fit_size(t, W)
     f = ImageFont.truetype(str(font_path(t.font)), size)
     layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     d = ImageDraw.Draw(layer)

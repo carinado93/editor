@@ -300,7 +300,7 @@ def analyse_all(sid: str, a: float = 0.0, b: float = 0.35) -> list[dict]:
                     if cc["id"] == cid:
                         cc["analysed"] = True
             update(sid, mark)
-        out.append(json.loads(f.read_text(encoding="utf-8")))
+        out.append(analysis.refresh_moments(json.loads(f.read_text(encoding="utf-8"))))
     return out
 
 
