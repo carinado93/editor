@@ -1631,7 +1631,8 @@ def studio_list():
             "lengths": store.LENGTHS, "moods": music.MOODS,
             "transitions": {k: v["label"] for k, v in transitions.TRANSITIONS.items()},
             "ramps": speed.LABELS, "anims_in": text.ANIMS_IN, "anims_out": text.ANIMS_OUT,
-            "templates": text.TEMPLATES}
+            "templates": text.TEMPLATES, "pro_tools": __import__("editor_app.video_studio.ai_tools",
+                                                                    fromlist=["status"]).status()}
 
 
 @app.post("/api/studio")

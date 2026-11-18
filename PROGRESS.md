@@ -123,6 +123,41 @@
     no speed ramps yet (step 3); not yet tested on her real DJI footage (D-Log, 4K HEVC); music library empty until
     she adds tracks.
 
+- [x] **Video Studio – steps 3–8 (18/19 Nov 2026, branch `video-studio`)**
+  - "Both" output: reel 9:16 + YouTube 16:9 (HD/4K) planned and rendered in one go; plans/renders stored per format
+    (old single-plan projects migrate on load).
+  - Step 3:
+    - speed ramps (`speed.py`: hero/montage/bullet/flash curves, eased, rendered as 12 constant-speed pieces;
+      minterpolate optical-flow slow motion in the final);
+    - auto ramp on the best calm shots (not the hook);
+    - transit shots 2×;
+    - timeline per format (swap/move/speed/ramp/transition per shot, thumbnails);
+    - "Update preview" re-renders the existing plan with the current colour/title/outro/transition settings.
+  - Step 4:
+    - transitions (`transitions.py`, xfade chain centred on the beat cut, all inputs normalised to one timebase);
+    - auto mode: reel mostly cuts, match-cut swipe by direction, zoom into hero, dissolve; YouTube dissolves +
+      dip to black;
+    - title animations in (tracking/fade/rise/letters/blur) and out (fade/sink/none);
+    - outro text (e.g. account).
+  - Step 5/6:
+    - per-shot panel with Filters (all looks rendered on her own frame, before/after slider, strength,
+      .cube import), Adjust, HSL, Effects (sharpen/clarity/vignette/grain/denoise/deflicker/stabilize via vidstab),
+      Crop & zoom (position + zoom keyframe start→end), apply to all;
+    - per-shot LUT bake;
+    - auto-reframe for vertical (saliency window);
+    - brightness matching across shots;
+    - "Drone crisp".
+  - Step 7 (partly): text templates (location pin, cinematic, caption, subscribe, thank you); loudness normalise
+    −14 LUFS. Auto captions not added to Video Studio (drone clips have no speech; the project editor already has
+    Whisper subtitles).
+  - Step 8 (partly): 25 transitions; HSL per colour. Curves, colour wheels and masks are not built yet.
+  - Step 9: ready: stabilize, denoise, deflicker, optical flow, auto-reframe. The generative tools are listed in
+    `video_studio/ai_tools.py` with engines and licences, but not built yet: enhance, object removal, matting,
+    extend, remix, stylize, relight, lip-sync, eye contact.
+  - Tested on her DJI Mini 4 Pro clip (4K HEVC, 3:54): both formats, swap, look/text edits + update preview.
+  - Tests: 23 in `test_video_studio.py`.
+  - Fixed on main 18 Nov: Windows LUT path escaping (`C\:`) made Generate fail.
+
 ### Wartet auf Carina
 - [ ] Neue Version holen (Git: Pull), ein Video mit Buzzwords + eingebrannten Untertiteln rendern und sagen, ob Stil,
   Größe und Position passen

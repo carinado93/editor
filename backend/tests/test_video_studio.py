@@ -232,3 +232,56 @@ def test_both_formats_and_timeline_edits(tmp_path, monkeypatch):
     assert after[1]["clip"] == before[2]["clip"] and abs(after[1]["dur"] - before[1]["dur"]) < 1e-9
     st = store.edit_shot(sid, "reel", 0, "transition", "flash")
     assert st["plans"]["reel"]["transitions"][0]["id"] == "flash" and st["plans"]["reel"]["edited"]
+
+
+def test_auto_reframe_finds_the_busy_side():
+    img = Image.new("RGB", (1920, 1080), (120, 150, 200))
+    rng = np.random.default_rng(0)
+    busy = (rng.random((1080, 500, 3)) * 255).astype(np.uint8)   # viel Struktur rechts
+    img.paste(Image.fromarray(busy), (1350, 0))
+    assert analysis.best_xpos(img, 9 / 16) > 0.75
+
+
+def test_templates_and_custom_lut(tmp_path):
+    for tpl in text.TEMPLATES:
+        im = text.template_frame(tpl, "Madeira", 540, 960, 1.0, 3.0)
+        assert im is not None and im.getbbox(), tpl
+    lut = color.bake(color.params_for("bw_drama"))
+    f = color.write_cube(lut, tmp_path / "bw.cube")
+    half = color.read_cube(color.custom_lut_file(f, 0.5, {}, tmp_path / "c"))
+    x = np.linspace(0, 1, half.shape[0])
+    ident = np.stack(np.meshgrid(x, x, x, indexing="ij")[::-1], -1)
+    assert np.allclose(half, ident + (lut - ident) * 0.5, atol=1e-5)    # Stärke 50 % = halbe Mischung
+
+
+def test_render_with_zoom_keyframes_effects_stabilize_and_text(tmp_path):
+    src = _clip(tmp_path / "a.mp4", dur=8)
+    info = media.probe(src)
+    shots = [{"clip": "a", "src_in": 0.5, "src_dur": 3.0, "t0": 0, "dur": 3.0, "speed": 1.0, "zoom": 1.0,
+              "zoom_end": 1.3, "xpos": 0.8, "fx": {"sharpen": 40, "vignette": 50, "grain": 20, "denoise": True},
+              "stabilize": "recommended", "adjust": {"exposure": 0.3}, "look": "golden_hour"},
+             {"clip": "a", "src_in": 4.0, "src_dur": 2.0, "t0": 3.0, "dur": 2.0, "speed": 1.0}]
+    plan = {"format": "reel", "shots": shots, "grade": {"look": "vivid_travel", "fx": {"clarity": 20}},
+            "texts": [{"tpl": "location_pin", "text": "Madeira", "t0": 0.5, "dur": 2.0}]}
+    out = tmp_path / "o.mp4"
+    res = render.render(plan, {"a": {"path": src, "info": info}}, tmp_path / "w", out, "preview")
+    assert abs(media.probe(out)["duration"] - 5.0) < 0.1 and res["width"] == 540
+
+
+def test_shot_panel_edits(tmp_path, monkeypatch):
+    monkeypatch.setattr(store, "BASE", tmp_path)
+    sid = store.create("Edits")["sid"]
+    src = _clip(tmp_path / "a.mp4", dur=30, size="480x270")
+    store.write_chunk(sid, "up12345", 0, src.read_bytes())
+    store.finish_upload(sid, "up12345", "a.mp4")
+    store.make_plan(sid, store.analyse_all(sid), "reel")
+    st = store.edit_shot(sid, "reel", 1, "set", {"adjust": {"exposure": 0.4}, "fx": {"sharpen": 30}, "look": "bw_drama",
+                                                 "zoom": 1.2, "evil": 1})
+    sh = st["plans"]["reel"]["shots"][1]
+    assert sh["look"] == "bw_drama" and sh["zoom"] == 1.2 and "evil" not in sh
+    st = store.edit_shot(sid, "reel", 1, "apply_all")
+    assert all(x.get("look") == "bw_drama" for x in st["plans"]["reel"]["shots"])
+    st = store.edit_shot(sid, "reel", 0, "add_text", {"tpl": "subscribe", "text": "Subscribe"})
+    assert st["plans"]["reel"]["texts"][0]["tpl"] == "subscribe"
+    looks = store.looks_preview(sid, "reel", 0, 1.0)
+    assert len(looks) >= 10 and (tmp_path / sid / "work" / "looks" / looks[0]["file"]).exists()

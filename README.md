@@ -117,6 +117,27 @@ Was die App automatisch macht:
 - Die beste Aufnahme kommt zuerst (Hook).
 - Die Schnitte liegen genau auf dem Takt der Musik, und die Länge stimmt aufs Bild genau.
 
+**Neu (Schritte 3–8):**
+- **„Both“**: Hochformat-Reel *und* Querformat-Video mit einem Klick.
+- **Tempo:** Zeitlupen-Rampen auf den schönsten ruhigen Aufnahmen und doppeltes Tempo bei langen Fahrten.
+  Im Final werden Zeitlupen weich gerechnet (Zwischenbilder).
+- **Zeitleiste:** Unter jedem Video siehst du die Aufnahmen. Pro Aufnahme kannst du sie tauschen (⇄),
+  verschieben (← →), das Tempo oder eine Rampe ändern und den Übergang nach ihr wählen.
+- **Klick auf ein Aufnahme-Bild** öffnet das Bearbeiten:
+  - **Filters:** alle Looks mit *deinem* Bild, Vorher/Nachher-Schieber, Stärke, eigene .cube-LUT importieren.
+  - **Adjust:** Belichtung, Kontrast, Lichter, Tiefen, Weiß, Schwarz, Temperatur, Tönung, Sättigung, Dynamik, Verblassen.
+  - **HSL:** Sättigung und Farbton pro Farbe.
+  - **Effects:** Schärfe, Klarheit, Vignette, Körnung, Entrauschen, Flackern entfernen, Stabilisieren.
+  - **Crop & zoom:** Bildausschnitt (bei Hochkant sucht die App ihn automatisch) und langsames Heranfahren.
+  - **Text:** Vorlagen (Ort mit Pin, Kino-Titel, Untertitel, Abonnieren-Knopf, Danke fürs Zuschauen).
+  - „Auf alle Aufnahmen übertragen“.
+- **Übergänge:** 25 Stück plus Automatik (meist harte Schnitte auf dem Takt, Wisch in Bewegungsrichtung,
+  Zoom vor schönen Momenten, ruhige Überblendungen bei YouTube).
+- **Titel:** 5 Einblend- und 3 Ausblend-Animationen, optionaler Abspann (z. B. dein Account).
+- **Stil:** Schärfe, Klarheit, Vignette, Körnung, „Drone crisp“, alle Aufnahmen stabilisieren, Entrauschen,
+  Helligkeit der Aufnahmen angleichen, Lautstärke auf −14 LUFS.
+- Nach Änderungen auf **„Update preview (keep shots)“** klicken. Bei anderem Format oder anderer Länge auf **„Make new preview“**.
+
 **Musik:** Lege lizenzfreie Stücke (YouTube Audio Library, Pixabay Music) in den Ordner `assets/music/`.
 Die App erkennt Tempo (BPM) und Stimmung von selbst. Die Angaben stehen in `assets/music/library.json`
 und dürfen geändert werden. Bekannte Songs aus den Charts können auf YouTube/Instagram Content-ID-Ansprüche
