@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { MomentPicker } from "./MomentPicker";
 import { ShotPanel } from "./ShotPanel";
 import { api, formatTime, type StudioMeta, type StudioPlan, type StudioProject, type StudioSettings, type StudioTrack } from "../api";
 
@@ -47,6 +48,7 @@ function DroneCutter({ sid, meta }: { sid: string; meta: StudioMeta }) {
   const [musicInfo, setMusicInfo] = useState<{ folder: string; note: string }>({ folder: "", note: "" });
   const [drag, setDrag] = useState<string | null>(null);
   const [draft, setDraft] = useState<{ location: string; subtitle: string } | null>(null);
+  const [picking, setPicking] = useState<string | null>(null);
   const running = st?.job && (st.job.status === "waiting" || st.job.status === "running");
 
   useEffect(() => {
@@ -114,7 +116,12 @@ function DroneCutter({ sid, meta }: { sid: string; meta: StudioMeta }) {
         </div>
         {err && <div className="banner error small">⚠ {err}</div>}
 
-        <h3>1 · Your clips</h3>
+        <div className="carousel-head">
+          <h3>1 · Your clips</h3>
+          {!!st.clips.length && st.clips.some((c) => !c.analysed) && (
+            <button className="btn ghost small-btn" disabled={!!running} onClick={() => act(() => api.studioAnalyse(sid))}>🔎 Analyse clips (for suggestions)</button>
+          )}
+        </div>
         <p className="small muted">mp4 / mov, up to 4K. One clip works too. Drag to change the order (for YouTube the order is kept roughly).</p>
         <div className="vs-clips">
           {st.clips.map((c) => (
@@ -125,7 +132,11 @@ function DroneCutter({ sid, meta }: { sid: string; meta: StudioMeta }) {
               <div className="small"><strong>{c.name}</strong><br />
                 <span className="muted">{formatTime(c.info.duration)} · {c.info.width}×{c.info.height} · {Math.round(c.info.fps)} fps{c.analysed ? " · ✓ analysed" : ""}</span>
               </div>
-              <button className="link small" disabled={!!running} onClick={() => confirm(`Remove ${c.name}?`) && act(() => api.studioDeleteClip(sid, c.id))}>remove</button>
+              <span className="row-buttons">
+                <button className="link small" onClick={() => setPicking(picking === c.id ? null : c.id)}>
+                  🎯 choose seconds{(c.must?.length || c.never?.length) ? ` (${(c.must?.length ?? 0)}✓ ${(c.never?.length ?? 0)}✗)` : ""}</button>
+                <button className="link small" disabled={!!running} onClick={() => confirm(`Remove ${c.name}?`) && act(() => api.studioDeleteClip(sid, c.id))}>remove</button>
+              </span>
             </div>
           ))}
           {uploads.map((u) => (
@@ -135,11 +146,14 @@ function DroneCutter({ sid, meta }: { sid: string; meta: StudioMeta }) {
               <span className="muted">{Math.round(u.sent / 1e6)} / {Math.round(u.size / 1e6)} MB</span>
             </div>
           ))}
-          <label className="vs-clip vs-add">
+          <label className="vs-clip vs-add" key="add">
             + Add clips
             <input type="file" accept="video/*,.mov,.mp4" multiple hidden onChange={(e) => { if (e.target.files) void upload(e.target.files); e.target.value = ""; }} />
           </label>
         </div>
+        {picking && st.clips.find((c) => c.id === picking) && (
+          <MomentPicker sid={sid} clip={st.clips.find((c) => c.id === picking)!} busy={!!running} onState={setSt} onErr={setErr} />
+        )}
       </section>
 
       <section className="card">

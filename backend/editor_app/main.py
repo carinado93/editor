@@ -1750,6 +1750,39 @@ async def studio_lut(sid: str, request: Request, name: str = "look.cube"):
     return store.import_lut(sid, name, await request.body())
 
 
+class StudioRangesBody(BaseModel):
+    must: list[list[float]] = []
+    never: list[list[float]] = []
+
+
+@app.put("/api/studio/{sid}/clips/{cid}/ranges")
+def studio_ranges(sid: str, cid: str, body: StudioRangesBody):
+    from .video_studio import store
+
+    return store.set_ranges(sid, cid, body.must, body.never)
+
+
+@app.get("/api/studio/{sid}/clips/{cid}/suggestions")
+def studio_suggestions(sid: str, cid: str):
+    from .video_studio import store
+
+    return {"suggestions": store.suggestions(sid, cid)}
+
+
+@app.get("/api/studio/{sid}/frame/{cid}")
+def studio_frame(sid: str, cid: str, t: float = 0.0):
+    from .video_studio import store
+
+    return FileResponse(store.frame_jpg(sid, cid, t), media_type="image/jpeg")
+
+
+@app.post("/api/studio/{sid}/analyse")
+def studio_analyse(sid: str):
+    from .video_studio import store
+
+    return store.enqueue(sid, "analyse")
+
+
 @app.post("/api/studio/{sid}/preview")
 def studio_preview(sid: str):
     from .video_studio import store

@@ -106,9 +106,9 @@ def plan(moments: list[dict], duration: float, mode: str = "reel", beats: list[f
     cuts = cut_times(duration, mode, beats, fps, seed, first_min)
     slots = [b - a for a, b in zip(cuts[:-1], cuts[1:])]
     rnd = random.Random(seed)
-    best = max(m["score"] for m in moments)
+    best = max((m["score"] for m in moments if not m.get("must")), default=max(m["score"] for m in moments))
     # wackelige/dunkle/unscharfe Momente nur, wenn sonst nichts mehr frei ist (stehen am Ende der Liste)
-    good = [m for m in moments if m["score"] >= 0.55 * best]
+    good = [m for m in moments if m["score"] >= 0.55 * best]   # enthält Carinas "unbedingt nehmen" (Punkte 10)
     weak = [m for m in moments if m["score"] < 0.55 * best]
     jitter = lambda m: m["score"] + rnd.uniform(0, 0.03 if seed else 0)  # noqa: E731 – Varianten
     pool = sorted(good, key=jitter, reverse=True) + sorted(weak, key=jitter, reverse=True)
@@ -132,8 +132,12 @@ def plan(moments: list[dict], duration: float, mode: str = "reel", beats: list[f
             return False
         # sieht nicht (fast) gleich aus wie eine schon gewählte Aufnahme – auch aus einem anderen Clip
         f = (m.get("info") or {}).get("feat") or []
-        limit = 0.9 + 0.08 * (1 - min(1.0, factor))   # streng zuerst, dann etwas lockerer
+        limit = 0.72 + 0.2 * (1 - min(1.0, factor))   # streng zuerst, dann lockerer
         return all(analysis.similarity(f, g) < limit for g in feats)
+
+    def novelty(m: dict) -> float:
+        f = (m.get("info") or {}).get("feat") or []
+        return 1.0 - max([analysis.similarity(f, g) for g in feats] or [0.0])
 
     def take(m: dict, L: float, speed: float = 1.0) -> Shot | None:
         src_L = L * speed
@@ -165,6 +169,10 @@ def plan(moments: list[dict], duration: float, mode: str = "reel", beats: list[f
             cands = sorted(cands, key=lambda m: m["clip"] == prev.clip)
         sh = None
         for pass_ in range(4):
+            # unter den guten Kandidaten den nehmen, der am wenigsten wie schon Gewähltes aussieht
+            if feats and i != 0:
+                top = cands[:40]
+                cands = sorted(top, key=lambda m: m["score"] * (0.35 + 0.65 * novelty(m)), reverse=True) + cands[40:]
             for m in cands:
                 if pass_ == 0 and prev and m.get("scene") == _scene_of(prev, pool) and m["clip"] == prev.clip:
                     continue   # nicht zweimal hintereinander dieselbe Szene

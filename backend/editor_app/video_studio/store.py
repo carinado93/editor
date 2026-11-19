@@ -280,6 +280,8 @@ def _work() -> None:
             _set_job(sid, status="running", message="Starting …")
             if kind == "generate":
                 generate(sid)
+            elif kind == "analyse":
+                analyse_all(sid, 0.0, 1.0)
             elif kind == "final":
                 render_final(sid)
             elif kind == "preview":
@@ -390,7 +392,7 @@ def make_plan(sid: str, analyses: list[dict], fmt: str) -> dict:
     dur = target_duration(s, fmt)
     mode = "reel" if fmt == "reel" else "youtube"
     key = "moments" if mode == "reel" else "moments_long"
-    moments = [m for a in analyses for m in (a.get(key) or a["moments"])]
+    moments = _apply_ranges(st, [m for a in analyses for m in (a.get(key) or a["moments"])], analyses)
     fps = render.out_fps([c["info"] for c in st["clips"]])
     mus = _music_for(st, dur, fmt)
     title = _title(s, mode)
@@ -418,6 +420,79 @@ def make_plan(sid: str, analyses: list[dict], fmt: str) -> dict:
             "smooth_slowmo": s.get("smooth_slowmo", True), "created": time.time()}
     update(sid, lambda st_: st_["plans"].__setitem__(fmt, plan))
     return plan
+
+
+def _apply_ranges(st: dict, moments: list[dict], analyses: list[dict]) -> list[dict]:
+    """Carinas Auswahl: "nie nehmen"-Bereiche raus, "unbedingt nehmen"-Bereiche als beste Momente dazu."""
+    out = []
+    by_clip = {c["id"]: c for c in st["clips"]}
+    for m in moments:
+        never = (by_clip.get(m["clip"]) or {}).get("never") or []
+        if any(m["start"] < b and a < m["start"] + m["dur"] for a, b in never):
+            continue
+        out.append(m)
+    samples = {a["clip"]: a.get("samples") or [] for a in analyses}
+    for c in st["clips"]:
+        for k, (a, b) in enumerate(c.get("must") or []):
+            ss = [x for x in samples.get(c["id"], []) if a <= x["t"] <= b and x.get("feat")]
+            feat = [round(float(v), 3) for v in np.mean([x["feat"] for x in ss], axis=0)] if ss else []
+            out.append({"clip": c["id"], "start": float(a), "dur": float(b - a), "score": 10.0 - k * 0.01,
+                        "hero": True, "transit": False, "direction": "", "scene": -1 - k, "must": True,
+                        "info": {"feat": feat}})
+    return sorted(out, key=lambda m: m["score"], reverse=True)
+
+
+def set_ranges(sid: str, cid: str, must: list, never: list) -> dict:
+    def clean(rs):
+        out = []
+        for r in rs or []:
+            a, b = float(r[0]), float(r[1])
+            if b - a >= 0.5:
+                out.append([round(max(0.0, a), 2), round(b, 2)])
+        return out[:40]
+
+    def fn(st):
+        for c in st["clips"]:
+            if c["id"] == cid:
+                c["must"], c["never"] = clean(must), clean(never)
+        st["plans"] = {}
+    return update(sid, fn)
+
+
+def suggestions(sid: str, cid: str, n: int = 12) -> list[dict]:
+    """Vorschläge für gute Stellen eines Clips (für "diese Sekunden nehmen")."""
+    f = pdir(sid) / "analysis" / f"{cid}.json"
+    if not f.exists():
+        raise UserError("Please press “Analyse clips” first.")
+    a = analysis.refresh_moments(json.loads(f.read_text(encoding="utf-8")))
+    ms = sorted(a["moments"], key=lambda m: m["score"], reverse=True)[:n]
+    best = max([m["score"] for m in ms] or [1])
+    # Vorschaubilder gleich mit erzeugen (3 parallel), damit die Seite sie sofort zeigen kann
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(3) as ex:
+        list(ex.map(lambda m: _safe_frame(sid, cid, round(m["start"] + m["dur"] / 2, 1)), ms))
+    return sorted([{"start": m["start"], "end": round(m["start"] + m["dur"], 2), "score": round(m["score"] / best, 2),
+                    "hero": m.get("hero", False), "direction": m.get("direction", "")} for m in ms],
+                  key=lambda x: x["start"])
+
+
+def _safe_frame(sid: str, cid: str, t: float) -> None:
+    try:
+        frame_jpg(sid, cid, t)
+    except UserError:
+        pass
+
+
+def frame_jpg(sid: str, cid: str, t: float) -> Path:
+    d = pdir(sid) / "work" / "frames"
+    d.mkdir(parents=True, exist_ok=True)
+    f = d / f"{cid}_{int(round(t * 10))}.jpg"
+    if not f.exists():
+        img = grab(sid, cid, t, 320)
+        if img is None:
+            raise UserError("File not found.")
+        img.save(f, quality=82)
+    return f
 
 
 def grab(sid: str, clip_id: str, t: float, width: int = 480):

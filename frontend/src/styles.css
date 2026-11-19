@@ -2159,3 +2159,12 @@ a.chip { text-decoration: none; color: inherit; }
 .vs-shot-video-wrap { display: flex; gap: 10px; align-items: flex-end; margin-bottom: 10px; flex-wrap: wrap; }
 .vs-shot-video { width: 520px; max-width: 100%; border-radius: 10px; background: #000; }
 .vs-shot-video.reel { width: 240px; }
+.vs-picker { background: #fff; border: 1px solid rgba(100, 68, 165, 0.2); border-radius: 12px; padding: 10px 12px; margin-top: 10px; }
+.vs-sugs { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin: 6px 0; }
+.vs-sug { display: grid; gap: 3px; border: 2px solid transparent; border-radius: 8px; padding: 3px; }
+.vs-sug img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 6px; display: block; }
+.vs-sug.must { border-color: #4a9d5b; } .vs-sug.never { border-color: var(--rot); opacity: 0.6; }
+.vs-sug-btns { display: flex; gap: 3px; }
+.vs-sug-btns button { flex: 1; border: 1px solid rgba(100, 68, 165, 0.35); background: #fff; border-radius: 6px; cursor: pointer; font-size: 0.75rem; }
+.vs-sug-btns button.on { background: var(--lila); color: #fff; }
+.vs-time { width: 80px; }

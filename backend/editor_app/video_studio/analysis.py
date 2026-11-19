@@ -227,11 +227,27 @@ def _mean_feat(ss: list) -> list:
     return [round(float(x), 3) for x in np.mean(np.array(fs), axis=0)]
 
 
+def _colour_sig(f: list) -> np.ndarray:
+    """Farb-Fingerabdruck aus dem Mini-Bild: Farbton-Verteilung (12 Stufen, nach Sättigung gewichtet) + Helligkeit."""
+    import cv2
+    px = (np.clip(np.array(f, np.float32).reshape(-1, 1, 3), 0, 1) * 255).astype(np.uint8)
+    hsv = cv2.cvtColor(px, cv2.COLOR_RGB2HSV).reshape(-1, 3).astype(np.float32)
+    h = np.zeros(15)
+    for hh, ss, vv in hsv:
+        w = ss / 255.0
+        h[int(hh / 180 * 12) % 12] += w
+        h[12 + min(2, int(vv / 86))] += 1 - w * 0.5
+    return h / (h.sum() + 1e-6)
+
+
 def similarity(a: list, b: list) -> float:
-    """0..1 – wie ähnlich zwei Aufnahmen aussehen (Mini-Bilder)."""
+    """0..1 – wie ähnlich zwei Aufnahmen aussehen: Bildaufbau (Mini-Bild) ODER gleiche Farben/Motiv
+    (Wasser, Fels, Wald …). Der größere Wert zählt."""
     if not a or not b or len(a) != len(b):
         return 0.0
-    return float(1.0 - np.abs(np.array(a) - np.array(b)).mean() * 4)
+    spatial = 1.0 - float(np.abs(np.array(a) - np.array(b)).mean()) * 4
+    colour = float(np.minimum(_colour_sig(a), _colour_sig(b)).sum())
+    return max(spatial, colour * 0.92)
 
 
 def _direction(dx: float, dy: float, zoom: float) -> str:
@@ -290,9 +306,18 @@ def moments(clip_id: str, samples: list[Sample], cuts: list[int], min_len: float
                 if rev:
                     mean_q *= float(np.exp(-0.7 * rev))
                 mean_q /= (1.0 + 0.3 * unsteady)
-                smooth = (jit < 3.0 or jit < 0.12 * mot) and rev == 0   # schnelle Fahrt: relatives Wackeln zählt
+                # Schneller Schwenk zur Seite (Drohne dreht sich): wirkt hektisch → kaum verwenden.
+                # Langsame Bögen (Orbit, < ~4 % Bildbreite/s) sind in Ordnung.
+                lat = np.array([abs(s.dx) for s in ss])
+                pan = float(np.median(lat)) > 14 and float(np.median(lat)) > 2 * abs(zm) + 4
+                surge = float(lat.max()) > 2.5 * float(np.median(lat)) + 25   # ruckartig schneller werden
+                if pan:
+                    mean_q *= 0.3
+                if surge:
+                    mean_q *= 0.5
+                smooth = (jit < 3.0 or jit < 0.12 * mot) and rev == 0 and not pan and not surge
                 hero = smooth and mean_q > 0.62 and float(np.mean([s.color for s in ss])) > 0.35 and mot < 25
-                transit = smooth and mot > 18
+                transit = smooth and mot > 18 and abs(zm) + abs(dy) > abs(dx)   # nur Vorwärts-/Höhenfahrt beschleunigen
                 cands.append(Moment(clip_id, round(float(st), 3), round(float(dur), 3), round(mean_q, 4), hero, transit,
                                     _direction(dx, dy, zm), si,
                                     {"motion": round(mot, 2), "jitter": round(jit, 2), "reversals": rev,

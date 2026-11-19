@@ -328,7 +328,7 @@ export interface ImageGenSettings {
   providers: Record<string, { label: string; cost: string; needs_key: boolean }>;
 }
 
-export interface StudioClip { id: string; name: string; file: string; thumb: string; analysed: boolean; info: VideoInfo & { fps: number } }
+export interface StudioClip { id: string; name: string; file: string; thumb: string; analysed: boolean; info: VideoInfo & { fps: number }; must?: number[][]; never?: number[][] }
 export interface StudioShot {
   clip: string; src_in: number; src_dur: number; t0: number; dur: number; speed: number; score: number; hero: boolean; transit: boolean; ramp?: string;
   adjust?: Record<string, number | Record<string, number>>; fx?: Record<string, number | boolean>; look?: string; strength?: number;
@@ -598,6 +598,12 @@ export const api = {
   studioLooks: (sid: string, fmt: string, k: number, strength: number) =>
     call<{ looks: { look: string; file: string }[] }>(`/api/studio/${sid}/looks/${fmt}/${k}?strength=${strength}`),
   studioLut: (sid: string, f: File) => call<StudioProject>(`/api/studio/${sid}/lut?name=${encodeURIComponent(f.name)}`, { method: "PUT", body: f }),
+  studioRanges: (sid: string, cid: string, must: number[][], never: number[][]) =>
+    call<StudioProject>(`/api/studio/${sid}/clips/${cid}/ranges`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ must, never }) }),
+  studioSuggestions: (sid: string, cid: string) =>
+    call<{ suggestions: { start: number; end: number; score: number; hero: boolean; direction: string }[] }>(`/api/studio/${sid}/clips/${cid}/suggestions`),
+  studioFrameUrl: (sid: string, cid: string, t: number) => `/api/studio/${sid}/frame/${cid}?t=${t.toFixed(1)}`,
+  studioAnalyse: (sid: string) => call<StudioProject>(`/api/studio/${sid}/analyse`, { method: "POST" }),
   studioPreview: (sid: string) => call<StudioProject>(`/api/studio/${sid}/preview`, { method: "POST" }),
   studioCancel: (sid: string) => call<StudioProject>(`/api/studio/${sid}/cancel`, { method: "POST" }),
   studioFile: (sid: string, sub: string, name: string, download = false) => `/api/studio/${sid}/file/${sub}/${encodeURIComponent(name)}${download ? "?download=1" : ""}`,

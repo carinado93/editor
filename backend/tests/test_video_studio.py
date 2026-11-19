@@ -369,3 +369,20 @@ def test_ping_pong_camera_is_rejected_and_lookalikes_are_not_repeated():
     shots = planner.plan([a, b, c], 4.5, "reel", None, 30.0, ramps=False)
     clips = [s.clip for s in shots]
     assert not ("a" in clips and "b" in clips) or len(shots) > 2  # gleich aussehendes Wasser nicht zweimal
+
+
+def test_must_and_never_ranges(tmp_path, monkeypatch):
+    monkeypatch.setattr(store, "BASE", tmp_path)
+    sid = store.create("Ranges")["sid"]
+    src = _clip(tmp_path / "a.mp4", dur=40, size="480x270")
+    store.write_chunk(sid, "up12345", 0, src.read_bytes())
+    cid = store.finish_upload(sid, "up12345", "a.mp4")["clips"][0]["id"]
+    analyses = store.analyse_all(sid)
+    sug = store.suggestions(sid, cid)
+    assert sug and all(s["end"] > s["start"] for s in sug)
+    store.set_ranges(sid, cid, [[30.0, 34.0]], [[5.0, 15.0]])
+    plan = store.make_plan(sid, analyses, "reel")
+    shots = plan["shots"]
+    assert any(30.0 - 0.01 <= s["src_in"] and s["src_in"] + s["src_dur"] <= 34.01 for s in shots)   # Wunsch drin
+    assert not any(s["src_in"] < 15.0 and s["src_in"] + s["src_dur"] > 5.0 for s in shots)          # Verbot raus
+    assert store.frame_jpg(sid, cid, 10.0).exists()
