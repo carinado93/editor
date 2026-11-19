@@ -44,8 +44,9 @@ def test_beat_tracker_finds_tempo_and_beats(tmp_path):
 
 @pytest.mark.parametrize("mode,dur", [("reel", 15), ("reel", 30), ("reel", 60), ("youtube", 180)])
 def test_plan_fits_length_exactly_and_snaps_to_beats(mode, dur):
-    moments = [{"clip": "a", "start": float(s), "dur": 6.0, "score": 0.7 - s * 0.001, "hero": s == 0, "transit": False,
-                "direction": "", "scene": s // 6} for s in range(0, 600, 6)]
+    L = 6 if mode == "reel" else 16   # YouTube-Aufnahmen sind länger (6–16 s)
+    moments = [{"clip": "a", "start": float(s), "dur": float(L), "score": 0.7 - s * 0.001, "hero": s == 0,
+                "transit": False, "direction": "", "scene": s // L} for s in range(0, 2400, L)]
     bts = list(np.arange(0.31, dur, 60 / 100))
     shots = planner.plan(moments, dur, mode, bts, fps=30.0, title_len=3.0 if mode == "reel" else 0)
     total = sum(s.dur for s in shots)
@@ -354,7 +355,7 @@ def test_ping_pong_camera_is_rejected_and_lookalikes_are_not_repeated():
     steady = [S(t=k / 4, sharp=0.6, bright=0.5, clip=0, color=0.5, motion=12, jitter=0.5, dx=12, dy=0, zoom=0)
               for k in range(24)]
     pingpong = [S(t=6 + k / 4, sharp=0.6, bright=0.5, clip=0, color=0.5, motion=12, jitter=0.5, dx=0,
-                  dy=12 if (k // 4) % 2 == 0 else -12, zoom=0) for k in range(24)]
+                  dy=20 if (k // 7) % 2 == 0 else -20, zoom=0) for k in range(28)]
     assert analysis._reversals(steady)[0] == 0 and analysis._reversals(pingpong)[0] >= 3
     ms = analysis.moments("a", steady + pingpong, [24])
     best = max(ms, key=lambda m: m["score"] if isinstance(m, dict) else m.score)

@@ -2,7 +2,7 @@
 
 Regeln (Stil "Explore the World 4K"):
   * Reel 9:16: Aufnahmen 1,5–3 s, die BESTE Aufnahme zuerst (Hook, trägt den Ort-Titel, darf bis 3,2 s).
-  * YouTube 16:9: Aufnahmen 4–10 s mit "Atem-Rhythmus" (lang – kürzer – lang …).
+  * YouTube 16:9: Aufnahmen 6–16 s mit "Atem-Rhythmus" (lang – kürzer – lang …), ruhig wie die Referenz.
   * Schnitte liegen auf Musik-Schlägen (wenn Musik da ist), Gesamtlänge stimmt aufs Bild genau.
   * Gleiche Bilder nie zweimal; aufeinanderfolgende Aufnahmen möglichst aus verschiedenen Szenen.
   * Ende: ruhige, schöne Aufnahme (Ausklang).
@@ -16,7 +16,8 @@ from dataclasses import asdict, dataclass
 
 MODES = {
     "reel": {"min": 1.5, "max": 3.0, "pattern": [2.4, 1.8, 2.2, 1.6, 2.6, 2.0], "first_max": 3.2},
-    "youtube": {"min": 4.0, "max": 10.0, "pattern": [7.0, 5.0, 8.5, 4.5, 6.5, 9.0], "first_max": 10.0},
+    # wie Carinas Referenz (Mallorca, 19.11.): lange, ruhige Aufnahmen, weich überblendet
+    "youtube": {"min": 6.0, "max": 16.0, "pattern": [11.0, 8.0, 14.0, 9.0, 12.0, 15.0], "first_max": 16.0},
 }
 
 

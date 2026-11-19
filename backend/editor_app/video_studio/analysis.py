@@ -189,20 +189,34 @@ def quality(s: Sample) -> float:
 
 
 def _reversals(ss: list) -> tuple[int, float]:
-    """(Anzahl Richtungswechsel, Unruhe 0..). Richtungswechsel = Bewegung auf einer Achse kehrt deutlich um."""
+    """(Anzahl deutlicher Richtungswechsel, Unruhe). Nur echte Umkehr zählt: die Bewegung läuft mindestens
+    ~¾ s klar in eine Richtung und dann ~¾ s klar in die andere (Kamera rauf/runter beim Ausrichten).
+    Kleines Messrauschen und ruhige Bögen (Orbit) zählen nicht."""
     rev = 0
     unsteady = 0.0
     for key in ("dx", "dy", "zoom"):
         v = np.array([getattr(s, key) for s in ss], float)
-        if v.size < 3:
+        if v.size < 6:
             continue
-        v = np.convolve(v, np.ones(3) / 3, mode="same") if v.size >= 5 else v
-        thr = 4.0 if key != "zoom" else 2.0
-        sig = [np.sign(x) for x in v if abs(x) > thr]
-        rev += int(sum(1 for a, b in zip(sig[:-1], sig[1:]) if a != b))
-        mag = np.abs(v).mean()
-        if mag > thr:
-            unsteady = max(unsteady, float(v.std() / (mag + 5.0)))
+        v = np.convolve(np.pad(v, 2, mode="edge"), np.ones(5) / 5, mode="valid")   # 1,25 s glätten
+        mag = np.abs(v)
+        thr = max(6.0 if key != "zoom" else 3.0, 0.5 * float(np.percentile(mag, 75)))
+        runs, cur, n = [], 0, 0
+        for x in v:
+            sgn = int(np.sign(x)) if abs(x) > thr else 0
+            if sgn == cur:
+                n += 1
+            else:
+                if cur != 0:
+                    runs.append((cur, n))
+                cur, n = sgn, 1
+        if cur != 0:
+            runs.append((cur, n))
+        strong = [r for r in runs if r[1] >= 3]
+        rev += sum(1 for a2, b2 in zip(strong[:-1], strong[1:]) if a2[0] != b2[0])
+        m = float(mag.mean())
+        if m > thr:
+            unsteady = max(unsteady, float(v.std() / (m + 8.0)))
     return rev, unsteady
 
 
@@ -275,7 +289,7 @@ def moments(clip_id: str, samples: list[Sample], cuts: list[int], min_len: float
                 rev, unsteady = _reversals(ss)
                 if rev:
                     mean_q *= float(np.exp(-0.7 * rev))
-                mean_q /= (1.0 + 0.6 * unsteady)
+                mean_q /= (1.0 + 0.3 * unsteady)
                 smooth = (jit < 3.0 or jit < 0.12 * mot) and rev == 0   # schnelle Fahrt: relatives Wackeln zählt
                 hero = smooth and mean_q > 0.62 and float(np.mean([s.color for s in ss])) > 0.35 and mot < 25
                 transit = smooth and mot > 18
@@ -306,8 +320,8 @@ def analyse(clip_id: str, path: Path, info: dict | None = None, progress=None) -
     return {"version": VERSION, "clip": clip_id, "duration": info["duration"], "fps": info["fps"], "width": info["width"],
             "height": info["height"], "scenes": [round(float(times[c]), 2) for c in cuts],
             "samples": [asdict(s) for s in samples], "moments": [m.to_dict() for m in ms],
-            # längere Momente (4–10 s) für YouTube-Aufnahmen
-            "moments_long": [m.to_dict() for m in moments(clip_id, samples, cuts, 4.0, 10.0, 1.0)]}
+            # längere Momente (6–16 s) für YouTube-Aufnahmen
+            "moments_long": [m.to_dict() for m in moments(clip_id, samples, cuts, 6.0, 16.0, 1.0)]}
 
 
 def refresh_moments(res: dict) -> dict:
@@ -319,7 +333,7 @@ def refresh_moments(res: dict) -> dict:
     ts = [s.t for s in samples]
     cuts = [min(range(len(ts)), key=lambda i: abs(ts[i] - c)) for c in res.get("scenes", [])]
     res["moments"] = [m.to_dict() for m in moments(res["clip"], samples, cuts)]
-    res["moments_long"] = [m.to_dict() for m in moments(res["clip"], samples, cuts, 4.0, 10.0, 1.0)]
+    res["moments_long"] = [m.to_dict() for m in moments(res["clip"], samples, cuts, 6.0, 16.0, 1.0)]
     return res
 
 

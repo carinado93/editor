@@ -396,7 +396,9 @@ def make_plan(sid: str, analyses: list[dict], fmt: str) -> dict:
     title = _title(s, mode)
     shots = planner.plan(moments, dur, mode, mus["beats"] if mus else None, fps, int(s.get("seed", 0)),
                          title_len=float(title.get("duration", 3)) if title.get("text") and title.get("enabled") else 0.0,
-                         ramps=bool(s.get("ramps", True)), speedup=bool(s.get("speedup", True)))
+                         # Rampen/2× nur im Reel – YouTube bleibt ruhig in Originaltempo (wie die Referenz)
+                         ramps=bool(s.get("ramps", True)) and mode == "reel",
+                         speedup=bool(s.get("speedup", True)) and mode == "reel")
     if mode == "youtube":   # YouTube erzählt: Reihenfolge der Clips und Zeit im Clip (wie geflogen)
         shots = _story_order(shots, [c["id"] for c in st["clips"]])
     shot_dicts = [x.to_dict() for x in shots]

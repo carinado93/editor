@@ -53,7 +53,7 @@ def auto(shots: list[dict], mode: str, seed: int = 0, dur_scale: float = 1.0) ->
         a, b = shots[k], shots[k + 1]
         if mode == "youtube":
             tid = "fade_black" if k == n - 2 and n > 3 else "dissolve"
-            d = 0.9 if tid == "dissolve" else 1.0
+            d = 1.8 if tid == "dissolve" else 1.5   # lange, weiche Überblendung wie in der Referenz
         else:
             every = 3 if n > 5 else 2
             if (k + rnd.randint(0, 1)) % every != every - 1:
