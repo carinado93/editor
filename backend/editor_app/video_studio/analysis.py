@@ -51,21 +51,44 @@ class Moment:
         return asdict(self)
 
 
-def read_samples(path: Path, info: dict, fps: float = SAMPLE_FPS, width: int = SAMPLE_W) -> tuple[np.ndarray, np.ndarray]:
-    """Kleine Graubild-/Farbbild-Folge des Clips: (times, frames[N,h,w,3] uint8)."""
+def read_samples(path: Path, info: dict, fps: float = SAMPLE_FPS, width: int = SAMPLE_W,
+                 progress=None) -> tuple[np.ndarray, np.ndarray]:
+    """Kleine Bildfolge des Clips: (times, frames[N,h,w,3] uint8). Liest Stück für Stück (Fortschritt 0..1),
+    mit Nvidia-Karte wird das 4K-Video auf der Grafikkarte entpackt (viel schneller)."""
     w = width
     h = int(round(width * info["height"] / max(1, info["width"]) / 2)) * 2
-    cmd = [media.ffmpeg(), "-hide_banner", "-loglevel", "error", "-nostdin", "-i", str(path),
-           "-map", f"0:{info['video_index']}", "-vf", f"{media.sdr_filter(info)}fps={fps},scale={w}:{h}:flags=area",
-           "-f", "rawvideo", "-pix_fmt", "rgb24", "-"]
-    r = subprocess.run(cmd, capture_output=True, creationflags=getattr(media, "_NO_WINDOW", 0))
-    if r.returncode != 0 or not r.stdout:
-        raise RuntimeError("Could not read the clip: " + r.stderr.decode("utf-8", "replace")[-300:])
-    frames = np.frombuffer(r.stdout, np.uint8)
-    n = frames.size // (w * h * 3)
-    frames = frames[: n * w * h * 3].reshape(n, h, w, 3)
-    times = (np.arange(n) + 0.5) / fps
-    return times, frames
+    expected = max(1, int(info.get("duration", 0) * fps))
+    vf = f"{media.sdr_filter(info)}fps={fps},scale={w}:{h}:flags=area"
+    base = [media.ffmpeg(), "-hide_banner", "-loglevel", "error", "-nostdin"]
+    tries = [[*base, "-hwaccel", "auto", "-i", str(path)]] if media.h264_encoder()[1] == "h264_nvenc" else []
+    tries.append([*base, "-threads", "0", "-i", str(path)])
+    size = w * h * 3
+    last_err = ""
+    for pre in tries:
+        cmd = [*pre, "-map", f"0:{info['video_index']}", "-vf", vf, "-f", "rawvideo", "-pix_fmt", "rgb24", "-"]
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                creationflags=getattr(media, "_NO_WINDOW", 0))
+        chunks = []
+        try:
+            while True:
+                buf = proc.stdout.read(size)
+                if len(buf) < size:
+                    break
+                chunks.append(np.frombuffer(buf, np.uint8).reshape(h, w, 3))
+                if progress and len(chunks) % 8 == 0:
+                    progress(min(1.0, len(chunks) / expected))
+                if media.cancelled():
+                    proc.kill()
+                    raise media.Cancelled()
+        finally:
+            proc.stdout.close()
+            err = proc.stderr.read().decode("utf-8", "replace")
+            proc.wait()
+        if chunks and proc.returncode == 0:
+            frames = np.stack(chunks)
+            return (np.arange(len(frames)) + 0.5) / fps, frames
+        last_err = err
+    raise RuntimeError("Could not read the clip: " + last_err[-300:])
 
 
 def _hist(f: np.ndarray) -> np.ndarray:
@@ -228,10 +251,10 @@ def moments(clip_id: str, samples: list[Sample], cuts: list[int], min_len: float
     return chosen
 
 
-def analyse(clip_id: str, path: Path, info: dict | None = None) -> dict:
+def analyse(clip_id: str, path: Path, info: dict | None = None, progress=None) -> dict:
     """Ganze Analyse eines Clips → JSON-fähiges Ergebnis (wird pro Clip zwischengespeichert)."""
     info = info or media.probe(path)
-    times, frames = read_samples(path, info)
+    times, frames = read_samples(path, info, progress=(lambda f: progress(0.8 * f)) if progress else None)
     cuts = scene_cuts(frames)
     resp: list[float] = []
     samples = measure(times, frames, resp)

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api, type StudioMeta, type StudioPlan, type StudioProject } from "../api";
 
 const LOOK_LABEL = (l: string) => (l.startsWith("file:") ? `My LUT: ${l.slice(5).replace(/\.cube$/, "")}` : l.replace(/_/g, " "));
@@ -10,6 +10,21 @@ const ADJ: [string, string, number, number, number][] = [
   ["sat", "Saturation", -100, 100, 1], ["vibrance", "Vibrance", -100, 100, 1], ["fade", "Fade", 0, 100, 1],
 ];
 const FX: [string, string][] = [["sharpen", "Sharpen"], ["clarity", "Clarity"], ["vignette", "Vignette"], ["grain", "Grain"]];
+
+/** Die Aufnahme als Video in Schleife (Ausschnitt aus der Vorschau, mit Farbe, Tempo und Übergängen). */
+function ShotVideo({ src, t0, dur, reel }: { src: string; t0: number; dur: number; reel: boolean }) {
+  const ref = useRef<HTMLVideoElement>(null);
+  useEffect(() => {
+    const v = ref.current;
+    if (!v) return;
+    const start = () => { v.currentTime = t0; void v.play().catch(() => {}); };
+    if (v.readyState >= 1) start(); else v.addEventListener("loadedmetadata", start, { once: true });
+  }, [src, t0]);
+  return (
+    <video ref={ref} className={`vs-shot-video ${reel ? "reel" : ""}`} src={src} muted playsInline controls
+      onTimeUpdate={(e) => { const v = e.currentTarget; if (v.currentTime >= t0 + dur - 0.04 || v.currentTime < t0 - 0.3) v.currentTime = t0; }} />
+  );
+}
 
 /** Ein Regler wie in CapCut: Schieber + Zahl + Zurücksetzen. Speichert beim Loslassen. */
 function Knob({ label, value, min, max, step, onCommit }: {
@@ -85,6 +100,13 @@ export function ShotPanel({ sid, fmt, k, plan, st, meta, onState, onErr }: {
         </span>
         <button className="link" onClick={() => send("apply_all")}>apply colour + effects of this shot to all shots</button>
       </div>
+
+      {st.renders[fmt]?.preview && (
+        <div className="vs-shot-video-wrap">
+          <ShotVideo src={api.studioFile(sid, "renders", st.renders[fmt]!.preview!.file)} t0={sh.t0} dur={sh.dur} reel={fmt === "reel"} />
+          <span className="muted">Shot {k + 1} from the preview, playing in a loop{plan.edited ? " – press “Update preview” to see your latest changes" : ""}.</span>
+        </div>
+      )}
 
       {tab === "filters" && (
         <div className="vs-filters">

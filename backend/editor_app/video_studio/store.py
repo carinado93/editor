@@ -318,7 +318,10 @@ def analyse_all(sid: str, a: float = 0.0, b: float = 0.35) -> list[dict]:
         f = d / "analysis" / f"{c['id']}.json"
         if not f.exists():
             _set_job(sid, progress=round(a + (b - a) * k / n, 3), message=f"Looking at clip {k + 1} of {n} …")
-            res = analysis.analyse(c["id"], d / "clips" / c["file"], c["info"])
+            mins = max(1, round(c["info"]["duration"] / 60))
+            res = analysis.analyse(c["id"], d / "clips" / c["file"], c["info"],
+                                   _progress(sid, a + (b - a) * k / n, a + (b - a) * (k + 1) / n,
+                                             f"Looking at clip {k + 1} of {n} ({mins} min of video) …"))
             f.write_text(json.dumps(res), encoding="utf-8")
 
             def mark(s, cid=c["id"]):
