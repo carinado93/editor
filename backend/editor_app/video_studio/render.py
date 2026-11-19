@@ -397,7 +397,11 @@ def render(plan: dict, clips: dict[str, dict], work: Path, out: Path, quality: s
         args += ["-map", alabel, "-c:a", "aac", "-b:a", "192k" if quality != "preview" else "128k", "-ar", "48000"]
     else:
         args += ["-an"]
-    args += [*encoder(quality, plan.get("codec", "h264")), "-pix_fmt", "yuv420p", "-r", f"{fps:g}",
+    cap = []
+    if quality != "preview":   # Datenrate begrenzen: Reels/HD ~25 Mbit/s, 4K ~80 Mbit/s (Instagram/YouTube-tauglich)
+        mr = 80 if max(W, H) > 2000 else 25
+        cap = ["-maxrate", f"{mr}M", "-bufsize", f"{2 * mr}M"]
+    args += [*encoder(quality, plan.get("codec", "h264")), *cap, "-pix_fmt", "yuv420p", "-r", f"{fps:g}",
              *media.SDR_TAGS, "-t", f"{total:.4f}", "-movflags", "+faststart", str(out)]
     media._run_with_progress(args, total, lambda f: prog(0.8 + 0.2 * f))
     prog(1.0)
