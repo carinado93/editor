@@ -347,3 +347,23 @@ def test_ai_object_removal_inpaints_box(tmp_path):
     px = np.asarray(Image.open(fr).convert("RGB"))[90, 160].astype(int)
     assert px[0] < 150 and abs(px[2] - 0x80) < 40               # rotes Kästchen verschwunden
     assert ai_tools.status()["remove_object"]["status"] == "ready"
+
+
+def test_ping_pong_camera_is_rejected_and_lookalikes_are_not_repeated():
+    S = analysis.Sample
+    steady = [S(t=k / 4, sharp=0.6, bright=0.5, clip=0, color=0.5, motion=12, jitter=0.5, dx=12, dy=0, zoom=0)
+              for k in range(24)]
+    pingpong = [S(t=6 + k / 4, sharp=0.6, bright=0.5, clip=0, color=0.5, motion=12, jitter=0.5, dx=0,
+                  dy=12 if (k // 4) % 2 == 0 else -12, zoom=0) for k in range(24)]
+    assert analysis._reversals(steady)[0] == 0 and analysis._reversals(pingpong)[0] >= 3
+    ms = analysis.moments("a", steady + pingpong, [24])
+    best = max(ms, key=lambda m: m["score"] if isinstance(m, dict) else m.score)
+    best = best if isinstance(best, dict) else best.to_dict()
+    assert best["start"] < 6                                       # die ruhige Fahrt gewinnt
+    water = [0.1, 0.4, 0.6] * 32
+    a = {"clip": "a", "start": 0.0, "dur": 6.0, "score": 0.9, "info": {"feat": water}, "scene": 0}
+    b = {"clip": "b", "start": 0.0, "dur": 6.0, "score": 0.89, "info": {"feat": water}, "scene": 0}
+    c = {"clip": "c", "start": 0.0, "dur": 6.0, "score": 0.5, "info": {"feat": [0.7, 0.5, 0.2] * 32}, "scene": 0}
+    shots = planner.plan([a, b, c], 4.5, "reel", None, 30.0, ramps=False)
+    clips = [s.clip for s in shots]
+    assert not ("a" in clips and "b" in clips) or len(shots) > 2  # gleich aussehendes Wasser nicht zweimal

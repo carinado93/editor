@@ -10,7 +10,7 @@ Ergebnis: Liste von Kandidaten-Momenten (Start, Länge, Punkte, Eigenschaften), 
 from __future__ import annotations
 
 import subprocess
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field  # noqa: F401
 from pathlib import Path
 
 import numpy as np
@@ -18,6 +18,7 @@ import numpy as np
 from .. import media
 
 SAMPLE_FPS = 4.0
+VERSION = 2   # 2: Mini-Bilder (feat) für "sieht gleich aus" + Richtungswechsel
 SAMPLE_W = 320
 
 
@@ -33,6 +34,7 @@ class Sample:
     dx: float = 0.0
     dy: float = 0.0
     zoom: float = 0.0  # >0 = nach vorn (hinein), <0 = zurück
+    feat: list = field(default_factory=list)   # Mini-Bild 8×4 RGB (0..1) – um gleich aussehende Aufnahmen zu erkennen
 
 
 @dataclass
@@ -171,7 +173,8 @@ def measure(times: np.ndarray, frames: np.ndarray, responses_out: list | None = 
         colorful = float((np.hypot(rg.std(), yb.std()) + 0.3 * np.hypot(rg.mean(), yb.mean())) / 110.0)
         out.append(Sample(float(t), sharp, bright, clip, min(1.0, colorful), float(F[i, 3] * SAMPLE_FPS),
                           float(jit[i] * SAMPLE_FPS), float(F[i, 0] * SAMPLE_FPS), float(F[i, 1] * SAMPLE_FPS),
-                          float(F[i, 2] * SAMPLE_FPS)))
+                          float(F[i, 2] * SAMPLE_FPS),
+                          [round(float(v), 2) for v in (cv2.resize(f, (8, 4), interpolation=cv2.INTER_AREA) / 255.0).ravel()]))
     return out
 
 
@@ -183,6 +186,38 @@ def quality(s: Sample) -> float:
     if s.bright < 0.12 or s.clip > 0.35:
         q *= 0.35
     return float(q)
+
+
+def _reversals(ss: list) -> tuple[int, float]:
+    """(Anzahl Richtungswechsel, Unruhe 0..). Richtungswechsel = Bewegung auf einer Achse kehrt deutlich um."""
+    rev = 0
+    unsteady = 0.0
+    for key in ("dx", "dy", "zoom"):
+        v = np.array([getattr(s, key) for s in ss], float)
+        if v.size < 3:
+            continue
+        v = np.convolve(v, np.ones(3) / 3, mode="same") if v.size >= 5 else v
+        thr = 4.0 if key != "zoom" else 2.0
+        sig = [np.sign(x) for x in v if abs(x) > thr]
+        rev += int(sum(1 for a, b in zip(sig[:-1], sig[1:]) if a != b))
+        mag = np.abs(v).mean()
+        if mag > thr:
+            unsteady = max(unsteady, float(v.std() / (mag + 5.0)))
+    return rev, unsteady
+
+
+def _mean_feat(ss: list) -> list:
+    fs = [s.feat for s in ss if getattr(s, "feat", None)]
+    if not fs:
+        return []
+    return [round(float(x), 3) for x in np.mean(np.array(fs), axis=0)]
+
+
+def similarity(a: list, b: list) -> float:
+    """0..1 – wie ähnlich zwei Aufnahmen aussehen (Mini-Bilder)."""
+    if not a or not b or len(a) != len(b):
+        return 0.0
+    return float(1.0 - np.abs(np.array(a) - np.array(b)).mean() * 4)
 
 
 def _direction(dx: float, dy: float, zoom: float) -> str:
@@ -235,13 +270,21 @@ def moments(clip_id: str, samples: list[Sample], cuts: list[int], min_len: float
                 dx = float(np.mean([s.dx for s in ss]))
                 dy = float(np.mean([s.dy for s in ss]))
                 zm = float(np.mean([s.zoom for s in ss]))
-                smooth = jit < 3.0 or jit < 0.12 * mot   # schnelle Fahrt: relatives Wackeln zählt
+                # Hin-und-her (Kamera rauf/runter/rauf, Ausrichten): Richtungswechsel der Bewegung zählen.
+                # Ruhige Drohnenfahrt = gleiche Richtung, gleichmäßiges Tempo.
+                rev, unsteady = _reversals(ss)
+                if rev:
+                    mean_q *= float(np.exp(-0.7 * rev))
+                mean_q /= (1.0 + 0.6 * unsteady)
+                smooth = (jit < 3.0 or jit < 0.12 * mot) and rev == 0   # schnelle Fahrt: relatives Wackeln zählt
                 hero = smooth and mean_q > 0.62 and float(np.mean([s.color for s in ss])) > 0.35 and mot < 25
                 transit = smooth and mot > 18
                 cands.append(Moment(clip_id, round(float(st), 3), round(float(dur), 3), round(mean_q, 4), hero, transit,
                                     _direction(dx, dy, zm), si,
-                                    {"motion": round(mot, 2), "jitter": round(jit, 2),
-                                     "bright": round(float(np.mean([s.bright for s in ss])), 3)}))
+                                    {"motion": round(mot, 2), "jitter": round(jit, 2), "reversals": rev,
+                                     "unsteady": round(unsteady, 2),
+                                     "bright": round(float(np.mean([s.bright for s in ss])), 3),
+                                     "feat": _mean_feat(ss)}))
             st += step
     cands.sort(key=lambda m: m.score, reverse=True)
     chosen: list[Moment] = []
@@ -260,7 +303,7 @@ def analyse(clip_id: str, path: Path, info: dict | None = None, progress=None) -
     samples = measure(times, frames, resp)
     cuts = sorted(set(cuts) | set(motion_cuts(samples, resp)))
     ms = moments(clip_id, samples, cuts)
-    return {"clip": clip_id, "duration": info["duration"], "fps": info["fps"], "width": info["width"],
+    return {"version": VERSION, "clip": clip_id, "duration": info["duration"], "fps": info["fps"], "width": info["width"],
             "height": info["height"], "scenes": [round(float(times[c]), 2) for c in cuts],
             "samples": [asdict(s) for s in samples], "moments": [m.to_dict() for m in ms],
             # längere Momente (4–10 s) für YouTube-Aufnahmen

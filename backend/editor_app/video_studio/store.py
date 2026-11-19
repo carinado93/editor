@@ -316,6 +316,12 @@ def analyse_all(sid: str, a: float = 0.0, b: float = 0.35) -> list[dict]:
     for k, c in enumerate(st["clips"]):
         media.check_cancel()
         f = d / "analysis" / f"{c['id']}.json"
+        if f.exists():   # ältere Analyse ohne Mini-Bilder → einmal neu
+            try:
+                if json.loads(f.read_text(encoding="utf-8")).get("version", 1) < analysis.VERSION:
+                    f.unlink()
+            except (OSError, ValueError):
+                f.unlink(missing_ok=True)
         if not f.exists():
             _set_job(sid, progress=round(a + (b - a) * k / n, 3), message=f"Looking at clip {k + 1} of {n} …")
             mins = max(1, round(c["info"]["duration"] / 60))

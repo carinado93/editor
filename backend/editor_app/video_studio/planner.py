@@ -10,6 +10,8 @@ Regeln (Stil "Explore the World 4K"):
 from __future__ import annotations
 
 import random
+
+from . import analysis
 from dataclasses import asdict, dataclass
 
 MODES = {
@@ -118,12 +120,19 @@ def plan(moments: list[dict], duration: float, mode: str = "reel", beats: list[f
         clip_len[m["clip"]] = max(clip_len.get(m["clip"], 0.0), m["start"] + m["dur"])
     n_clips = max(1, len(clip_len))
     per_clip = max(1.0, len(slots) / n_clips)
-    sep = {c: min(30.0, max(4.0, L / (per_clip * 1.4))) for c, L in clip_len.items()}
+    sep = {c: min(40.0, max(5.0, L / (per_clip * 1.15))) for c, L in clip_len.items()}
     centers: dict[str, list[float]] = {}
+
+    feats: list[list] = []   # Mini-Bilder der schon gewählten Aufnahmen
 
     def far_enough(m: dict, factor: float = 1.0) -> bool:
         c = m["start"] + m["dur"] / 2
-        return all(abs(c - x) >= sep[m["clip"]] * factor for x in centers.get(m["clip"], []))
+        if not all(abs(c - x) >= sep[m["clip"]] * factor for x in centers.get(m["clip"], [])):
+            return False
+        # sieht nicht (fast) gleich aus wie eine schon gewählte Aufnahme – auch aus einem anderen Clip
+        f = (m.get("info") or {}).get("feat") or []
+        limit = 0.9 + 0.08 * (1 - min(1.0, factor))   # streng zuerst, dann etwas lockerer
+        return all(analysis.similarity(f, g) < limit for g in feats)
 
     def take(m: dict, L: float, speed: float = 1.0) -> Shot | None:
         src_L = L * speed
@@ -132,6 +141,8 @@ def plan(moments: list[dict], duration: float, mode: str = "reel", beats: list[f
             return None
         used.setdefault(m["clip"], []).append((s, s + src_L))
         centers.setdefault(m["clip"], []).append(s + src_L / 2)
+        if (m.get("info") or {}).get("feat"):
+            feats.append(m["info"]["feat"])
         return Shot(m["clip"], round(s, 3), round(src_L, 3), 0.0, L, speed, m["score"], m.get("hero", False),
                     m.get("transit", False), m.get("direction", ""))
 
