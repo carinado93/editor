@@ -27,8 +27,8 @@ FORMATS = {"reel": (1080, 1920), "youtube": (1920, 1080), "youtube4k": (3840, 21
 
 def out_size(fmt: str, quality: str) -> tuple[int, int]:
     W, H = FORMATS.get(fmt, FORMATS["reel"])
-    if quality == "preview":
-        f = 540 / min(W, H)
+    if quality == "preview":   # Vorschau: 720 px (früher 540) – schnell, aber gut genug zum Beurteilen
+        f = 720 / min(W, H)
         W, H = int(round(W * f / 2) * 2), int(round(H * f / 2) * 2)
     return W, H
 
@@ -54,7 +54,8 @@ def encoder(quality: str, codec: str = "h264") -> list[str]:
             return ["-c:v", "h264_nvenc", "-preset", "p4", "-cq", "14", "-b:v", "0"]
         return ["-c:v", "libx264", "-preset", "veryfast", "-crf", "14"]
     if quality == "preview":
-        return media.h264_encoder()
+        return (["-c:v", "h264_nvenc", "-preset", "p4", "-cq", "23", "-b:v", "0"] if _nvenc()
+                else ["-c:v", "libx264", "-preset", "veryfast", "-crf", "23"])
     if codec == "h265":
         return (["-c:v", "hevc_nvenc", "-preset", "p5", "-cq", "21", "-b:v", "0", "-tag:v", "hvc1"] if _nvenc()
                 else ["-c:v", "libx265", "-preset", "medium", "-crf", "20", "-tag:v", "hvc1"])

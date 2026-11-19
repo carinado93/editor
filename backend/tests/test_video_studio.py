@@ -128,14 +128,15 @@ def test_render_reel_end_to_end(tmp_path):
         "music": {"file": "click.wav", "path": str(_click_track(tmp_path / "click.wav")), "start": 0.0}}
     out = tmp_path / "out.mp4"
     res = render.render(plan, {"a": {"path": src, "info": info}}, tmp_path / "work", out, "preview")
-    assert res["width"] == 540 and res["height"] == 960
+    assert res["width"] == 720 and res["height"] == 1280
     o = media.probe(out)
     assert abs(o["duration"] - 7.0) < 0.1 and o["has_audio"]
     # Titel ist im Bild (weiße Pixel in der Titelzeile bei 1,5 s)
     fr = tmp_path / "f.png"
     subprocess.run([media.ffmpeg(), "-y", "-loglevel", "error", "-ss", "1.5", "-i", str(out), "-frames:v", "1",
                     str(fr)], check=True)
-    row = np.asarray(Image.open(fr).convert("L"))[int(0.40 * 960):int(0.48 * 960)]
+    img = np.asarray(Image.open(fr).convert("L"))
+    row = img[int(0.40 * img.shape[0]):int(0.48 * img.shape[0])]
     assert (row > 240).sum() > 50
 
 
@@ -207,7 +208,7 @@ def test_render_with_transitions_ramp_and_outro(tmp_path):
     r = subprocess.run([media.ffprobe(), "-v", "error", "-count_frames", "-select_streams", "v", "-show_entries",
                         "stream=nb_read_frames,width,height", "-of", "json", str(out)], capture_output=True, text=True)
     s = json.loads(r.stdout)["streams"][0]
-    assert (s["width"], s["height"]) == (960, 540)
+    assert (s["width"], s["height"]) == (1280, 720)
     assert abs(int(s["nb_read_frames"]) - 6.5 * 30) <= 1           # Länge bleibt trotz Übergängen exakt
 
 
@@ -266,7 +267,7 @@ def test_render_with_zoom_keyframes_effects_stabilize_and_text(tmp_path):
             "texts": [{"tpl": "location_pin", "text": "Madeira", "t0": 0.5, "dur": 2.0}]}
     out = tmp_path / "o.mp4"
     res = render.render(plan, {"a": {"path": src, "info": info}}, tmp_path / "w", out, "preview")
-    assert abs(media.probe(out)["duration"] - 5.0) < 0.1 and res["width"] == 540
+    assert abs(media.probe(out)["duration"] - 5.0) < 0.1 and res["width"] == 720
 
 
 def test_shot_panel_edits(tmp_path, monkeypatch):
@@ -316,7 +317,7 @@ def test_masks_shapes_and_masked_render(tmp_path):
     a = np.asarray(Image.open(fr).convert("L")).astype(float)
     ref = tmp_path / "r.png"
     subprocess.run([media.ffmpeg(), "-y", "-loglevel", "error", "-ss", "1.2", "-i", str(src), "-frames:v", "1",
-                    "-vf", "scale=960:540", str(ref)], check=True)
+                    "-vf", "scale=1280:720", str(ref)], check=True)
     b = np.asarray(Image.open(ref).convert("L")).astype(float)
     assert a[:100].mean() < b[:100].mean() - 15            # oben (Himmel-Maske) dunkler
     assert abs(a[-100:].mean() - b[-100:].mean()) < 12      # unten unverändert
