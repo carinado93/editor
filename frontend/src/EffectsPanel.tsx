@@ -34,6 +34,7 @@ const HINT: Record<string, string> = {
   sportpill: "SPORT|time, e.g. ZUMBA|30 min",
   ringtimer: "Text|minutes, e.g. meditation time|30 – or count up: Text|from|to, e.g. Gedanken|1|190000",
   circleword: "the word that circles, e.g. Gedanken",
+  loop: "one step per line (3–6), e.g. Gedanken benennen / Beweise prüfen / …",
   countup: "Text|from|to, e.g. Gedanken =|1|190000",
   savedcard: "Title|Button, e.g. WORKOUT SAVED|RESUME: WORK · lines: Label|value",
   subscribe: "3 lines with |, e.g. any support in the form of|a subscribe or like|would be highly appreciated",
@@ -79,6 +80,7 @@ const DESC: Record<string, string> = {
   logoff: "A glitch on the picture, then a lilac 'logging off…' pill. For shutting the computer down.",
   sportpill: "A lilac pill top left with a ticking stopwatch: sport + duration. Put one on each sport scene.",
   ringtimer: "A ring timer counts down (e.g. 30:00 → 00:00) – or a number counts up in the ring (e.g. 1 → 190.000) – while the title writes itself.",
+  loop: "Your steps as a cycle: dots in a circle with arrows; the step you talk about lights up and is shown big in the middle. Make it as long as you talk about the steps.",
   circleword: "A word written around a circle that keeps turning – e.g. 'Gedanken' for Gedankenkreisen.",
   countup: "A text with a number that counts up faster and faster, e.g. 'Gedanken = 190.000'.",
   savedcard: "The video dims and a lilac 'WORKOUT SAVED' card pops up with 3 values; a cursor clicks the button. Keep it ≥ 2 s.",
@@ -488,10 +490,10 @@ export function EffectsEditor({ items: source, allowedInit, time, outTime, onSee
     setItems(items.map((o, j) => (j === i ? { ...o, ...patch } : o)));
   };
 
-  const LIST_TYPES = ["steps", "cards", "tags", "scores", "checklist", "endcard", "bigwords", "clothesline", "wordswap", "stickers"];
+  const LIST_TYPES = ["steps", "cards", "tags", "scores", "checklist", "endcard", "bigwords", "clothesline", "wordswap", "stickers", "loop"];
   const add = () => {
     const t = types.find((x) => x.key === addType);
-    const dur = addType === "poof" ? 1 : addType === "whip" ? 0.6 : 4;
+    const dur = addType === "poof" ? 1 : addType === "whip" ? 0.6 : addType === "loop" ? 40 : 4;
     const start = Math.max(0, addType === "poof" ? time - 0.25 : addType === "whip" ? time - 0.3 : time);
     // Dein Text macht den Effekt: bei Listen eine Zeile pro Punkt, sonst wird er zur Überschrift
     const lines = addText.split("\n").map((x) => x.trim()).filter(Boolean);
@@ -683,7 +685,7 @@ export function EffectsEditor({ items: source, allowedInit, time, outTime, onSee
       <div className="fx-list">
         {items.map((o, i) => {
           const t = typeOf(o.type);
-          const listType = ["steps", "cards", "tags", "scores", "checklist", "endcard", "bigwords", "clothesline", "repeat", "wordswap", "switch", "stickers"].includes(o.type ?? "");
+          const listType = ["steps", "cards", "tags", "scores", "checklist", "endcard", "bigwords", "clothesline", "repeat", "wordswap", "switch", "stickers", "loop"].includes(o.type ?? "");
           return (
             <div key={o.id} id={o.id} className={`fx-row ${o.on ? "" : "off"}`}>
               <FxPreview preview={preview} item={o} />
@@ -721,6 +723,22 @@ export function EffectsEditor({ items: source, allowedInit, time, outTime, onSee
               </div>
               {DESC[o.type ?? ""] && <div className="small muted fx-desc">ⓘ {DESC[o.type ?? ""]}</div>}
               {STUDIO_FIELDS[o.type ?? ""] && <StudioFields o={o} spec={STUDIO_FIELDS[o.type ?? ""]} onChange={(p) => upd(i, p)} />}
+              {o.type === "loop" && (o.items ?? []).length > 0 && (
+                <div className="fx-loop-times small">
+                  <span className="muted">When does each step light up? Pause the video where you start talking about it:</span>
+                  {(o.items ?? []).map((st, k) => (
+                    <button key={k} className="link" onClick={() => {
+                      const n = (o.items ?? []).length;
+                      const cur = (o.item_t ?? []).length === n ? [...(o.item_t ?? [])]
+                        : Array.from({ length: n }, (_, j) => Math.round((o.start + 0.6 + j * Math.max(0.5, (o.end - o.start - 0.6) / n)) * 10) / 10);
+                      cur[k] = Math.round(time * 10) / 10;
+                      upd(i, { item_t: cur });
+                    }}>
+                      {k + 1}. {st.slice(0, 24)} → {(o.item_t ?? []).length === (o.items ?? []).length ? formatTime(o.item_t![k]) : "auto"} (set to {formatTime(time)})
+                    </button>
+                  ))}
+                </div>
+              )}
               {o.type === "ringtimer" && (() => {
                 const [nm, tm = "", upto = ""] = (o.title ?? "").split("|");
                 const up = upto.trim() !== "";

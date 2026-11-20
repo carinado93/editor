@@ -788,6 +788,73 @@ def draw_countup(base, ctx, it, t, d, mask):
     return out
 
 
+# ------------------------------------------------------------------ Kreislauf der Schritte (Loop)
+
+def draw_loop(base, ctx, it, t, d, mask):
+    """3–6 Schritte als Kreislauf: Punkte im Kreis mit Pfeilen, der aktuelle Schritt leuchtet lila und steht groß
+    in der Mitte; nach dem letzten geht der Pfeil zurück zum ersten. items = Schritte, item_t = wann welcher dran ist
+    (Sekunden ab Effekt-Start; ohne Angabe gleichmäßig verteilt)."""
+    w, h, u = ctx.w, ctx.h, ctx.u
+    steps = [str(x).strip() for x in (it.get("items") or []) if str(x).strip()][:6] or \
+        ["Gedanken benennen", "Beweise prüfen", "Pauschal oder konkret?", "Realistischer Gedanke", "Kleinster Schritt"]
+    n = len(steps)
+    times = [float(x) for x in (it.get("times") or [])][:n]   # vorbereitet: relativ zum Effekt-Start
+    if len(times) != n:
+        times = [0.6 + k * max(0.5, (d - 0.6) / n) for k in range(n)]
+    cur = max([k for k in range(n) if t >= times[k] - 1e-6] or [0])
+    sc = float(it.get("scale") or 1)
+    R = 250 * u * sc
+    side = int(2 * R + 140 * u * sc)
+    layer_l = Image.new("RGBA", (side, side), (0, 0, 0, 0))
+    dr = ImageDraw.Draw(layer_l)
+    c = side / 2
+    col = fx.text_color(it, LILAC)
+    node_r = 34 * u * sc
+    gap = math.degrees(node_r * 1.6 / R)
+    k_in = min(1.0, t / 0.9)
+    shown = max(1, min(n, int(k_in * n + 0.999)))
+    angs = [-90 + 360 * k / n for k in range(n)]
+    lw = max(3, int(6 * u * sc))
+    for k in range(shown):   # Pfeile (Bogen + Spitze) von Schritt k zu k+1, der letzte zurück zum ersten
+        a0, a1 = angs[k] + gap, angs[k] + 360 / n - gap
+        active = k == (cur - 1) % n and t >= times[cur] and cur > 0 or (k == n - 1 and cur == 0 and t > times[-1])
+        fill = (col if active else (255, 255, 255)) + (255 if active else 150,)
+        dr.arc((c - R, c - R, c + R, c + R), a0, a1, fill=fill, width=lw)
+        ae = math.radians(a1)
+        tip = (c + R * math.cos(ae), c + R * math.sin(ae))
+        tang = ae + math.pi / 2
+        sz = 14 * u * sc
+        dr.polygon([tip, (tip[0] - sz * math.cos(tang) + sz * 0.6 * math.cos(ae), tip[1] - sz * math.sin(tang) + sz * 0.6 * math.sin(ae)),
+                    (tip[0] - sz * math.cos(tang) - sz * 0.6 * math.cos(ae), tip[1] - sz * math.sin(tang) - sz * 0.6 * math.sin(ae))], fill=fill)
+    fnum = sfont("titan", int(30 * u * sc))
+    for k in range(shown):   # Punkte mit Nummer + kurzer Beschriftung außen
+        a = math.radians(angs[k])
+        x, y = c + R * math.cos(a), c + R * math.sin(a)
+        on = k == cur
+        pulse = 1 + (0.12 * max(0.0, 1 - (t - times[k]) / 0.4) if on else 0)
+        r = node_r * pulse
+        dr.ellipse((x - r, y - r, x + r, y + r), fill=(col + (255,)) if on else (255, 255, 255, 235),
+                   outline=(255, 255, 255, 255), width=max(2, int(3 * u)))
+        dr.text((x, y), str(k + 1), font=fnum, fill=(255, 255, 255) if on else PLUM, anchor="mm")
+    # aktueller Schritt groß in der Mitte
+    fbig = sfont("fredoka_b", int(46 * u * sc))
+    lines = fx.wrap(steps[cur], fbig, int(R * 1.45))[:3]
+    yy = c - (len(lines) - 1) * fbig.size * 0.6
+    fade = min(1.0, (t - times[cur]) / 0.3) if t >= times[cur] else 0.0
+    for ln in lines:
+        dr.text((c, yy), ln, font=fbig, fill=(255, 255, 255, int(255 * fade)), anchor="mm",
+                stroke_width=max(1, int(3 * u)), stroke_fill=(40, 30, 60, int(170 * fade)))
+        yy += fbig.size * 1.2
+    cx = _free_x(ctx, side * 0.8)
+    cy = h * (0.5 if not ctx.portrait else 0.58)
+    k_out = 1 - ease((t - (d - 0.4)) / 0.4) if t > d - 0.4 else 1
+    layer = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    fx.paste_scaled(layer, fx._shadow(layer_l, 6, 5, 110), (cx, cy), back(t / 0.4), k_out)
+    out = base.copy()
+    out.alpha_composite(layer)
+    return out
+
+
 # ------------------------------------------------------------------ registry
 
 STUDIO_TYPES = {
@@ -798,6 +865,7 @@ STUDIO_TYPES = {
     "sportpill": ("E", "Sport label with stopwatch", ("side",)),
     "ringtimer": ("E", "Meditation ring timer (counts down or up)", ("side",)),
     "circleword": ("E", "Word circling (e.g. Gedankenkreisen)", ("side",)),
+    "loop": ("E", "Loop of steps (cycle, current step lights up)", ("side",)),
     "countup": ("E", "Text + number counting up (e.g. Gedanken = 190.000)", ("side",)),
     "savedcard": ("E", "'Workout saved' card + click", ("scene",)),
     "subscribe": ("E", "Subscribe/like on lilac (iris)", ("scene",)),
@@ -814,6 +882,7 @@ STUDIO_DESCRIBE = {
     "sportpill": "Sport-Pille mit Stoppuhr oben links (title 'SPORT|Dauer', z. B. 'ZUMBA|30 min') – jede Sportart, ganze Szene",
     "ringtimer": "Meditations-Ring zählt runter + Titel schreibt sich (title 'Text|Minuten', z. B. 'meditation time|30'); "
                  "hochzählen mit 'Text|von|bis' (z. B. 'Gedanken|1|190000') – Meditation/Pause, 3–4 s",
+    "loop": "3–6 Schritte als Kreislauf mit Pfeilen, der aktuelle leuchtet lila und steht groß in der Mitte (items = Schritte, item_t = wann welcher dran ist) – Methode/Ablauf in Schritten, so lange sie darüber spricht",
     "circleword": "ein Wort kreist rund um einen Kreis und dreht sich (title 'Wort|Mitte optional', z. B. 'Gedanken') – Gedankenkreisen, Grübeln, 2–4 s",
     "countup": "Text + Zahl, die immer schneller hochzählt (title 'Text|von|bis', z. B. 'Gedanken =|1|190000') – wenn sie über viele Gedanken/Dinge spricht, 2–4 s",
     "savedcard": "Video gedimmt, lila Karte 'WORKOUT SAVED' mit 3 Werten, Cursor klickt Knopf (title 'Überschrift|Knopf', items 'Label|Wert') – Übergang nach Sport, ≥2 s",
@@ -824,7 +893,7 @@ STUDIO_DESCRIBE = {
 
 STUDIO_DRAWERS = {"battery": draw_battery, "codechips": draw_codechips, "nightfall": draw_nightfall,
                   "logoff": draw_logoff, "sportpill": draw_sportpill, "ringtimer": draw_ringtimer,
-                  "circleword": draw_circleword, "countup": draw_countup,
+                  "circleword": draw_circleword, "countup": draw_countup, "loop": draw_loop,
                   "savedcard": draw_savedcard, "subscribe": draw_subscribe, "heartcover": draw_heartcover,
                   "sharestats": draw_sharestats}
 

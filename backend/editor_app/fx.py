@@ -1794,7 +1794,7 @@ def text_color(it: dict, default=(255, 253, 249)) -> tuple:
     return TEXT_COLORS.get(it.get("color") or "", default)
 
 
-STUDIO_MOVABLE = {"battery", "codechips", "logoff", "sportpill", "ringtimer", "circleword", "countup"}
+STUDIO_MOVABLE = {"battery", "codechips", "logoff", "sportpill", "ringtimer", "circleword", "countup", "loop"}
 
 STUDIO_DRAWERS = dict(_studio.STUDIO_DRAWERS)
 TYPES.update(_studio.STUDIO_TYPES)
