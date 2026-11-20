@@ -316,6 +316,16 @@ def toggle_cut(pid: str, body: ToggleBody):
     return cutstore.toggle_detection(pid, body.id, body.active)
 
 
+@app.get("/api/projects/{pid}/effects/versions")
+def fx_versions(pid: str):
+    return {"versions": [{k: v for k, v in x.items() if k != "overlays"} for x in cutstore.fx_versions(pid)]}
+
+
+@app.post("/api/projects/{pid}/effects/versions/{index}/restore")
+def fx_restore(pid: str, index: int):
+    return cutstore.restore_fx_version(pid, index)
+
+
 @app.post("/api/projects/{pid}/cuts/words")
 def cut_words(pid: str, body: WordsBody):
     return cutstore.set_words(pid, body.indices, body.cut)

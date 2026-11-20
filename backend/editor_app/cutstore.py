@@ -8,6 +8,7 @@ import copy
 import json
 import re
 import threading
+import time
 
 from . import cuts, gaze, noises, projects
 from .fx import TEXT_COLORS as _TEXT_COLORS
@@ -194,7 +195,7 @@ def view(pid: str, cutlist: dict | None = None) -> dict:
     if cutlist is None:
         cl = _migrate_to_effects(pid, cl)
     ev = cuts.evaluate(t, cl)
-    public = {k: v for k, v in cl.items() if k != "history"}
+    public = {k: v for k, v in cl.items() if k not in ("history", "fx_versions", "_ts")}
     public.setdefault("buzzwords", [])
     public.setdefault("overlays", [])
     defaults = REEL_RENDER_DEFAULTS if cl["settings"].get("no_cuts") else RENDER_DEFAULTS
@@ -205,7 +206,8 @@ def view(pid: str, cutlist: dict | None = None) -> dict:
 def _change(pid: str, fn) -> dict:
     with _lock:
         cl = load(pid)
-        snapshot = {k: copy.deepcopy(v) for k, v in cl.items() if k != "history"}
+        snapshot = {k: copy.deepcopy(v) for k, v in cl.items() if k not in ("history", "fx_versions")}
+        snapshot["_ts"] = time.time()
         fn(cl)
         cl.setdefault("history", []).append(snapshot)
         cl["history"] = cl["history"][-MAX_UNDO:]
@@ -303,6 +305,8 @@ def undo(pid: str) -> dict:
             raise UserError("There is nothing to undo.")
         prev = hist.pop()
         prev["history"] = hist
+        prev["fx_versions"] = cl.get("fx_versions", [])   # Versionen gehen beim Rückgängigmachen nicht verloren
+        prev.pop("_ts", None)
         _save(pid, prev)
         return view(pid, prev)
 
@@ -478,10 +482,15 @@ def auto_animations(pid: str) -> None:
         _save(pid, c)
 
 
-def set_effects(pid: str, items: list[dict]) -> dict:
-    """Große Effekte ersetzen (andere Texte und Animationen bleiben)."""
-    others = [o for o in load(pid).get("overlays", []) if o.get("kind") != "fx"]
-    return set_overlays(pid, others + items)
+_CLAUDE_ID = re.compile(r"^fx-\d+-\d+$")   # von Claude vorgeschlagen (selbst hinzugefügte: "fx-<Zeit>")
+
+
+def set_effects(pid: str, items: list[dict], label: str = "before Claude's suggestions") -> dict:
+    """Claude-Vorschläge übernehmen: Carinas selbst hinzugefügte Effekte und alle Texte/Animationen bleiben,
+    nur frühere Claude-Vorschläge werden ersetzt. Der alte Stand wird vorher als Version gespeichert."""
+    old = load(pid).get("overlays", [])
+    keep = [o for o in old if o.get("kind") != "fx" or not _CLAUDE_ID.match(str(o.get("id", "")))]
+    return set_overlays(pid, keep + items, label)
 
 
 def suggest_effects(pid: str, engine: str, allowed: list[str], wish: str = "") -> dict:
@@ -532,11 +541,57 @@ def set_speed(pid: str, ranges: list[dict]) -> dict:
     return _change(pid, fn)
 
 
-def set_overlays(pid: str, overlays: list[dict]) -> dict:
+MAX_VERSIONS = 40
+
+
+def _snapshot_overlays(cl: dict, label: str) -> None:
+    """Stand der Effekte/Texte als Version merken (zum Wiederherstellen), nur wenn er sich unterscheidet."""
+    cur = copy.deepcopy(cl.get("overlays") or [])
+    if not cur:
+        return
+    vs = cl.setdefault("fx_versions", [])
+    if vs and vs[-1].get("overlays") == cur:
+        return
+    vs.append({"ts": time.time(), "label": label, "overlays": cur})
+    cl["fx_versions"] = vs[-MAX_VERSIONS:]
+
+
+def fx_versions(pid: str) -> list[dict]:
+    """Frühere Stände der Effekte: gespeicherte Versionen + alle Stände aus dem Rückgängig-Verlauf (neueste zuerst)."""
+    cl = load(pid)
+    out, seen = [], set()
+    cur_key = json.dumps(cl.get("overlays") or [], sort_keys=True)
+    seen.add(cur_key)
+    cand = [(v.get("ts", 0), v.get("label", ""), v.get("overlays") or []) for v in cl.get("fx_versions", [])]
+    hist = cl.get("history") or []
+    for k, h in enumerate(hist):
+        cand.append((h.get("_ts", 0) or -(len(hist) - k), "earlier state (undo history)", h.get("overlays") or []))
+    for ts, label, ovs in sorted(cand, key=lambda x: x[0], reverse=True):
+        key = json.dumps(ovs, sort_keys=True)
+        if not ovs or key in seen:
+            continue
+        seen.add(key)
+        fx = [o for o in ovs if o.get("kind") == "fx"]
+        out.append({"key": key[:0] + str(len(out)), "ts": ts if ts > 0 else None, "label": label, "count": len(ovs),
+                    "summary": [f"{round(float(o.get('start', 0)))} s · {o.get('type') or o.get('kind')} · "
+                                f"{(o.get('title') or o.get('text') or '')[:40]}" for o in sorted(ovs, key=lambda o: o.get('start', 0))][:8],
+                    "fx": len(fx), "overlays": ovs})
+    return out
+
+
+def restore_fx_version(pid: str, index: int) -> dict:
+    vs = fx_versions(pid)
+    if not 0 <= index < len(vs):
+        raise UserError("This version does not exist any more.")
+    return set_overlays(pid, vs[index]["overlays"], "before restoring an earlier version")
+
+
+def set_overlays(pid: str, overlays: list[dict], label: str = "before saving") -> dict:
     t = _transcript(pid)
     dur = t.get("duration", 0)
 
     def fn(cl):
+        _snapshot_overlays(cl, label)
         clean = []
         for o in overlays:
             text = str(o.get("text", "")).strip() or (o.get("type", "") if o.get("kind") == "fx" else "")

@@ -2175,3 +2175,8 @@ a.chip { text-decoration: none; color: inherit; }
 .fx-colors { display: inline-flex; gap: 5px; align-items: center; margin: 4px 0; }
 .fx-color { width: 22px; height: 22px; border-radius: 50%; border: 2px solid rgba(74, 58, 48, 0.25); cursor: pointer; padding: 0; }
 .fx-color.on { border-color: var(--lila); box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--lila); }
+.fx-versions { margin: -4px 0 10px; }
+.fx-versions-list { display: grid; gap: 8px; margin-top: 6px; max-height: 420px; overflow: auto; }
+.fx-version { display: flex; gap: 12px; justify-content: space-between; align-items: flex-start; background: #fff;
+  border: 1px solid rgba(100, 68, 165, 0.2); border-radius: 10px; padding: 8px 10px; }
+.fx-version ul { margin: 4px 0 0; padding-left: 18px; color: var(--braun-2); }

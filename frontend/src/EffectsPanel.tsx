@@ -215,6 +215,37 @@ function FxPreview({ preview, item }: { preview: PreviewFn; item: Overlay }) {
 
 const SPEED_LABEL: Record<number, string> = { 0.25: "¼× slow", 0.5: "½× slow", 2: "2× fast", 4: "4× fast", 8: "8× fast" };
 
+/** Frühere Stände der Effekte wiederherstellen (z. B. wenn Claude etwas überschrieben hat). */
+function FxVersions({ id, onCuts }: { id: string; onCuts: (c: CutView) => void }) {
+  const [open, setOpen] = useState(false);
+  const [list, setList] = useState<Awaited<ReturnType<typeof api.fxVersions>>["versions"] | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const load = () => api.fxVersions(id).then((r) => setList(r.versions)).catch((e) => setErr(e.message));
+  return (
+    <div className="fx-versions small">
+      <button className="link" onClick={() => { setOpen(!open); if (!open) void load(); }}>🕘 Earlier versions (restore)</button>
+      {open && (
+        <div className="fx-versions-list">
+          {err && <div className="banner error">{err}</div>}
+          {list && !list.length && <p className="muted">No earlier versions saved yet.</p>}
+          {list?.map((v, k) => (
+            <div key={k} className="fx-version">
+              <div>
+                <strong>{v.ts ? new Date(v.ts * 1000).toLocaleString() : "earlier"}</strong> · {v.label} · {v.count} items ({v.fx} effects)
+                <ul>{v.summary.map((x, j) => <li key={j}>{x}</li>)}</ul>
+              </div>
+              <button className="btn small-btn" onClick={async () => {
+                if (!confirm("Restore this version? Your current effects are saved as a version first, so you can go back.")) return;
+                try { onCuts(await api.fxRestore(id, k)); setOpen(false); } catch (e) { setErr((e as Error).message); }
+              }}>↺ restore</button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** Große Effekte im ganzen Video (YouTube / Reel veredeln) plus Zeitraffer/Zeitlupe. */
 export function EffectsPanel({ id, cuts, onCuts, time, outTime, onSeek, keep }: {
   id: string; cuts: CutView; onCuts: (c: CutView) => void; time: number; outTime?: number | null; onSeek: (t: number) => void;
@@ -234,6 +265,7 @@ export function EffectsPanel({ id, cuts, onCuts, time, outTime, onSeek, keep }: 
   return (
     <section className="card fx-card" id="step-effects">
       <h3>Effects</h3>
+      <FxVersions id={id} onCuts={onCuts} />
       <EffectsEditor
         renderOptions={cuts.cutlist.render_options as unknown as Record<string, unknown>}
         onRenderOptions={async (r) => onCuts(await api.renderOptions(id, r as Partial<RenderOptions>))}
