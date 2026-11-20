@@ -2181,3 +2181,6 @@ a.chip { text-decoration: none; color: inherit; }
   border: 1px solid rgba(100, 68, 165, 0.2); border-radius: 10px; padding: 8px 10px; }
 .fx-version ul { margin: 4px 0 0; padding-left: 18px; color: var(--braun-2); }
 .fx-loop-times { display: flex; flex-direction: column; gap: 2px; margin: 4px 0; }
+.fx-loop-time { display: flex; gap: 8px; align-items: center; }
+.fx-loop-time > span:first-child { min-width: 230px; }
+.fx-loop-time input { width: 70px; }

@@ -249,8 +249,9 @@ function FxVersions({ id, onCuts }: { id: string; onCuts: (c: CutView) => void }
 }
 
 /** Große Effekte im ganzen Video (YouTube / Reel veredeln) plus Zeitraffer/Zeitlupe. */
-export function EffectsPanel({ id, cuts, onCuts, time, outTime, onSeek, keep }: {
+export function EffectsPanel({ id, cuts, onCuts, time, outTime, toSrc, toOut, onSeek, keep }: {
   id: string; cuts: CutView; onCuts: (c: CutView) => void; time: number; outTime?: number | null; onSeek: (t: number) => void;
+  toSrc?: (t: number) => number; toOut?: (t: number) => number;
   keep?: [number, number][];
 }) {
   const [busy, setBusy] = useState(false);
@@ -277,6 +278,8 @@ export function EffectsPanel({ id, cuts, onCuts, time, outTime, onSeek, keep }: 
         allowedInit={cuts.cutlist.fx_allowed}
         time={time}
         outTime={outTime}
+        toSrc={toSrc}
+        toOut={toOut}
         onSeek={onSeek}
         preview={(item, signal) => api.effectPreviewLive(id, item, signal)}
         onSave={async (list) => {
@@ -393,11 +396,13 @@ function inCutPart(keep: [number, number][] | undefined, t: number): boolean {
   return !!keep?.length && !keep.some(([a, b]) => t >= a - 0.05 && t <= b + 0.05);
 }
 
-export function EffectsEditor({ items: source, allowedInit, time, outTime, onSeek, preview, onSave, onSuggest, children, compact, exclude, keep, endAt, renderOptions, onRenderOptions }: {
+export function EffectsEditor({ items: source, allowedInit, time, outTime, toSrc, toOut, onSeek, preview, onSave, onSuggest, children, compact, exclude, keep, endAt, renderOptions, onRenderOptions }: {
   items: Overlay[];
   allowedInit?: string[];
   time: number;
   outTime?: number | null;
+  toSrc?: (t: number) => number;
+  toOut?: (t: number) => number;
   onSeek: (t: number) => void;
   preview: PreviewFn;
   onSave: (list: Overlay[]) => Promise<void>;
@@ -723,22 +728,32 @@ export function EffectsEditor({ items: source, allowedInit, time, outTime, onSee
               </div>
               {DESC[o.type ?? ""] && <div className="small muted fx-desc">ⓘ {DESC[o.type ?? ""]}</div>}
               {STUDIO_FIELDS[o.type ?? ""] && <StudioFields o={o} spec={STUDIO_FIELDS[o.type ?? ""]} onChange={(p) => upd(i, p)} />}
-              {o.type === "loop" && (o.items ?? []).length > 0 && (
-                <div className="fx-loop-times small">
-                  <span className="muted">When does each step light up? Pause the video where you start talking about it:</span>
-                  {(o.items ?? []).map((st, k) => (
-                    <button key={k} className="link" onClick={() => {
-                      const n = (o.items ?? []).length;
-                      const cur = (o.item_t ?? []).length === n ? [...(o.item_t ?? [])]
-                        : Array.from({ length: n }, (_, j) => Math.round((o.start + 0.6 + j * Math.max(0.5, (o.end - o.start - 0.6) / n)) * 10) / 10);
-                      cur[k] = Math.round(time * 10) / 10;
-                      upd(i, { item_t: cur });
-                    }}>
-                      {k + 1}. {st.slice(0, 24)} → {(o.item_t ?? []).length === (o.items ?? []).length ? formatTime(o.item_t![k]) : "auto"} (set to {formatTime(time)})
-                    </button>
-                  ))}
-                </div>
-              )}
+              {o.type === "loop" && (o.items ?? []).length > 0 && (() => {
+                const n = (o.items ?? []).length;
+                const cur = (o.item_t ?? []).length === n ? [...(o.item_t ?? [])]
+                  : Array.from({ length: n }, (_, j) => Math.round((o.start + 0.6 + j * Math.max(0.5, (o.end - o.start - 0.6) / n)) * 10) / 10);
+                const out = (t: number) => (toOut ? toOut(t) : t);
+                const src = (t: number) => (toSrc ? toSrc(t) : t);
+                const setAt = (k: number, srcT: number) => { const nx = [...cur]; nx[k] = Math.round(srcT * 10) / 10; upd(i, { item_t: nx }); };
+                return (
+                  <div className="fx-loop-times small">
+                    <span className="muted">When does each step light up? Time {toOut ? "in your finished video" : ""} (m:ss):</span>
+                    {(o.items ?? []).map((st, k) => (
+                      <div key={k} className="fx-loop-time">
+                        <span>{k + 1}. {st.slice(0, 32)}</span>
+                        <input key={`${k}-${cur[k]}`} defaultValue={formatTime(out(cur[k]))} placeholder="2:31"
+                          onBlur={(e) => {
+                            const p2 = e.target.value.trim().split(":").map(Number);
+                            const sec = p2.length === 2 ? p2[0] * 60 + p2[1] : p2[0];
+                            if (!Number.isNaN(sec)) setAt(k, src(sec));
+                          }} />
+                        <button className="link" onClick={() => setAt(k, time)}>← now ({formatTime(outTime ?? out(time))})</button>
+                        {(o.item_t ?? []).length !== n && <span className="muted">auto</span>}
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
               {o.type === "ringtimer" && (() => {
                 const [nm, tm = "", upto = ""] = (o.title ?? "").split("|");
                 const up = upto.trim() !== "";

@@ -395,6 +395,23 @@ export function ProjectView({ id }: { id: string }) {
     return keep.length ? keep[keep.length - 1][1] : t;
   };
 
+  /** Zeit im Original → Zeit im fertigen Video (Gegenstück zu outToSrc) */
+  const srcToOut = (t: number): number => {
+    const keep = cuts?.evaluation.keep ?? [];
+    const speed = cuts?.cutlist.speed ?? [];
+    let acc = 0;
+    for (const [a, b] of keep) {
+      const marks = [a, b, ...speed.flatMap((r) => [r.start, r.end]).filter((x) => x > a && x < b)].sort((x, y) => x - y);
+      for (let k = 0; k < marks.length - 1; k++) {
+        const s0 = marks[k], s1 = marks[k + 1];
+        const f = speed.find((r) => s0 >= r.start - 1e-6 && s1 <= r.end + 1e-6)?.factor ?? 1;
+        if (t <= s1) return acc + Math.max(0, t - s0) / f;
+        acc += (s1 - s0) / f;
+      }
+    }
+    return acc;
+  };
+
   // ---------- Rendern ----------
   const startRender = async () => {
     if (reelMode && !(cuts?.cutlist.overlays ?? []).some((o) => o.on)) {
@@ -911,7 +928,7 @@ export function ProjectView({ id }: { id: string }) {
           )}
         </div>
       </div>
-      {editMode && cuts && <EffectsPanel id={id} cuts={cuts} onCuts={setCuts} time={time} outTime={outTime} onSeek={(t) => seek(t, false)}
+      {editMode && cuts && <EffectsPanel id={id} cuts={cuts} onCuts={setCuts} time={time} outTime={outTime} toSrc={cutMode ? outToSrc : undefined} toOut={cutMode ? srcToOut : undefined} onSeek={(t) => seek(t, false)}
         keep={cutMode ? cuts.evaluation.keep : undefined} />}
       {cutMode && <YoutubePackage id={id} />}
       {reelMode && cuts && <ReelPackage id={id} cuts={cuts} onCuts={setCuts} time={time} duration={duration} />}
