@@ -183,7 +183,7 @@ function FxPreview({ preview, item }: { preview: PreviewFn; item: Overlay }) {
   const [loading, setLoading] = useState(false);
   const [failed, setFailed] = useState(false);
   const last = useRef<string | null>(null);
-  const key = JSON.stringify([item.type, item.place, item.title, item.items, item.start, item.end, item.scale, item.pos_x, item.pos_y, item.nudge_x, item.nudge_y]);
+  const key = JSON.stringify([item.type, item.place, item.title, item.items, item.start, item.end, item.scale, item.pos_x, item.pos_y, item.nudge_x, item.nudge_y, item.color, item.item_t]);
   useEffect(() => {
     const ctrl = new AbortController();
     const timer = setTimeout(async () => {
