@@ -275,7 +275,10 @@ export function ProjectView({ id }: { id: string }) {
     async (fn: () => Promise<CutView>) => {
       setBusy(true);
       try {
-        setCuts(await fn());
+        // Sicherung: antwortet der Motor nicht, wird der Editor nach 45 s wieder freigegeben (nichts bleibt grau)
+        const timeout = new Promise<never>((_, rej) => setTimeout(() => rej(new Error(
+          "The engine did not answer. Please look at the black window for an error, then press F5 and try again.")), 45000));
+        setCuts(await Promise.race([fn(), timeout]));
         setError(null);
       } catch (e) {
         setError((e as Error).message);
