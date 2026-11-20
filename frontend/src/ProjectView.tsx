@@ -299,7 +299,47 @@ export function ProjectView({ id }: { id: string }) {
     return run(() => api.cutWords(id, selWords, false));
   };
 
+  /** ganzer Satz um Wort i: bis zum letzten Satzzeichen davor / bis zum nächsten Satzzeichen (innerhalb des Absatzes) */
+  const sentenceOf = (i: number): [number, number] => {
+    const end = /[.!?…]["»”)]*$/;
+    let a = i, b = i;
+    while (a > 0 && words[a - 1].seg === words[i].seg && !end.test(words[a - 1].w)) a--;
+    while (b < words.length - 1 && words[b + 1].seg === words[i].seg && !end.test(words[b].w)) b++;
+    return [a, b];
+  };
+  const paragraphOf = (seg: number): [number, number] | null => {
+    const idx = words.filter((w) => w.seg === seg).map((w) => w.i);
+    return idx.length ? [idx[0], idx[idx.length - 1]] : null;
+  };
+  /** Text mit der Maus markiert (über mehrere Wörter/Sätze ziehen) → diese Wörter auswählen */
+  const onTextMouseUp = () => {
+    const selection = window.getSelection();
+    if (!selection || selection.isCollapsed || !textBox.current) return;
+    const spanOf = (n: Node | null): HTMLElement | null => {
+      let el: Node | null = n;
+      while (el && !(el instanceof HTMLElement && el.dataset.i)) el = el.parentNode;
+      return el as HTMLElement | null;
+    };
+    let a = spanOf(selection.anchorNode), b = spanOf(selection.focusNode);
+    if (!a || !b) {   // Markierung beginnt/endet zwischen Wörtern: nächstgelegene Wörter im markierten Bereich
+      const spans = Array.from(textBox.current.querySelectorAll<HTMLElement>("span[data-i]")).filter((el) => selection.containsNode(el, true));
+      if (!spans.length) return;
+      a = spans[0];
+      b = spans[spans.length - 1];
+    }
+    const i = Number(a.dataset.i), j = Number(b.dataset.i);
+    if (i === j) return;
+    setSel([Math.min(i, j), Math.max(i, j)]);
+    selection.removeAllRanges();
+  };
+
   const onWordClick = (w: FlatWord, ev: React.MouseEvent) => {
+    if (ev.detail >= 2) {   // Doppelklick: ganzer Satz
+      setSel(sentenceOf(w.i));
+      window.getSelection()?.removeAllRanges();
+      return;
+    }
+    if (window.getSelection && !window.getSelection()!.isCollapsed) return;   // gerade mit der Maus markiert
     if (ev.shiftKey && sel) {
       setSel([Math.min(sel[0], w.i), Math.max(sel[1], w.i)]);
       return;
@@ -658,7 +698,8 @@ export function ProjectView({ id }: { id: string }) {
           {cutMode ? (
             <p className="muted small hint">
               <span className="demo cut-retake">Struck through</span> = gets cut, <span className="demo suggestion">dashed</span> = suggestion.
-              Click a word to select it (Shift+click for several). <kbd>Del</kbd> deletes, <kbd>Ctrl+Z</kbd> undoes.
+              Click a word to select it. <strong>Drag with the mouse</strong> over several sentences, <strong>double-click</strong> for a whole
+              sentence, <strong>✂</strong> next to the time cuts a whole paragraph. <kbd>Del</kbd> deletes, <kbd>Ctrl+Z</kbd> undoes.
             </p>
           ) : reelMode ? (
             <p className="muted small hint">
@@ -676,6 +717,19 @@ export function ProjectView({ id }: { id: string }) {
               <div className="small">
                 <strong>"{selWords.slice(0, 12).map((k) => words[k]?.w).join(" ")}{selWords.length > 12 ? " …" : ""}"</strong>
                 {selDetExact && <div className="muted">{selDetExact.active ? selDetExact.reason : `Suggestion: ${selDetExact.reason}`}</div>}
+                {cutMode && (
+                  <div className="muted">
+                    Select: <button className="link" onClick={() => {
+                      const a2 = sentenceOf(sel[0])[0], b2 = sentenceOf(sel[1])[1];
+                      setSel([a2, b2]);
+                    }}>whole sentence{sel[0] !== sel[1] ? "s" : ""}</button>
+                    {" · "}<button className="link" onClick={() => {
+                      const p1 = paragraphOf(words[sel[0]].seg), p2 = paragraphOf(words[sel[1]].seg);
+                      if (p1 && p2) setSel([p1[0], p2[1]]);
+                    }}>whole paragraph</button>
+                    {" · "}{selWords.length} words, {Math.round(words[sel[1]].e - words[sel[0]].s)} s
+                  </div>
+                )}
                 {!selDetExact && selDet && cutMode && selDet.end - selDet.start > 1 && (
                   <div className="muted">
                     Part of a {selDet.active ? "cut" : "suggestion"} ({selDet.end - selDet.start} words).{" "}
@@ -746,7 +800,7 @@ export function ProjectView({ id }: { id: string }) {
             </div>
           )}
 
-          <div className={`transcript ${cutMode ? "editing" : ""}`} ref={textBox}>
+          <div className={`transcript ${cutMode ? "editing" : ""}`} ref={textBox} onMouseUp={editMode ? onTextMouseUp : undefined}>
             {!transcript && <p className="muted">The transcript appears here as soon as it is ready.</p>}
             {transcript && !transcript.segments.length && (
               <p className="muted">Nobody speaks in this clip. Write your idea in the reel package below – the texts are made from it.</p>
@@ -756,6 +810,17 @@ export function ProjectView({ id }: { id: string }) {
                 <button className="time" onClick={() => seek(s.s)} title="Jump here">
                   {formatTime(s.s)}
                 </button>
+                {cutMode && (() => {
+                  const pr = paragraphOf(si);
+                  if (!pr) return null;
+                  const allCut = !!flags && words.filter((w) => w.seg === si).every((w) => flags[w.i]);
+                  return (
+                    <button className="para-cut" disabled={busy} title={allCut ? "Bring this whole paragraph back" : "Cut this whole paragraph"}
+                      onClick={() => run(() => api.cutWords(id, Array.from({ length: pr[1] - pr[0] + 1 }, (_, k) => pr[0] + k), !allCut))}>
+                      {allCut ? "↺" : "✂"}
+                    </button>
+                  );
+                })()}
                 {words
                   .filter((w) => w.seg === si)
                   .map((w) => {
