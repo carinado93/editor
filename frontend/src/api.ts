@@ -100,6 +100,8 @@ export interface Overlay {
   pos_y?: "auto" | "top" | "middle" | "bottom";
   nudge_x?: number;
   nudge_y?: number;
+  /** Textfarbe: white | pink | yellow | lilac | green */
+  color?: string;
 }
 
 export interface EffectType {

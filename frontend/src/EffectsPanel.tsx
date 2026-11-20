@@ -32,7 +32,9 @@ const HINT: Record<string, string> = {
   nightfall: "Start|End|line, e.g. 18:00|21:47|wait… it's night?",
   logoff: "optional, e.g. logging off",
   sportpill: "SPORT|time, e.g. ZUMBA|30 min",
-  ringtimer: "Text|minutes, e.g. meditation time|30",
+  ringtimer: "Text|minutes, e.g. meditation time|30 – or count up: Text|from|to, e.g. Gedanken|1|190000",
+  circleword: "the word that circles, e.g. Gedanken",
+  countup: "Text|from|to, e.g. Gedanken =|1|190000",
   savedcard: "Title|Button, e.g. WORKOUT SAVED|RESUME: WORK · lines: Label|value",
   subscribe: "3 lines with |, e.g. any support in the form of|a subscribe or like|would be highly appreciated",
   heartcover: "LEFT|RIGHT word, e.g. THANK|YOU",
@@ -76,7 +78,9 @@ const DESC: Record<string, string> = {
   nightfall: "The room gets a night tint, the sun sets, the moon rises and the clock counts up.",
   logoff: "A glitch on the picture, then a lilac 'logging off…' pill. For shutting the computer down.",
   sportpill: "A lilac pill top left with a ticking stopwatch: sport + duration. Put one on each sport scene.",
-  ringtimer: "A ring timer counts down (e.g. 30:00 → 00:00) while the title writes itself. For meditation.",
+  ringtimer: "A ring timer counts down (e.g. 30:00 → 00:00) – or a number counts up in the ring (e.g. 1 → 190.000) – while the title writes itself.",
+  circleword: "A word written around a circle that keeps turning – e.g. 'Gedanken' for Gedankenkreisen.",
+  countup: "A text with a number that counts up faster and faster, e.g. 'Gedanken = 190.000'.",
   savedcard: "The video dims and a lilac 'WORKOUT SAVED' card pops up with 3 values; a cursor clicks the button. Keep it ≥ 2 s.",
   subscribe: "Lilac fills the screen from the middle (best when something covers the lens), 'a subscribe or like' + buttons get clicked, then the video opens again.",
   heartcover: "THANK / YOU drop in behind you, then a lilac heart grows from your face and covers the whole screen. Needs you in the video.",
@@ -110,6 +114,8 @@ const STUDIO_FIELDS: Record<string, StudioSpec> = {
   heartcover: { title: [["Left word", "THANK"], ["Right word", "YOU"]] },
   savedcard: { title: [["Heading", "WORKOUT SAVED"], ["Button", "RESUME: WORK"]],
     rows: { labels: ["Label", "Value"], defaults: [["Time", "2h 00m"], ["Activities", "3"], ["Mood", "reset"]] } },
+  circleword: { title: [["Word that circles", "Gedanken"], ["Text in the middle (optional)", ""]] },
+  countup: { title: [["Text", "Gedanken ="], ["From", "1"], ["To", "190000"]] },
   sharestats: { title: [["Call to action", "give kudos & follow for part 2"]],
     rows: { labels: ["Activity", "Time"], defaults: [["Work", "11h 00m"], ["Sports", "2h 00m"], ["Meditation", "30m"]] },
     name: ["Name on the sticker", "CARINA"] },
@@ -684,18 +690,36 @@ export function EffectsEditor({ items: source, allowedInit, time, outTime, onSee
               {DESC[o.type ?? ""] && <div className="small muted fx-desc">ⓘ {DESC[o.type ?? ""]}</div>}
               {STUDIO_FIELDS[o.type ?? ""] && <StudioFields o={o} spec={STUDIO_FIELDS[o.type ?? ""]} onChange={(p) => upd(i, p)} />}
               {o.type === "ringtimer" && (() => {
-                const [nm, tm = ""] = (o.title ?? "").split("|");
+                const [nm, tm = "", upto = ""] = (o.title ?? "").split("|");
+                const up = upto.trim() !== "";
                 const mins = (tm.match(/\d+([.,]\d+)?/) ?? [""])[0];
-                const setT = (n: string, m: string) => upd(i, { title: `${n.trim()}|${m || "30"}`, text: n || "meditation" });
+                const setT = (n: string, m: string, u2?: string) =>
+                  upd(i, { title: u2 !== undefined && u2 !== "" ? `${n.trim()}|${m || "1"}|${u2}` : `${n.trim()}|${m || "30"}`, text: n || "meditation" });
                 return (
                   <div className="fx-sport small">
-                    <input className="fx-title" placeholder="Text, e.g. meditation time" value={nm} onChange={(e) => setT(e.target.value, mins)} />
-                    <label>⏱ Minutes
-                      <input type="number" min={1} max={600} value={mins} placeholder="30" onChange={(e) => setT(nm, e.target.value)} />
-                    </label>
+                    <input className="fx-title" placeholder="Text, e.g. meditation time" value={nm} onChange={(e) => setT(e.target.value, tm, up ? upto : undefined)} />
+                    <select value={up ? "up" : "down"} onChange={(e) => (e.target.value === "up" ? setT(nm, "1", "190000") : setT(nm, "30"))}>
+                      <option value="down">counts down (minutes)</option><option value="up">counts up (number)</option>
+                    </select>
+                    {up ? (<>
+                      <label>from<input type="number" value={tm} onChange={(e) => setT(nm, e.target.value, upto)} /></label>
+                      <label>to<input type="number" value={upto} onChange={(e) => setT(nm, tm, e.target.value)} /></label>
+                    </>) : (
+                      <label>⏱ Minutes
+                        <input type="number" min={1} max={600} value={mins} placeholder="30" onChange={(e) => setT(nm, e.target.value)} />
+                      </label>
+                    )}
                   </div>
                 );
               })()}
+              {["behind", "typewriter", "circleword", "countup", "ringtimer"].includes(o.type ?? "") && (
+                <span className="fx-colors small">Colour:
+                  {([["white", "#fffdf9"], ["pink", "#f096b9"], ["yellow", "#fae28c"], ["lilac", "#c9b3ec"], ["green", "#a0d696"]] as const).map(([c, hex]) => (
+                    <button key={c} title={c} className={`fx-color ${(o.color ?? "") === c || (!o.color && c === "white") ? "on" : ""}`}
+                      style={{ background: hex }} onClick={() => upd(i, { color: c })} />
+                  ))}
+                </span>
+              )}
               {o.type === "sportpill" && (() => {
                 // Sport-Label: Name und Minuten getrennt eingeben (gespeichert als "NAME|30 min")
                 const [nm, tm = ""] = (o.title ?? "").split("|");

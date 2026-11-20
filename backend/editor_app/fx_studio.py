@@ -325,9 +325,22 @@ def draw_sportpill(base, ctx, it, t, d, mask):
 
 # ------------------------------------------------------------------ ring timer
 
+def _num(x: str) -> float | None:
+    try:
+        return float(str(x).replace(".", "").replace(",", ".").replace(" ", ""))
+    except ValueError:
+        return None
+
+
+def fmt_count(v: float) -> str:
+    """190000 → 190.000 (deutsche Tausenderpunkte)."""
+    return f"{int(round(v)):,}".replace(",", ".")
+
+
 def draw_ringtimer(base, ctx, it, t, d, mask):
     w, h, u = ctx.w, ctx.h, ctx.u
-    title, total = _parts(it.get("title", ""), 2, ["meditation time", "30"])
+    title, total, upto = _parts(it.get("title", ""), 3, ["meditation time", "30", ""])
+    count_up = _num(upto) is not None and _num(total) is not None   # "Text|1|190000" = hochzählen
     try:
         total_s = float(total) * 60
     except ValueError:
@@ -342,11 +355,22 @@ def draw_ringtimer(base, ctx, it, t, d, mask):
     dr = ImageDraw.Draw(ring)
     box = (20, 20, 20 + 2 * R, 20 + 2 * R)
     dr.ellipse(box, outline=(255, 255, 255, 110), width=max(6, int(16 * u)))
-    if k < 1:
-        dr.arc(box, -90 + 360 * k, 270, fill=LILAC + (255,), width=max(6, int(16 * u)))
-    left = total_s * (1 - k)
-    dr.text((20 + R, 20 + R), f"{int(left) // 60:02d}:{int(left) % 60:02d}", font=sfont("titan", int(70 * u)),
-            fill=WHITE, anchor="mm")
+    col = fx.text_color(it, LILAC)
+    if count_up:   # Ring füllt sich, Zahl zählt hoch (z. B. Gedanken 1 → 190.000)
+        if k > 0:
+            dr.arc(box, -90, -90 + 360 * k, fill=col + (255,), width=max(6, int(16 * u)))
+        a0, a1 = _num(total), _num(upto)
+        val = fmt_count(a0 + (a1 - a0) * (1 - (1 - k) ** 3))
+        fs = int(70 * u)
+        while sfont("titan", fs).getlength(val) > 1.7 * R and fs > 20:
+            fs = int(fs * 0.9)
+        dr.text((20 + R, 20 + R), val, font=sfont("titan", fs), fill=WHITE, anchor="mm")
+    else:
+        if k < 1:
+            dr.arc(box, -90 + 360 * k, 270, fill=col + (255,), width=max(6, int(16 * u)))
+        left = total_s * (1 - k)
+        dr.text((20 + R, 20 + R), f"{int(left) // 60:02d}:{int(left) % 60:02d}", font=sfont("titan", int(70 * u)),
+                fill=WHITE, anchor="mm")
     pulse = 1 + (0.08 * math.sin((t - (d - 0.5)) * 12) if k >= 1 else 0)
     fx.paste_scaled(layer, ring, (cx, cy), s * pulse, 1)
     # write-on title
@@ -680,6 +704,90 @@ def draw_sharestats(base, ctx, it, t, d, mask):
     return out
 
 
+# ------------------------------------------------------------------ Wort kreist ("Gedankenkreisen")
+
+def _ring_of_word(word: str, R: float, size: int, color) -> Image.Image:
+    """Das Wort mehrfach rund um einen Kreis geschrieben (Buchstaben zeigen nach außen)."""
+    f = sfont("fredoka_b", size)
+    unit = word.upper().strip() + "  •  "
+    circ = 2 * math.pi * R
+    reps = max(1, int(circ // max(1.0, f.getlength(unit))))
+    text = unit * reps
+    total = sum(f.getlength(ch) for ch in text)
+    scale = circ / max(1.0, total)          # Abstände so strecken, dass der Kreis genau voll wird
+    side = int(2 * (R + size * 1.2))
+    img = Image.new("RGBA", (side, side), (0, 0, 0, 0))
+    c = side / 2
+    ang = -math.pi / 2
+    for ch in text:
+        cw = f.getlength(ch) * scale
+        mid = ang + cw / 2 / R
+        if ch.strip():
+            g = Image.new("RGBA", (int(size * 1.6), int(size * 1.6)), (0, 0, 0, 0))
+            ImageDraw.Draw(g).text((g.width / 2, g.height / 2), ch, font=f, fill=color + (255,), anchor="mm")
+            g = g.rotate(-math.degrees(mid) - 90, resample=Image.BICUBIC, expand=True)
+            x, y = c + R * math.cos(mid), c + R * math.sin(mid)
+            img.alpha_composite(g, (int(x - g.width / 2), int(y - g.height / 2)))
+        ang += cw / R
+    return img
+
+
+def draw_circleword(base, ctx, it, t, d, mask):
+    """Ein Wort kreist: rund um einen Kreis geschrieben und dreht sich (title 'Wort|Mitte (optional)')."""
+    w, h, u = ctx.w, ctx.h, ctx.u
+    word, center = _parts(it.get("title", ""), 2, ["Gedanken", ""])
+    col = fx.text_color(it, WHITE)
+    R = 250 * u * float(it.get("scale") or 1)
+    size = int(58 * u * float(it.get("scale") or 1))
+    key = ("circleword", word, int(R), size, col)
+    if key not in ctx.cache:
+        ctx.cache[key] = _ring_of_word(word, R, size, col)
+    ring = ctx.cache[key].rotate(-t * 40, resample=Image.BICUBIC)   # 40° pro Sekunde
+    cx = _free_x(ctx, ring.width)
+    cy = h * (0.5 if not ctx.portrait else 0.6)
+    k_in = back(t / 0.45)
+    k_out = 1 - ease((t - (d - 0.4)) / 0.4) if t > d - 0.4 else 1
+    layer = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    fx.paste_scaled(layer, fx._shadow(ring, 6, 5, 110), (cx, cy), k_in, k_out)
+    if center:
+        f = sfont("titan", int(64 * u))
+        im = Image.new("RGBA", (int(f.getlength(center) + 40), int(f.size * 1.6)), (0, 0, 0, 0))
+        ImageDraw.Draw(im).text((im.width / 2, im.height / 2), center, font=f, fill=WHITE, anchor="mm")
+        fx.paste_scaled(layer, fx._shadow(im, 6, 5, 120), (cx, cy), k_in, k_out)
+    out = base.copy()
+    out.alpha_composite(layer)
+    return out
+
+
+# ------------------------------------------------------------------ "Gedanken = 190.000" (Zähler mit Text)
+
+def draw_countup(base, ctx, it, t, d, mask):
+    """Text + Zahl, die immer größer wird (title 'Text|von|bis', z. B. 'Gedanken =|1|190000')."""
+    w, h, u = ctx.w, ctx.h, ctx.u
+    label, a, b = _parts(it.get("title", ""), 3, ["Gedanken =", "1", "190000"])
+    a0, a1 = _num(a) or 0.0, _num(b) or 100.0
+    k = min(1.0, max(0.0, (t - 0.25) / max(0.3, d * 0.8 - 0.25)))
+    val = fmt_count(a0 + (a1 - a0) * (k ** 2.2))   # erst langsam, dann immer schneller (Gedanken rasen)
+    col = fx.text_color(it, WHITE)
+    sc = float(it.get("scale") or 1)
+    f1 = sfont("fredoka_b", int(64 * u * sc))
+    f2 = sfont("titan", int(110 * u * sc * (0.9 + 0.25 * k)))   # Zahl wächst auch optisch
+    W1, W2 = f1.getlength(label), f2.getlength(fmt_count(a1))
+    im = Image.new("RGBA", (int(max(W1, W2) + 80), int(f1.size * 1.4 + f2.size * 1.4)), (0, 0, 0, 0))
+    dr = ImageDraw.Draw(im)
+    dr.text((im.width / 2, f1.size * 0.8), label, font=f1, fill=WHITE, anchor="mm")
+    dr.text((im.width / 2, f1.size * 1.4 + f2.size * 0.7), val, font=f2, fill=col, anchor="mm")
+    cx = _free_x(ctx, im.width)
+    cy = h * (0.42 if not ctx.portrait else 0.55)
+    k_in = back(t / 0.35)
+    k_out = 1 - ease((t - (d - 0.35)) / 0.35) if t > d - 0.35 else 1
+    layer = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    fx.paste_scaled(layer, fx._shadow(im, 8, 6, 130), (cx, cy), k_in, k_out)
+    out = base.copy()
+    out.alpha_composite(layer)
+    return out
+
+
 # ------------------------------------------------------------------ registry
 
 STUDIO_TYPES = {
@@ -688,7 +796,9 @@ STUDIO_TYPES = {
     "nightfall": ("E", "Sunset → moon, time counts", ("side",)),
     "logoff": ("E", "Glitch + 'logging off…'", ("side",)),
     "sportpill": ("E", "Sport label with stopwatch", ("side",)),
-    "ringtimer": ("E", "Meditation ring timer", ("side",)),
+    "ringtimer": ("E", "Meditation ring timer (counts down or up)", ("side",)),
+    "circleword": ("E", "Word circling (e.g. Gedankenkreisen)", ("side",)),
+    "countup": ("E", "Text + number counting up (e.g. Gedanken = 190.000)", ("side",)),
     "savedcard": ("E", "'Workout saved' card + click", ("scene",)),
     "subscribe": ("E", "Subscribe/like on lilac (iris)", ("scene",)),
     "heartcover": ("E", "THANK YOU behind you + lilac heart cover", ("side",)),
@@ -702,7 +812,10 @@ STUDIO_DESCRIBE = {
     "nightfall": "Raum wird Nacht, Sonne geht unter, Mond auf, Uhr zählt (title 'Start|Ende|Satz', z. B. '18:00|21:47|wait… it's night?') – Abend, Zeit vergeht",
     "logoff": "Glitch, dann Pille 'logging off…' (title optional) – Feierabend, PC aus, 2–3 s",
     "sportpill": "Sport-Pille mit Stoppuhr oben links (title 'SPORT|Dauer', z. B. 'ZUMBA|30 min') – jede Sportart, ganze Szene",
-    "ringtimer": "Meditations-Ring zählt runter + Titel schreibt sich (title 'Text|Minuten', z. B. 'meditation time|30') – Meditation/Pause, 3–4 s",
+    "ringtimer": "Meditations-Ring zählt runter + Titel schreibt sich (title 'Text|Minuten', z. B. 'meditation time|30'); "
+                 "hochzählen mit 'Text|von|bis' (z. B. 'Gedanken|1|190000') – Meditation/Pause, 3–4 s",
+    "circleword": "ein Wort kreist rund um einen Kreis und dreht sich (title 'Wort|Mitte optional', z. B. 'Gedanken') – Gedankenkreisen, Grübeln, 2–4 s",
+    "countup": "Text + Zahl, die immer schneller hochzählt (title 'Text|von|bis', z. B. 'Gedanken =|1|190000') – wenn sie über viele Gedanken/Dinge spricht, 2–4 s",
     "savedcard": "Video gedimmt, lila Karte 'WORKOUT SAVED' mit 3 Werten, Cursor klickt Knopf (title 'Überschrift|Knopf', items 'Label|Wert') – Übergang nach Sport, ≥2 s",
     "subscribe": "Lila füllt das Bild von der Mitte, 'a subscribe or like' + Knöpfe werden angeklickt (title '3 Zeilen mit |') – Abo-Bitte, wenn etwas die Linse verdeckt, 3–4 s",
     "heartcover": "'THANK YOU' hinter ihr, dann wächst ein lila Herz aus ihrem Gesicht und deckt alles ab (title 'THANK|YOU') – Danke/Luftkuss am Ende, 2–3 s",
@@ -711,6 +824,7 @@ STUDIO_DESCRIBE = {
 
 STUDIO_DRAWERS = {"battery": draw_battery, "codechips": draw_codechips, "nightfall": draw_nightfall,
                   "logoff": draw_logoff, "sportpill": draw_sportpill, "ringtimer": draw_ringtimer,
+                  "circleword": draw_circleword, "countup": draw_countup,
                   "savedcard": draw_savedcard, "subscribe": draw_subscribe, "heartcover": draw_heartcover,
                   "sharestats": draw_sharestats}
 

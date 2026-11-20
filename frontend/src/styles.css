@@ -2172,3 +2172,6 @@ a.chip { text-decoration: none; color: inherit; }
   font-size: 0.8rem; padding: 0 6px; margin: 0 6px 0 -2px; vertical-align: 1px; }
 .para-cut:hover { background: var(--rot); color: #fff; }
 .transcript.editing { user-select: text; }
+.fx-colors { display: inline-flex; gap: 5px; align-items: center; margin: 4px 0; }
+.fx-color { width: 22px; height: 22px; border-radius: 50%; border: 2px solid rgba(74, 58, 48, 0.25); cursor: pointer; padding: 0; }
+.fx-color.on { border-color: var(--lila); box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--lila); }

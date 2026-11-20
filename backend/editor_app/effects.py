@@ -92,7 +92,8 @@ def clean(o: dict, duration: float | None = None) -> dict | None:
             "pos_x": o.get("pos_x") if o.get("pos_x") in ("left", "center", "right") else "auto",
             "pos_y": o.get("pos_y") if o.get("pos_y") in ("top", "middle", "bottom") else "auto",
             "nudge_x": round(max(-1.0, min(1.0, float(o.get("nudge_x") or 0))), 3),
-            "nudge_y": round(max(-1.0, min(1.0, float(o.get("nudge_y") or 0))), 3)}
+            "nudge_y": round(max(-1.0, min(1.0, float(o.get("nudge_y") or 0))), 3),
+            "color": o.get("color") if o.get("color") in fx.TEXT_COLORS else ""}
 
 
 def clip_transcript(transcript: dict, flags: list, segments: list[list[float]]) -> dict:

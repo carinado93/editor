@@ -10,6 +10,7 @@ import re
 import threading
 
 from . import cuts, gaze, noises, projects
+from .fx import TEXT_COLORS as _TEXT_COLORS
 from .errors import UserError
 
 _lock = threading.RLock()
@@ -571,6 +572,7 @@ def set_overlays(pid: str, overlays: list[dict]) -> dict:
                     item["scale"] = 1.0
                 item["pos_x"] = o.get("pos_x") if o.get("pos_x") in ("left", "center", "right") else "auto"
                 item["pos_y"] = o.get("pos_y") if o.get("pos_y") in ("top", "middle", "bottom") else "auto"
+                item["color"] = o.get("color") if o.get("color") in _TEXT_COLORS else ""
                 for nk in ("nudge_x", "nudge_y"):
                     try:
                         item[nk] = round(max(-1.0, min(1.0, float(o.get(nk) or 0))), 3)

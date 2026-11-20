@@ -840,9 +840,11 @@ def draw_typewriter(layer, ctx, it, t, d, place):
         part = ln[:max(0, left)]
         left -= len(ln)
         x = ctx.w * 0.08
+        col = text_color(it, WEISS)
+        shadow = (74, 52, 110) if it.get("color") in ("lilac", "lila", "white", "", None) and col != WEISS else LILA
         if part:
-            dr.text((x + 5 * ctx.u, y + 6 * ctx.u), part, font=f, fill=LILA + (int(230 * out),), anchor="lt")
-            dr.text((x, y), part, font=f, fill=WEISS + (int(255 * out),), anchor="lt")
+            dr.text((x + 5 * ctx.u, y + 6 * ctx.u), part, font=f, fill=shadow + (int(230 * out),), anchor="lt")
+            dr.text((x, y), part, font=f, fill=col + (int(255 * out),), anchor="lt")
         if len(part) < len(ln) or ln is lines[-1]:  # hier steht der Cursor
             if int(t * 3) % 2 == 0:
                 cx = x + f.getlength(part) + 6 * ctx.u
@@ -1658,11 +1660,11 @@ def render_frame(frame: Image.Image, it: dict, t: float, d: float, ctx: Ctx, mas
         while f.getlength(txt) > w * 0.94 and f.size > 40:
             f = font("head", int(f.size * 0.9))
         s, a = appear(t, 0.05, 0, d, pop=0.4)
-        key = ("behind", txt, f.size)
+        key = ("behind", txt, f.size, it.get("color"))
         if key not in ctx.cache:
             tw, tht = text_size(txt, f)
             im = Image.new("RGBA", (tw + 60, tht + 120), (0, 0, 0, 0))
-            col = WEISS if it.get("color") != "lila" else LILA
+            col = text_color(it, WEISS)
             ImageDraw.Draw(im).text((im.width / 2, im.height / 2), txt, font=f, fill=col, anchor="mm")
             ctx.cache[key] = im
         fy = ctx.face[1] * h
@@ -1783,7 +1785,16 @@ def preview_png(it: dict, w: int, h: int, face_box, frame: Image.Image | None, o
 # ---------------------------------------------------------------- Studio effects (Day-in-my-life training, Nov 2026)
 from . import fx_studio as _studio  # noqa: E402  (registers group "E")
 # Studio-Effekte, die ein Element über das Bild legen – die kann Carina frei positionieren
-STUDIO_MOVABLE = {"battery", "codechips", "logoff", "sportpill", "ringtimer"}
+# Textfarben zum Auswählen (Text hinter dir, Schreibmaschine, Wort kreist, Zähler)
+TEXT_COLORS = {"white": (255, 253, 249), "pink": (240, 150, 185), "yellow": (250, 226, 140), "lilac": (201, 179, 236),
+               "green": (160, 214, 150), "lila": (201, 179, 236)}
+
+
+def text_color(it: dict, default=(255, 253, 249)) -> tuple:
+    return TEXT_COLORS.get(it.get("color") or "", default)
+
+
+STUDIO_MOVABLE = {"battery", "codechips", "logoff", "sportpill", "ringtimer", "circleword", "countup"}
 
 STUDIO_DRAWERS = dict(_studio.STUDIO_DRAWERS)
 TYPES.update(_studio.STUDIO_TYPES)
