@@ -56,6 +56,7 @@ export function ProjectView({ id }: { id: string }) {
   const [error, setError] = useState<string | null>(null);
   const [current, setCurrent] = useState(-1);
   const [time, setTime] = useState(0);
+  const [outTime, setOutTime] = useState<number | null>(null);   // Zeit im fertigen Video (unten), falls dort pausiert
   const [follow, setFollow] = useState(true);
   const [preview, setPreview] = useState(true);
   const [sel, setSel] = useState<[number, number] | null>(null);
@@ -233,6 +234,7 @@ export function ProjectView({ id }: { id: string }) {
         }
       }
       setTime(t);
+      if (!v.paused) setOutTime(null);   // oberes Video läuft: dessen Zeit gilt
       if (words.length) {
         const f = findAt(words, t, (w) => w.s);
         setCurrent(f >= 0 && t <= words[f].e + 0.3 ? f : -1);
@@ -373,6 +375,25 @@ export function ProjectView({ id }: { id: string }) {
     window.addEventListener("keydown", on);
     return () => window.removeEventListener("keydown", on);
   });
+
+  /** Zeit im fertigen (geschnittenen) Video → Zeit im Original (über die behaltenen Stellen und Tempo-Bereiche) */
+  const outToSrc = (t: number): number => {
+    const keep = cuts?.evaluation.keep ?? [];
+    const speed = cuts?.cutlist.speed ?? [];
+    let acc = 0;
+    for (const [a, b] of keep) {
+      // Stück in Teilstücke mit eigenem Tempo zerlegen
+      const marks = [a, b, ...speed.flatMap((r) => [r.start, r.end]).filter((x) => x > a && x < b)].sort((x, y) => x - y);
+      for (let k = 0; k < marks.length - 1; k++) {
+        const s0 = marks[k], s1 = marks[k + 1];
+        const f = speed.find((r) => s0 >= r.start - 1e-6 && s1 <= r.end + 1e-6)?.factor ?? 1;
+        const len = (s1 - s0) / f;
+        if (t <= acc + len) return s0 + (t - acc) * f;
+        acc += len;
+      }
+    }
+    return keep.length ? keep[keep.length - 1][1] : t;
+  };
 
   // ---------- Rendern ----------
   const startRender = async () => {
@@ -661,8 +682,10 @@ export function ProjectView({ id }: { id: string }) {
                 return (
                   <div className="watch">
                     <h4>Your finished video</h4>
-                    <video key={shown} className="watch-video" src={api.exportWatchUrl(id, shown)} controls preload="metadata" playsInline />
-                    <div className="small muted">{shown}</div>
+                    <video key={shown} className="watch-video" src={api.exportWatchUrl(id, shown)} controls preload="metadata" playsInline
+                      onTimeUpdate={(e) => { const t = e.currentTarget.currentTime; setOutTime(t); setTime(outToSrc(t)); }}
+                      onSeeked={(e) => { const t = e.currentTarget.currentTime; setOutTime(t); setTime(outToSrc(t)); }} />
+                    <div className="small muted">{shown} · pause here and add an effect below – it is placed at this moment</div>
                   </div>
                 );
               })()}
@@ -888,7 +911,7 @@ export function ProjectView({ id }: { id: string }) {
           )}
         </div>
       </div>
-      {editMode && cuts && <EffectsPanel id={id} cuts={cuts} onCuts={setCuts} time={time} onSeek={(t) => seek(t, false)}
+      {editMode && cuts && <EffectsPanel id={id} cuts={cuts} onCuts={setCuts} time={time} outTime={outTime} onSeek={(t) => seek(t, false)}
         keep={cutMode ? cuts.evaluation.keep : undefined} />}
       {cutMode && <YoutubePackage id={id} />}
       {reelMode && cuts && <ReelPackage id={id} cuts={cuts} onCuts={setCuts} time={time} duration={duration} />}

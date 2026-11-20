@@ -210,8 +210,8 @@ function FxPreview({ preview, item }: { preview: PreviewFn; item: Overlay }) {
 const SPEED_LABEL: Record<number, string> = { 0.25: "¼× slow", 0.5: "½× slow", 2: "2× fast", 4: "4× fast", 8: "8× fast" };
 
 /** Große Effekte im ganzen Video (YouTube / Reel veredeln) plus Zeitraffer/Zeitlupe. */
-export function EffectsPanel({ id, cuts, onCuts, time, onSeek, keep }: {
-  id: string; cuts: CutView; onCuts: (c: CutView) => void; time: number; onSeek: (t: number) => void;
+export function EffectsPanel({ id, cuts, onCuts, time, outTime, onSeek, keep }: {
+  id: string; cuts: CutView; onCuts: (c: CutView) => void; time: number; outTime?: number | null; onSeek: (t: number) => void;
   keep?: [number, number][];
 }) {
   const [busy, setBusy] = useState(false);
@@ -236,6 +236,7 @@ export function EffectsPanel({ id, cuts, onCuts, time, onSeek, keep }: {
         items={fxItems}
         allowedInit={cuts.cutlist.fx_allowed}
         time={time}
+        outTime={outTime}
         onSeek={onSeek}
         preview={(item, signal) => api.effectPreviewLive(id, item, signal)}
         onSave={async (list) => {
@@ -352,10 +353,11 @@ function inCutPart(keep: [number, number][] | undefined, t: number): boolean {
   return !!keep?.length && !keep.some(([a, b]) => t >= a - 0.05 && t <= b + 0.05);
 }
 
-export function EffectsEditor({ items: source, allowedInit, time, onSeek, preview, onSave, onSuggest, children, compact, exclude, keep, endAt, renderOptions, onRenderOptions }: {
+export function EffectsEditor({ items: source, allowedInit, time, outTime, onSeek, preview, onSave, onSuggest, children, compact, exclude, keep, endAt, renderOptions, onRenderOptions }: {
   items: Overlay[];
   allowedInit?: string[];
   time: number;
+  outTime?: number | null;
   onSeek: (t: number) => void;
   preview: PreviewFn;
   onSave: (list: Overlay[]) => Promise<void>;
@@ -607,7 +609,10 @@ export function EffectsEditor({ items: source, allowedInit, time, onSeek, previe
       </div>
 
       <div className="fx-tool">
-        <div className="fx-tool-title">＋ Add an effect yourself <span className="muted small">at {formatTime(time)} (pause the video where it should start)</span></div>
+        <div className="fx-tool-title">＋ Add an effect yourself <span className="muted small">
+          {outTime != null
+            ? <>at {formatTime(outTime)} in your finished video (= {formatTime(time)} in the original)</>
+            : <>at {formatTime(time)} (pause the video – or your finished video – where it should start)</>}</span></div>
         <div className="fx-add-row">
           <select value={addType} onChange={(e) => setAddType(e.target.value)}>
             {types.map((t) => (
@@ -617,7 +622,7 @@ export function EffectsEditor({ items: source, allowedInit, time, onSeek, previe
           <textarea className="fx-add-text" rows={1} value={addText}
             placeholder={HINT[addType] ? `Your text (optional) – ${HINT[addType]}` : "Your text (optional)"}
             onChange={(e) => setAddText(e.target.value)} />
-          <button className="btn" onClick={add}>+ Add at {formatTime(time)}</button>
+          <button className="btn" onClick={add}>+ Add at {formatTime(outTime ?? time)}{outTime != null ? " (finished video)" : ""}</button>
         </div>
         {DESC[addType] && <div className="small muted fx-desc">ⓘ {DESC[addType]}</div>}
         {endAt != null && (
