@@ -59,7 +59,7 @@ export function Settings() {
             onChange={(e) => setKey(e.target.value)}
             autoComplete="off"
           />
-          <button className="btn" disabled={busy || !key.trim()} onClick={save}>
+          <button title="Save – check and save your settings" className="btn" disabled={busy || !key.trim()} onClick={save}>
             {busy ? "Checking …" : "Save"}
           </button>
         </div>

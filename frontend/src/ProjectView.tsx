@@ -463,7 +463,7 @@ export function ProjectView({ id }: { id: string }) {
   return (
     <div className="page review">
       <div className="review-head">
-        <a href="#/" className="link">
+        <a title="Back – to all projects" href="#/" className="link">
           ← All projects
         </a>
         <h2>{project.name}</h2>
@@ -480,12 +480,12 @@ export function ProjectView({ id }: { id: string }) {
       {editMode && cuts && <AskClaude id={id} onCuts={setCuts} canUndo={cuts.can_undo} />}
       {editMode && cuts && (
         <nav className="step-nav" aria-label="Steps">
-          <a href="#step-cut" onClick={jump}>{cutMode ? "1 · Cut" : "1 · Texts"}</a>
-          <a href="#step-effects" onClick={jump}>2 · Effects</a>
-          <a href="#step-render" onClick={jump}>3 · Render</a>
-          {cutMode && <a href="#step-reels" onClick={jump}>4 · Reels</a>}
-          {cutMode && <a href="#step-texts" onClick={jump}>5 · Title &amp; texts</a>}
-          {cutMode && <a href="#step-thumb" onClick={jump}>6 · Thumbnail</a>}
+          <a title="Step 1 – cut the video / edit the texts" href="#step-cut" onClick={jump}>{cutMode ? "1 · Cut" : "1 · Texts"}</a>
+          <a title="Step 2 – add effects (texts, boxes, cut-out tricks)" href="#step-effects" onClick={jump}>2 · Effects</a>
+          <a title="Step 3 – render the finished video" href="#step-render" onClick={jump}>3 · Render</a>
+          {cutMode && <a title="Step 4 – make short reels from this video" href="#step-reels" onClick={jump}>4 · Reels</a>}
+          {cutMode && <a title="Step 5 – YouTube title, description and texts" href="#step-texts" onClick={jump}>5 · Title &amp; texts</a>}
+          {cutMode && <a title="Step 6 – make the thumbnail" href="#step-thumb" onClick={jump}>6 · Thumbnail</a>}
         </nav>
       )}
 
@@ -668,14 +668,14 @@ export function ProjectView({ id }: { id: string }) {
                   ))}
                 </select>
                 )}
-                <button className="btn" onClick={startRender} disabled={!!rendering || busy || !newDur}>
+                <button title="Render – make the finished video file" className="btn" onClick={startRender} disabled={!!rendering || busy || !newDur}>
                   {reelMode ? "Render reel" : "Final render"}
                 </button>
               </div>
               {rendering && r && (
                 <div className="small">
                   <progress value={r.progress} max={1} /> {r.message}{" "}
-                  <button className="link danger" onClick={async () => {
+                  <button title="Cancel – stop rendering" className="link danger" onClick={async () => {
                     if (!confirm("Cancel this render? The half-finished video is deleted.")) return;
                     try { setProject(await api.cancelRender(id)); } catch (e) { setError((e as Error).message); }
                   }}>✕ Cancel</button>
@@ -690,7 +690,7 @@ export function ProjectView({ id }: { id: string }) {
                 }} />{" "}
                 Also download it in the browser (it is always saved on your Desktop in “SOCIAL MEDIA APP”)
               </label>
-              <button className="link" onClick={() => api.openOutbox(reelMode ? "reels" : "youtube").catch(() => {})}>
+              <button title="Open folder – shows the finished videos on your Desktop" className="link" onClick={() => api.openOutbox(reelMode ? "reels" : "youtube").catch(() => {})}>
                 📁 Open the {reelMode ? "Reels" : "YouTube videos"} folder
               </button>
               {r?.status === "fehler" && <div className="small error-text">⚠ {r.error}</div>}
@@ -710,8 +710,8 @@ export function ProjectView({ id }: { id: string }) {
                 <ul className="exports small">
                   {[...project.exports].reverse().map((x) => (
                     <li key={x.file}>
-                      <button className="link" onClick={() => setWatch(x.file)}>▶ watch</button>{" "}
-                      <a href={api.exportUrl(id, x.file)} download>
+                      <button title="Watch – play this finished video here" className="link" onClick={() => setWatch(x.file)}>▶ watch</button>{" "}
+                      <a title="Download – save this video file" href={api.exportUrl(id, x.file)} download>
                         ⬇ {x.file}
                       </a>
                       <span className="muted">
@@ -762,7 +762,7 @@ export function ProjectView({ id }: { id: string }) {
                 {selDetExact && <div className="muted">{selDetExact.active ? selDetExact.reason : `Suggestion: ${selDetExact.reason}`}</div>}
                 {cutMode && (
                   <div className="muted">
-                    Select: <button className="link" onClick={() => {
+                    Select: <button title="Whole sentence – select the complete sentence" className="link" onClick={() => {
                       const a2 = sentenceOf(sel[0])[0], b2 = sentenceOf(sel[1])[1];
                       setSel([a2, b2]);
                     }}>whole sentence{sel[0] !== sel[1] ? "s" : ""}</button>
@@ -804,7 +804,7 @@ export function ProjectView({ id }: { id: string }) {
                     {buzzOf.has(sel[0]) ? "★ Remove buzzword" : "★ Make buzzword"}
                   </button>
                 )}
-                <button className="btn ghost" onClick={() => seek(words[sel[0]].s)}>
+                <button title="Listen – play this part" className="btn ghost" onClick={() => seek(words[sel[0]].s)}>
                   ▶ Listen
                 </button>
                 {cutMode && (
@@ -829,7 +829,7 @@ export function ProjectView({ id }: { id: string }) {
                 <span className="speed-btns small" title="Time-lapse / slow motion for the selected words">
                   Speed:
                   {[0.25, 0.5, 2, 4, 8].map((f) => (
-                    <button key={f} className="link" disabled={busy} onClick={() => {
+                    <button title="Speed – play slower or faster to check the cut" key={f} className="link" disabled={busy} onClick={() => {
                       const a = words[sel[0]].s, b = words[sel[1]].e;
                       const rest = (cuts?.cutlist.speed ?? []).filter((r) => r.end <= a || r.start >= b);
                       run(() => api.setSpeed(id, [...rest, { start: a, end: b, factor: f, mute: f > 2 }]));
@@ -1110,11 +1110,11 @@ function TimeCutBox({ id, cuts, time, clips, busy, onSeek, run }: {
       <span>
         Cut by time (also parts without speech):{" "}
         {from == null ? (
-          <button className="btn ghost small-btn" disabled={busy} onClick={() => setFrom(time)}>✂ start cut here ({formatTime(time)})</button>
+          <button title="Start cut – the cut starts at the current position" className="btn ghost small-btn" disabled={busy} onClick={() => setFrom(time)}>✂ start cut here ({formatTime(time)})</button>
         ) : (
           <>
             from <strong>{formatTime(from)}</strong>{" "}
-            <button className="btn small-btn" disabled={busy || time <= from} onClick={() => {
+            <button title="End cut – the cut ends at the current position" className="btn small-btn" disabled={busy || time <= from} onClick={() => {
               const a = from;
               setFrom(null);
               void run(() => api.timeCuts(id, [...ranges, [a, time]]));
@@ -1127,7 +1127,7 @@ function TimeCutBox({ id, cuts, time, clips, busy, onSeek, run }: {
         <span className="time-cut-list">
           {ranges.map(([a, b], k) => (
             <span key={k} className="chip cut-pause">
-              <button className="link" onClick={() => onSeek(a)}>{formatTime(a)}–{formatTime(b)}</button>{" "}
+              <button title="Cut part – click to jump there" className="link" onClick={() => onSeek(a)}>{formatTime(a)}–{formatTime(b)}</button>{" "}
               <button className="link danger" disabled={busy} title="Bring this part back"
                 onClick={() => run(() => api.timeCuts(id, ranges.filter((_, j) => j !== k)))}>✕</button>
             </span>
@@ -1166,7 +1166,7 @@ function AskClaude({ id, onCuts, canUndo }: { id: string; onCuts: (c: CutView) =
         <textarea rows={2} value={wish} onChange={(e) => setWish(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && wish.trim() && !busy) { e.preventDefault(); void go(); } }}
           placeholder={'e.g. "a checklist when I list the 3 signs, on the right" · "cut the first 3 seconds" · "statement card MYTH 2 at 1:20" · "slow motion when I sit down" · "remove the purple label"'} />
-        <button className="btn" disabled={busy || !wish.trim()} onClick={go}>{busy ? "Claude is working …" : "Do it"}</button>
+        <button title="Do it – Claude changes the cut as you wrote" className="btn" disabled={busy || !wish.trim()} onClick={go}>{busy ? "Claude is working …" : "Do it"}</button>
       </div>
       {err && <div className="banner error small">{err}</div>}
       {res && (
@@ -1175,7 +1175,7 @@ function AskClaude({ id, onCuts, canUndo }: { id: string; onCuts: (c: CutView) =
           {!!res.done.length && <div className="muted">Done: {res.done.join(" · ")}</div>}
           {!res.done.length && !res.message && <div>Nothing to change.</div>}
           {canUndo && !!res.done.length && (
-            <button className="link" onClick={async () => onCuts(await api.undo(id))}>↶ undo (press again for each step)</button>
+            <button title="Undo – go back one step (press again for more)" className="link" onClick={async () => onCuts(await api.undo(id))}>↶ undo (press again for each step)</button>
           )}
         </div>
       )}

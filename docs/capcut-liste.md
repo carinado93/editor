@@ -22,6 +22,8 @@ CapCuts Vorlagen, Sticker-Bilder und Filter-Dateien selbst darf ich nicht kopier
 | Maus über Filter = sofort Vorschau im Player („Vorschau — Filter“) | ❌ (erst klicken) | Hover-Vorschau |
 | Nichts scrollt die ganze Seite – jeder Bereich scrollt für sich | ❌ | Ganze App auf Bildschirmhöhe |
 | Lila Diamant 💎 = Pro-Funktion (sehr viele Effekte/Vorlagen/KI-Sachen) | – | Bei uns alles frei |
+| Jedes Symbol hat beim Drüberfahren einen Hinweis (Name + was es tut) | ✅ seit 26.11.: Tooltip-Blase an allen Symbol-Knöpfen | – |
+| Auswahl als Raster mit Beispiel statt Liste (Schriften in der Schrift, Effekte als Bild, Animationen bewegt) | ✅ seit 26.11.: Effekte, Schriften, Titel-Animation, Farb-Look, Untertitel-Stil, Übergänge, Masken, Text-Vorlagen, Reel-Animation, Cover-Farbe | Weitere Listen nach Bedarf |
 
 ## 2. Medien (neu gesehen)
 - Linke Liste: **Importieren** (Medien, Zeitleiste, Untergeordnete …), **Deine**, **Generieren** (KI-Bild mit Textfeld + Modell „Seedream 4.3“, KI-Video, KI-Dialogszene), **Speicher** (Cloud), **Bibliothek**, **Dreamina**

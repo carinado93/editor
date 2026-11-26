@@ -140,7 +140,7 @@ export function CarouselStudio() {
               ))}
             </span>
             <button className="btn ghost" onClick={() => api.openOutbox("carousels").catch(() => {})} title="Saved on your Desktop: SOCIAL MEDIA APP › Carousels">📁 Open folder</button>
-            <a className="btn" href={api.carouselZip(car.id)} download>⬇ Download all (ZIP)</a>
+            <a title="Download all – all slides as one ZIP file" className="btn" href={api.carouselZip(car.id)} download>⬇ Download all (ZIP)</a>
           </div>
           <div className="carousel-grid">
             {car.files.map((f, k) => (

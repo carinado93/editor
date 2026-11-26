@@ -55,8 +55,8 @@ export function MomentPicker({ sid, clip, busy, onState, onErr }: {
                   </a>
                   <span>{formatTime(g.start)}–{formatTime(g.end)} · {"★".repeat(Math.max(1, Math.round(g.score * 3)))}</span>
                   <span className="vs-sug-btns">
-                    <button disabled={busy} className={isMust ? "on" : ""} onClick={() => toggle("must", g.start, g.end)}>✓ use</button>
-                    <button disabled={busy} className={isNever ? "on" : ""} onClick={() => toggle("never", g.start, g.end)}>✗ never</button>
+                    <button title="Use – these seconds must be in the video" disabled={busy} className={isMust ? "on" : ""} onClick={() => toggle("must", g.start, g.end)}>✓ use</button>
+                    <button title="Never – these seconds must not be in the video" disabled={busy} className={isNever ? "on" : ""} onClick={() => toggle("never", g.start, g.end)}>✗ never</button>
                   </span>
                 </div>
               );
@@ -68,13 +68,13 @@ export function MomentPicker({ sid, clip, busy, onState, onErr }: {
         <span className="muted">My own part:</span>
         <input className="vs-time" value={from} onChange={(e) => setFrom(e.target.value)} placeholder="from 1:05" />
         <input className="vs-time" value={to} onChange={(e) => setTo(e.target.value)} placeholder="to 1:12" />
-        <button className="btn small-btn" disabled={busy} onClick={() => addManual("must")}>✓ always use</button>
-        <button className="btn ghost small-btn" disabled={busy} onClick={() => addManual("never")}>✗ never use</button>
+        <button title="Always use – keep the marked part in the video" className="btn small-btn" disabled={busy} onClick={() => addManual("must")}>✓ always use</button>
+        <button title="Never use – leave the marked part out" className="btn ghost small-btn" disabled={busy} onClick={() => addManual("never")}>✗ never use</button>
       </div>
       {(!!must.length || !!never.length) && (
         <p>
-          {must.map(([a, b], i) => <span key={`m${i}`} className="chip on">✓ {formatTime(a)}–{formatTime(b)} <button className="link" onClick={() => save(must.filter((_, j) => j !== i), never)}>×</button></span>)}
-          {never.map(([a, b], i) => <span key={`n${i}`} className="chip">✗ {formatTime(a)}–{formatTime(b)} <button className="link" onClick={() => save(must, never.filter((_, j) => j !== i))}>×</button></span>)}
+          {must.map(([a, b], i) => <span key={`m${i}`} className="chip on">✓ {formatTime(a)}–{formatTime(b)} <button title="Remove – forget this choice" className="link" onClick={() => save(must.filter((_, j) => j !== i), never)}>×</button></span>)}
+          {never.map(([a, b], i) => <span key={`n${i}`} className="chip">✗ {formatTime(a)}–{formatTime(b)} <button title="Remove – forget this choice" className="link" onClick={() => save(must, never.filter((_, j) => j !== i))}>×</button></span>)}
         </p>
       )}
       <p className="muted">Then press “Make new preview”.</p>

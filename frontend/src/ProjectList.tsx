@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import { api, formatSize, formatTime, type Mode, type Project, type SystemInfo } from "./api";
 import { dismiss, queueFiles, subscribe, type UploadState } from "./uploads";
+import { ExamplePicker, TransitionExample } from "./Pickers";
 
 const MODE_CARDS: { mode: Mode; title: string; text: string; ready: boolean }[] = [
   { mode: "youtube", title: "YouTube", text: "Long raw video. Pauses, slips, retakes and filler words get marked.", ready: true },
@@ -414,9 +415,9 @@ function CombineForm({ onError, language, model }: { onError: (m: string | null)
           {k > 0 && (
             <div className="combine-trans small">
               <span>↓ transition</span>
-              <select value={tr(k - 1)} onChange={(e) => setTrans(files.slice(1).map((_, j) => (j === k - 1 ? e.target.value : tr(j))))}>
-                {Object.entries(TRANS_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-              </select>
+              <ExamplePicker value={tr(k - 1)} onChange={(v) => setTrans(files.slice(1).map((_, j) => (j === k - 1 ? v : tr(j))))} tile="sm"
+                options={Object.entries(TRANS_LABEL).map(([v, l]) => ({ value: v, label: l, desc: TRANS_HINT[v] || undefined }))}
+                example={(o, small) => <TransitionExample kind={o.value} small={small} />} />
               <span className="muted">{TRANS_HINT[tr(k - 1)]}</span>
             </div>
           )}
@@ -450,7 +451,7 @@ function CombineForm({ onError, language, model }: { onError: (m: string | null)
             <textarea rows={2} value={describe} onChange={(e) => setDescribe(e.target.value)}
               placeholder={'e.g. "in video 2 I appear in the room in smoke" or "I hold a glass in front of the camera, then I wear another outfit"'} />
           </label>
-          <button className="btn ghost small-btn" disabled={!!busy || !describe.trim()} onClick={planWithClaude}>✨ Let Claude choose</button>
+          <button title="Let Claude choose – Claude picks the best order and transitions" className="btn ghost small-btn" disabled={!!busy || !describe.trim()} onClick={planWithClaude}>✨ Let Claude choose</button>
           {note && <div className="banner small">{note}</div>}
         </div>
       )}

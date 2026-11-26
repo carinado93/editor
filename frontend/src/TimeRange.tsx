@@ -52,7 +52,7 @@ export function TimeRange({ start, end, now, onChange, onSeek }: {
         ← now
       </button>
       <span className="muted">({len.toFixed(1)} s)</span>
-      {onSeek && <button className="link" onClick={() => onSeek(start)}>▶ jump</button>}
+      {onSeek && <button title="Jump – go to the start of this effect in the video" className="link" onClick={() => onSeek(start)}>▶ jump</button>}
     </span>
   );
 }

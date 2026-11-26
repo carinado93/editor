@@ -2,6 +2,8 @@
 
 ## Stand: 8. November 2026
 
+> **26 Nov 2026 (CapCut-style labels and examples):** Every symbol button now has a tooltip "Name – what it does" (styled bubble, `Tooltips` in `frontend/src/Pickers.tsx`; any `title="Name – explanation"` is shown that way, symbol-only buttons without a title get a default text). Plain dropdowns for choices with a look were replaced by `ExamplePicker` (grid with categories, search and one example per option): effect type (example picture of each effect on the project's own video, new endpoint `GET /api/projects/{pid}/effects/example/{type}`, cached in `fx_beispiele/`), Video Studio font (her title text in each font), title animation in/out (looping), colour look (her first clip with an approximate CSS look), caption style, transitions (animated A→B), shot mask shape, shot text template (new endpoint `GET /api/studio/template-example/{tpl}`), reel text animation, combine transitions, reel cover colour.
+>
 > **10 Nov 2026:** The whole app interface is now in English (all pages, buttons, hints, plus the progress, error and warning messages from the engine). The prompts sent to Claude/Ollama are unchanged, so texts are still written in German or English as chosen. From now on, notes are in English.
 
 **Phase:** Meilenstein 3 fertig (Blick, Zoom, Ton, Untertitel, Buzzwords). Wartet auf Carinas Test und OK für Meilenstein 4.

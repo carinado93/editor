@@ -16,6 +16,7 @@ import { PlanPage } from "./PlanPage";
 import { Settings } from "./Settings";
 import { ThumbMakerPage } from "./ThumbMaker";
 import { StudioPage } from "./video-studio/StudioPage";
+import { Tooltips } from "./Pickers";
 
 function useHash() {
   const [hash, setHash] = useState(window.location.hash);
@@ -80,7 +81,7 @@ function UpdateBanner() {
       {phase === "fehler" && (
         <>
           ⚠ {err}{" "}
-          <button className="link" onClick={() => setPhase("idle")}>
+          <button title="OK – close this message" className="link" onClick={() => setPhase("idle")}>
             ok
           </button>
         </>
@@ -144,6 +145,7 @@ function App() {
         )}
       </header>
       <UpdateBanner />
+      <Tooltips />
       {offline && <div className="banner error page">No connection to the engine. Please start the app with start.bat.</div>}
       {system && !system.ffmpeg && <div className="banner error page">ffmpeg is missing. Please start the app with start.bat, it installs it.</div>}
       {hash.startsWith("#/studio") ? (

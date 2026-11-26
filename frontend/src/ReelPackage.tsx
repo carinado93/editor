@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, formatTime, type CutView, type Overlay, type ReelTexts } from "./api";
 import { CoverStudio } from "./CoverStudio";
+import { ExamplePicker, OverlayAnimExample } from "./Pickers";
 
 function copy(text: string, done: (msg: string) => void) {
   navigator.clipboard.writeText(text).then(
@@ -96,14 +97,16 @@ export function ReelPackage({
                 to
                 <input type="number" step={0.1} min={0} value={o.end} onChange={(e) => upd(i, { end: Number(e.target.value) })} />
                 sec.
-                <select value={o.anim ?? "karte"} onChange={(e) => upd(i, { anim: e.target.value as Overlay["anim"] })}>
-                  <option value="pop">Pop</option>
-                  <option value="karte">Card (soft)</option>
-                  <option value="wort">Word by word</option>
-                  <option value="slide">Slide</option>
-                </select>
+                <ExamplePicker value={o.anim ?? "karte"} onChange={(v) => upd(i, { anim: v as Overlay["anim"] })} search={false}
+                  options={[
+                    { value: "pop", label: "Pop", desc: "The text pops up big and bouncy" },
+                    { value: "karte", label: "Card (soft)", desc: "A soft card rises in" },
+                    { value: "wort", label: "Word by word", desc: "One word appears after the other" },
+                    { value: "slide", label: "Slide", desc: "The text slides in from the side" },
+                  ]}
+                  example={(x, small) => <OverlayAnimExample kind={x.value} small={small} />} />
                 <span className={o.end - o.start < 4.4 ? "error-text" : "muted"}>({(o.end - o.start).toFixed(1)} s)</span>
-                <button className="link danger" onClick={() => setOverlays(overlays.filter((_, j) => j !== i))}>
+                <button className="link danger" title="Remove – delete this text" onClick={() => setOverlays(overlays.filter((_, j) => j !== i))}>
                   remove
                 </button>
               </div>
@@ -170,7 +173,7 @@ export function ReelPackage({
             </button>
           </div>
           <Status busy={busy} err={err} msg={msg} />
-          {err?.includes("Settings") && <a className="small" href="#/einstellungen">→ go to Settings</a>}
+          {err?.includes("Settings") && <a title="Go to Settings – add your AI key there" className="small" href="#/einstellungen">→ go to Settings</a>}
           {!!texts?.scenes?.length && (
             <div className="scenes">
               <h4>Texts in the video (hook first)</h4>

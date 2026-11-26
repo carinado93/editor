@@ -72,7 +72,7 @@ export function PlanPage() {
     <div key={it.id} className={`plan-card ${it.status}`}>
       <div className="plan-card-head">
         <span className="small">{TYPE_LABEL[it.type] ?? it.type}</span>
-        <button className="link small" onClick={() => setOpen(open === it.id ? null : it.id)}>{open === it.id ? "close" : "edit"}</button>
+        <button title="Edit – open or close the details of this post" className="link small" onClick={() => setOpen(open === it.id ? null : it.id)}>{open === it.id ? "close" : "edit"}</button>
       </div>
       <strong className="plan-title">{it.title}</strong>
       {it.account && <span className="muted small">{it.account}</span>}
@@ -85,7 +85,7 @@ export function PlanPage() {
               {Object.keys(TYPE_LABEL).map((t) => <option key={t} value={t}>{TYPE_LABEL[t]}</option>)}
             </select>
             <input type="date" value={it.date} onChange={(e) => upd(it.id, { date: e.target.value })} />
-            {it.date && <button className="link" onClick={() => upd(it.id, { date: "" })}>→ idea box</button>}
+            {it.date && <button title="Idea box – move this post back to the ideas" className="link" onClick={() => upd(it.id, { date: "" })}>→ idea box</button>}
             <button className="link danger" onClick={() => act("del", async () => setItems((await api.planDelete(it.id)).items))}>delete</button>
           </div>
         </div>
@@ -135,9 +135,9 @@ export function PlanPage() {
 
       <section className="card">
         <div className="plan-week-head">
-          <button className="btn ghost small-btn" onClick={() => setWeek(new Date(week.getTime() - 7 * 86400000))}>← previous week</button>
+          <button title="Previous week – show the week before" className="btn ghost small-btn" onClick={() => setWeek(new Date(week.getTime() - 7 * 86400000))}>← previous week</button>
           <strong>Week of {week.toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" })}</strong>
-          <button className="btn ghost small-btn" onClick={() => setWeek(new Date(week.getTime() + 7 * 86400000))}>next week →</button>
+          <button title="Next week – show the week after" className="btn ghost small-btn" onClick={() => setWeek(new Date(week.getTime() + 7 * 86400000))}>next week →</button>
           <button className="link" onClick={() => act("add", async () => setItems((await api.planAdd({ date: days[0], type: "reel", title: "New idea", idea: "" })).items))}>+ add an idea</button>
         </div>
         <div className="plan-grid">

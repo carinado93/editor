@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { MomentPicker } from "./MomentPicker";
 import { ShotPanel } from "./ShotPanel";
+import { CaptionExample, ExamplePicker, FontExample, LookExample, TextAnimExample, TransitionExample } from "../Pickers";
 import { api, formatTime, type StudioMeta, type StudioPlan, type StudioProject, type StudioSettings, type StudioTrack } from "../api";
 
 const LOOK_NAMES: Record<string, string> = {
@@ -32,7 +33,7 @@ export function StudioPage({ sid }: { sid?: string }) {
             window.location.hash = `#/studio/${p.sid}`;
           }}>+ New drone video</button>
           {meta?.projects.map((p) => (
-            <a key={p.sid} className="chip" href={`#/studio/${p.sid}`}>{p.name} · {p.clips} clip{p.clips === 1 ? "" : "s"}{p.has_final ? " · ✓" : ""}</a>
+            <a title="Open – this drone video project" key={p.sid} className="chip" href={`#/studio/${p.sid}`}>{p.name} · {p.clips} clip{p.clips === 1 ? "" : "s"}{p.has_final ? " · ✓" : ""}</a>
           ))}
         </div>
       </section>
@@ -111,7 +112,7 @@ function DroneCutter({ sid, meta }: { sid: string; meta: StudioMeta }) {
     <div className="page vs-page">
       <section className="card">
         <div className="letter-head">
-          <a className="link" href="#/studio">← Video Studio</a>
+          <a title="Back – to all Video Studio projects" className="link" href="#/studio">← Video Studio</a>
           <h2 style={{ margin: 0 }}>{st.name}</h2>
         </div>
         {err && <div className="banner error small">⚠ {err}</div>}
@@ -119,7 +120,7 @@ function DroneCutter({ sid, meta }: { sid: string; meta: StudioMeta }) {
         <div className="carousel-head">
           <h3>1 · Your clips</h3>
           {!!st.clips.length && st.clips.some((c) => !c.analysed) && (
-            <button className="btn ghost small-btn" disabled={!!running} onClick={() => act(() => api.studioAnalyse(sid))}>🔎 Analyse clips (for suggestions)</button>
+            <button title="Analyse – the app looks at every clip to suggest the best moments" className="btn ghost small-btn" disabled={!!running} onClick={() => act(() => api.studioAnalyse(sid))}>🔎 Analyse clips (for suggestions)</button>
           )}
         </div>
         <p className="small muted">mp4 / mov, up to 4K. One clip works too. Drag to change the order (for YouTube the order is kept roughly).</p>
@@ -133,7 +134,7 @@ function DroneCutter({ sid, meta }: { sid: string; meta: StudioMeta }) {
                 <span className="muted">{formatTime(c.info.duration)} · {c.info.width}×{c.info.height} · {Math.round(c.info.fps)} fps{c.analysed ? " · ✓ analysed" : ""}</span>
               </div>
               <span className="row-buttons">
-                <button className="link small" onClick={() => setPicking(picking === c.id ? null : c.id)}>
+                <button title="Choose seconds – mark parts that must (or must never) be in the video" className="link small" onClick={() => setPicking(picking === c.id ? null : c.id)}>
                   🎯 choose seconds{(c.must?.length || c.never?.length) ? ` (${(c.must?.length ?? 0)}✓ ${(c.never?.length ?? 0)}✗)` : ""}</button>
                 <button className="link small" disabled={!!running} onClick={() => confirm(`Remove ${c.name}?`) && act(() => api.studioDeleteClip(sid, c.id))}>remove</button>
               </span>
@@ -159,16 +160,16 @@ function DroneCutter({ sid, meta }: { sid: string; meta: StudioMeta }) {
       <section className="card">
         <h3>2 · Format and length</h3>
         <div className="row-buttons small">
-          <button className={`btn small-btn ${isReel ? "" : "ghost"}`} onClick={() => set({ format: "reel" })}>Vertical · Reel / Short 9:16</button>
-          <button className={`btn small-btn ${s.format === "youtube" ? "" : "ghost"}`} onClick={() => set({ format: "youtube" })}>Landscape · YouTube 16:9 (HD)</button>
-          <button className={`btn small-btn ${s.format === "youtube4k" ? "" : "ghost"}`} onClick={() => set({ format: "youtube4k" })}>Landscape · YouTube 16:9 (4K)</button>
-          <button className={`btn small-btn ${s.format === "both" ? "" : "ghost"}`} onClick={() => set({ format: "both" })}>Both: vertical + landscape</button>
+          <button title="Vertical – 9:16 for Instagram Reels and YouTube Shorts" className={`btn small-btn ${isReel ? "" : "ghost"}`} onClick={() => set({ format: "reel" })}>Vertical · Reel / Short 9:16</button>
+          <button title="Landscape HD – 16:9 for YouTube, 1920×1080" className={`btn small-btn ${s.format === "youtube" ? "" : "ghost"}`} onClick={() => set({ format: "youtube" })}>Landscape · YouTube 16:9 (HD)</button>
+          <button title="Landscape 4K – 16:9 for YouTube, 3840×2160 (slower)" className={`btn small-btn ${s.format === "youtube4k" ? "" : "ghost"}`} onClick={() => set({ format: "youtube4k" })}>Landscape · YouTube 16:9 (4K)</button>
+          <button title="Both – one vertical and one landscape video from the same clips" className={`btn small-btn ${s.format === "both" ? "" : "ghost"}`} onClick={() => set({ format: "both" })}>Both: vertical + landscape</button>
         </div>
         {hasReel && (
           <div className="row-buttons small">
             <span className="muted">Vertical length:</span>
             {meta.lengths.map((L) => (
-              <button key={L} className={`chip ${s.length === L ? "on" : ""}`} onClick={() => set({ length: L })}>{L} s</button>
+              <button title="Length – how long the vertical video is" key={L} className={`chip ${s.length === L ? "on" : ""}`} onClick={() => set({ length: L })}>{L} s</button>
             ))}
           </div>
         )}
@@ -185,9 +186,9 @@ function DroneCutter({ sid, meta }: { sid: string; meta: StudioMeta }) {
         <h3>3 · Style</h3>
         <div className="vs-grid small">
           <label>Colour look
-            <select value={s.grade.look} onChange={(e) => set({ grade: { look: e.target.value } })}>
-              {meta.looks.map((l) => <option key={l} value={l}>{LOOK_NAMES[l] ?? l}</option>)}
-            </select>
+            <ExamplePicker value={s.grade.look} onChange={(v) => set({ grade: { look: v } })}
+              options={meta.looks.map((l) => ({ value: l, label: LOOK_NAMES[l] ?? l }))}
+              example={(o, small) => <LookExample look={o.value} img={firstThumb} small={small} />} />
           </label>
           <label>Strength {Math.round(s.grade.strength * 100)} %
             <input type="range" min={0} max={1.5} step={0.05} value={s.grade.strength} onChange={(e) => set({ grade: { strength: Number(e.target.value) } })} />
@@ -210,10 +211,14 @@ function DroneCutter({ sid, meta }: { sid: string; meta: StudioMeta }) {
           <label className="check-line"><input type="checkbox" checked={s.captions.enabled} onChange={(e) => set({ captions: { enabled: e.target.checked }, ...(e.target.checked ? { keep_audio: true } : {}) })} /> Auto captions from the spoken words (needs original sound)</label>
           {s.captions.enabled && <>
             <label>Caption style
-              <select value={s.captions.style} onChange={(e) => set({ captions: { style: e.target.value } })}>
-                <option value="clean">Clean (white)</option><option value="bold">Bold (big caps)</option>
-                <option value="karaoke">Word by word (lilac)</option><option value="boxed">Boxed</option>
-              </select>
+              <ExamplePicker value={s.captions.style} onChange={(v) => set({ captions: { style: v } })} tile="lg"
+                options={[
+                  { value: "clean", label: "Clean (white)", desc: "White words with a soft shadow" },
+                  { value: "bold", label: "Bold (big caps)", desc: "Big, thick capitals" },
+                  { value: "karaoke", label: "Word by word (lilac)", desc: "The word you are saying lights up in lilac" },
+                  { value: "boxed", label: "Boxed", desc: "White words on a dark box – easy to read on busy pictures" },
+                ]}
+                example={(o, small) => <CaptionExample style={o.value} small={small} />} />
             </label>
             <label>Language
               <select value={s.captions.language} onChange={(e) => set({ captions: { language: e.target.value } })}>
@@ -225,10 +230,12 @@ function DroneCutter({ sid, meta }: { sid: string; meta: StudioMeta }) {
         </div>
         <div className="vs-grid small">
           <label>Transitions
-            <select value={s.transition} onChange={(e) => set({ transition: e.target.value })}>
-              <option value="auto">Automatic (fits the shots and the beat)</option>
-              {Object.entries(meta.transitions).map(([k, l]) => <option key={k} value={k}>{k === "cut" ? "Hard cuts only" : `${l} on every cut`}</option>)}
-            </select>
+            <ExamplePicker value={s.transition} onChange={(v) => set({ transition: v })} tile="sm"
+              options={[
+                { value: "auto", label: "Automatic", desc: "The app picks a transition that fits the shots and the beat" },
+                ...Object.entries(meta.transitions).map(([k, l]) => ({ value: k, label: k === "cut" ? "Hard cuts only" : l, desc: k === "cut" ? "No transition, straight cut" : `${l} on every cut` })),
+              ]}
+              example={(o, small) => o.value === "auto" ? <span className={small ? "" : "ex-font small"}>✨ auto</span> : <TransitionExample kind={o.value} small={small} />} />
           </label>
           <label>Transition length {s.transition_dur ? `${s.transition_dur.toFixed(1)} s` : "(standard)"}
             <input type="range" min={0} max={2} step={0.1} value={s.transition_dur} onChange={(e) => set({ transition_dur: Number(e.target.value) })} />
@@ -276,9 +283,9 @@ function DroneCutter({ sid, meta }: { sid: string; meta: StudioMeta }) {
             <label>Location<input value={loc} placeholder="SRI LANKA" onChange={(e) => setDraft({ location: e.target.value, subtitle: sub })} onBlur={(e) => set({ location: e.target.value })} /></label>
             <label>Small line below (optional)<input value={sub} placeholder="Island of Serendipity" onChange={(e) => setDraft({ location: loc, subtitle: e.target.value })} onBlur={(e) => set({ subtitle: e.target.value })} /></label>
             <label>Font
-              <select value={s.title.font} onChange={(e) => set({ title: { font: e.target.value } })}>
-                {meta.fonts.map((f) => <option key={f} value={f}>{f}</option>)}
-              </select>
+              <ExamplePicker value={s.title.font} onChange={(v) => set({ title: { font: v } })} tile="lg"
+                options={meta.fonts.map((f) => ({ value: f, label: f }))}
+                example={(o, small) => <FontExample font={o.value} text={(loc || "SRI LANKA").toUpperCase()} small={small} />} />
             </label>
             <label>Size {Math.round(s.title.size * 1000) / 10} %
               <input type="range" min={0.04} max={0.14} step={0.005} value={s.title.size} onChange={(e) => set({ title: { size: Number(e.target.value) } })} />
@@ -291,15 +298,17 @@ function DroneCutter({ sid, meta }: { sid: string; meta: StudioMeta }) {
             </label>
             <label>Colour<input type="color" value={rgbHex(s.title.color)} onChange={(e) => set({ title: { color: hexRgb(e.target.value) } })} /></label>
             <label>Animation in
-              <select value={s.title.animate ? s.title.anim_in : "off"} onChange={(e) => set({ title: e.target.value === "off" ? { animate: false } : { animate: true, anim_in: e.target.value } })}>
-                {Object.entries(meta.anims_in).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
-                <option value="off">No animation</option>
-              </select>
+              <ExamplePicker value={s.title.animate ? s.title.anim_in : "off"} tile="lg"
+                onChange={(v) => set({ title: v === "off" ? { animate: false } : { animate: true, anim_in: v } })}
+                options={[...Object.entries(meta.anims_in).map(([k, l]) => ({ value: k, label: l })), { value: "off", label: "No animation" }]}
+                example={(o, small) => <TextAnimExample kind={o.value === "off" ? "none" : o.value} dir="in" font={s.title.font}
+                  text={(loc || "SRI LANKA").toUpperCase()} small={small} />} />
             </label>
             <label>Animation out
-              <select value={s.title.anim_out} onChange={(e) => set({ title: { anim_out: e.target.value } })}>
-                {Object.entries(meta.anims_out).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
-              </select>
+              <ExamplePicker value={s.title.anim_out} onChange={(v) => set({ title: { anim_out: v } })} tile="lg"
+                options={Object.entries(meta.anims_out).map(([k, l]) => ({ value: k, label: l }))}
+                example={(o, small) => <TextAnimExample kind={o.value} dir="out" font={s.title.font}
+                  text={(loc || "SRI LANKA").toUpperCase()} small={small} />} />
             </label>
             <label className="check-line"><input type="checkbox" checked={s.title.enabled} onChange={(e) => set({ title: { enabled: e.target.checked } })} /> Show title</label>
             {hasYt && <label className="check-line"><input type="checkbox" checked={s.title.youtube_card} onChange={(e) => set({ title: { youtube_card: e.target.checked } })} /> Title also on the landscape video</label>}
@@ -313,12 +322,12 @@ function DroneCutter({ sid, meta }: { sid: string; meta: StudioMeta }) {
       <section className="card">
         <h3>5 · Make the video</h3>
         <div className="row-buttons">
-          <button className="btn" disabled={!!running || !st.clips.length || !!uploads.length} onClick={() => act(() => api.studioGenerate(sid))}>
+          <button title="Generate – make a new preview from your settings" className="btn" disabled={!!running || !st.clips.length || !!uploads.length} onClick={() => act(() => api.studioGenerate(sid))}>
             {anyPreview ? "↻ Make new preview" : "✨ Generate preview"}
           </button>
-          {anyPreview && <button className="btn ghost" disabled={!!running} onClick={() => act(() => api.studioGenerate(sid, true))}>🎲 Other version (order + music)</button>}
-          {anyPreview && <button className={`btn ${edited ? "" : "ghost"}`} disabled={!!running} onClick={() => act(() => api.studioPreview(sid))}>↻ Update preview (keep shots)</button>}
-          {anyPreview && <button className="btn" disabled={!!running} onClick={() => act(() => api.studioFinal(sid))}>⬆ Render final video{fmts.length > 1 ? "s" : ""}</button>}
+          {anyPreview && <button title="Other version – new shot order and other music" className="btn ghost" disabled={!!running} onClick={() => act(() => api.studioGenerate(sid, true))}>🎲 Other version (order + music)</button>}
+          {anyPreview && <button title="Update preview – keep your shots, show your latest changes" className={`btn ${edited ? "" : "ghost"}`} disabled={!!running} onClick={() => act(() => api.studioPreview(sid))}>↻ Update preview (keep shots)</button>}
+          {anyPreview && <button title="Render final – make the full-quality video file" className="btn" disabled={!!running} onClick={() => act(() => api.studioFinal(sid))}>⬆ Render final video{fmts.length > 1 ? "s" : ""}</button>}
           {running && <button className="link" onClick={() => act(() => api.studioCancel(sid))}>cancel</button>}
         </div>
         <p className="small muted">Changed colour, title, outro, volume, transitions or a shot? Press “Update preview” – your shots stay. Changed the format or length? Press “Make new preview”.</p>
@@ -357,7 +366,7 @@ function FormatResult({ sid, fmt, st, meta, busy, onState, onErr }: {
       <div className="vs-result">
         {r.preview && <video key={r.preview.file} className={reel ? "vs-video reel" : "vs-video"} src={api.studioFile(sid, "renders", r.preview.file)} controls playsInline />}
         {r.final && (
-          <p className="small"><a className="btn" href={api.studioFile(sid, "renders", r.final.file, true)} download>⬇ Download final MP4</a><br />
+          <p className="small"><a title="Download – save the finished MP4" className="btn" href={api.studioFile(sid, "renders", r.final.file, true)} download>⬇ Download final MP4</a><br />
             <span className="muted">{r.final.width}×{r.final.height} · {r.final.fps} fps · {Math.round(r.final.size / 1e6)} MB · also on your Desktop</span></p>
         )}
       </div>
@@ -423,7 +432,7 @@ function TitlePreview({ thumb, s, reel }: { thumb: string; s: StudioSettings; re
           </div>
         )}
       </div>
-      <button className="link small" onClick={() => setK(k + 1)}>▶ play animation</button>
+      <button title="Play – show the title animation again" className="link small" onClick={() => setK(k + 1)}>▶ play animation</button>
     </div>
   );
 }

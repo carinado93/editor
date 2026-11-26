@@ -403,6 +403,29 @@ def effect_preview(pid: str, fid: str):
     return _effect_preview(pid, item)
 
 
+@app.get("/api/projects/{pid}/effects/example/{etype}")
+def effect_example(pid: str, etype: str):
+    """Beispielbild eines Effekt-Typs auf Carinas Video (für die Auswahl-Kacheln wie in CapCut).
+    Mit Beispieltext, einmal gerechnet und im Projekt zwischengespeichert."""
+    from . import fx
+    if etype not in fx.TYPES or not re.fullmatch(r"[\w-]+", etype):
+        raise HTTPException(404)
+    cache = projects.path(pid, "fx_beispiele") / f"{etype}.jpg"
+    if not cache.exists():
+        info = projects.load(pid).get("info") or {}
+        dur = float(info.get("duration") or 20)
+        t0 = max(0.0, min(dur - 4.5, dur * 0.3))
+        item = {"id": f"example-{etype}", "kind": "fx", "type": etype, "on": True, "start": t0, "end": t0 + 4,
+                "text": "", "title": "", "items": [], "place": "scene"}
+        try:
+            res = _effect_preview(pid, item)
+        except Exception:  # noqa: BLE001  (z. B. Stativ-Effekte ohne leeren Raum)
+            raise HTTPException(404)
+        cache.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(res.path, cache)
+    return FileResponse(cache, media_type="image/jpeg", headers={"Cache-Control": "max-age=86400"})
+
+
 class PreviewBody(BaseModel):
     item: dict
 
@@ -1643,6 +1666,31 @@ def studio_list():
             "ramps": speed.LABELS, "anims_in": text.ANIMS_IN, "anims_out": text.ANIMS_OUT,
             "templates": text.TEMPLATES, "pro_tools": __import__("editor_app.video_studio.ai_tools",
                                                                     fromlist=["status"]).status()}
+
+
+@app.get("/api/studio/template-example/{tpl}")
+def studio_template_example(tpl: str, text: str = "", reel: bool = True):
+    """Beispielbild einer Text-Vorlage (für die Auswahl-Kacheln), auf dunklem Verlauf."""
+    import io
+
+    from fastapi.responses import Response
+    from PIL import Image
+
+    from .video_studio import text as vtext
+    if tpl not in vtext.TEMPLATES:
+        raise HTTPException(404)
+    W, H = (360, 640) if reel else (640, 360)
+    sample = text or {"location_title": "SRI LANKA", "location_pin": "Ella, Sri Lanka", "cinematic": "Sri Lanka",
+                      "caption": "my favourite place", "subscribe": "SUBSCRIBE", "thank_you": ""}.get(tpl, "Text")
+    bg = Image.linear_gradient("L").resize((W, H)).convert("RGB")
+    bg = Image.merge("RGB", [c.point(lambda v, k=k: int(40 + v * (0.35, 0.25, 0.45)[k])) for k, c in enumerate(bg.split())])
+    fr = vtext.template_frame(tpl, sample, W, H, 1.6, 3.0)
+    img = bg.convert("RGBA")
+    if fr is not None:
+        img.alpha_composite(fr)
+    buf = io.BytesIO()
+    img.convert("RGB").save(buf, "JPEG", quality=85)
+    return Response(buf.getvalue(), media_type="image/jpeg", headers={"Cache-Control": "max-age=3600"})
 
 
 @app.post("/api/studio")

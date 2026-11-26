@@ -1,5 +1,34 @@
 import { useEffect, useRef, useState } from "react";
 import { api, type StudioMeta, type StudioPlan, type StudioProject } from "../api";
+import { ExamplePicker, ImageExample } from "../Pickers";
+
+const TAB_TIP: Record<string, string> = {
+  filters: "Filters – ready colour looks for this shot, with a preview picture",
+  adjust: "Adjust – exposure, contrast, highlights, shadows, temperature, saturation …",
+  hsl: "HSL – change one colour only (e.g. make the sky bluer)",
+  curves: "Curves – fine control of dark, middle and bright parts",
+  wheels: "Colour wheels – tint the shadows, midtones and highlights",
+  mask: "Mask – change the colour only inside a shape (sky, circle, heart …)",
+  effects: "Effects – sharpen, clarity, vignette, grain, denoise, stabilize",
+  frame: "Crop & zoom – move the picture and add a slow zoom",
+  ai: "AI tools – blur the background, enhance quality, remove an object",
+  text: "Text – add a text template to this shot",
+};
+
+const MASKS: { value: string; label: string; desc: string }[] = [
+  { value: "", label: "No mask", desc: "Colour changes apply to the whole picture" },
+  { value: "sky", label: "Sky", desc: "From the top down to the horizon – e.g. make only the sky bluer" },
+  { value: "linear", label: "Linear", desc: "Everything on one side of a line" },
+  { value: "mirror", label: "Mirror (band)", desc: "A band across the picture" },
+  { value: "circle", label: "Circle", desc: "Inside a circle" },
+  { value: "rectangle", label: "Rectangle", desc: "Inside a rectangle" },
+  { value: "heart", label: "Heart", desc: "Inside a heart" },
+  { value: "star", label: "Star", desc: "Inside a star" },
+];
+
+function MaskExample({ shape, small }: { shape: string; small?: boolean }) {
+  return <span className={`ex-mask ex-mask-${shape || "none"} ${small ? "small" : ""}`}><span /></span>;
+}
 
 const LOOK_LABEL = (l: string) => (l.startsWith("file:") ? `My LUT: ${l.slice(5).replace(/\.cube$/, "")}` : l.replace(/_/g, " "));
 const COLORS = ["red", "orange", "yellow", "green", "cyan", "blue", "purple", "magenta"];
@@ -38,7 +67,7 @@ function Knob({ label, value, min, max, step, onCommit }: {
       <input type="range" min={min} max={max} step={step} value={v} onChange={(e) => setV(Number(e.target.value))}
         onPointerUp={() => onCommit(v)} onKeyUp={() => onCommit(v)} />
       <input type="number" min={min} max={max} step={step} value={v} onChange={(e) => setV(Number(e.target.value))} onBlur={() => onCommit(v)} />
-      <button type="button" title="reset" onClick={() => { setV(0); onCommit(null); }}>↺</button>
+      <button type="button" title={`Reset – ${label} back to the start value`} onClick={() => { setV(0); onCommit(null); }}>↺</button>
     </label>
   );
 }
@@ -92,7 +121,7 @@ export function ShotPanel({ sid, fmt, k, plan, st, meta, onState, onErr }: {
         <strong>Shot {k + 1}</strong>
         <span className="seg">
           {(["filters", "adjust", "hsl", "curves", "wheels", "mask", "effects", "frame", "ai", "text"] as const).map((t) => (
-            <button key={t} className={tab === t ? "on" : ""} onClick={() => setTab(t)}>
+            <button key={t} className={tab === t ? "on" : ""} onClick={() => setTab(t)} title={TAB_TIP[t]}>
               {{ filters: "Filters", adjust: "Adjust", hsl: "HSL", curves: "Curves", wheels: "Colour wheels", mask: "Mask",
                 effects: "Effects", frame: "Crop & zoom", ai: "AI tools", text: "Text" }[t]}
             </button>
@@ -171,7 +200,8 @@ export function ShotPanel({ sid, fmt, k, plan, st, meta, onState, onErr }: {
         return (
           <div className="vs-knobs">
             <span className="seg">{(["rgb", "r", "g", "b"] as const).map((c) => (
-              <button key={c} className={curveCh === c ? "on" : ""} onClick={() => setCurveCh(c)}>{c.toUpperCase()}</button>))}</span>
+              <button key={c} className={curveCh === c ? "on" : ""} onClick={() => setCurveCh(c)}
+                title={{ rgb: "RGB – brightness of all colours together", r: "R – red only", g: "G – green only", b: "B – blue only" }[c]}>{c.toUpperCase()}</button>))}</span>
             <svg viewBox="0 0 100 100" className="vs-curve">
               <line x1="0" y1="100" x2="100" y2="0" stroke="#ccc" strokeDasharray="2" />
               <polyline fill="none" stroke={{ rgb: "#6a4c9c", r: "#d33", g: "#3a3", b: "#36d" }[curveCh]} strokeWidth="2"
@@ -211,11 +241,8 @@ export function ShotPanel({ sid, fmt, k, plan, st, meta, onState, onErr }: {
         return (
           <div className="vs-knobs">
             <label>Shape
-              <select value={m.shape ?? ""} onChange={(e) => setM({ shape: e.target.value })}>
-                <option value="">no mask</option><option value="sky">Sky (top down to horizon)</option><option value="linear">Linear</option>
-                <option value="mirror">Mirror (band)</option><option value="circle">Circle</option><option value="rectangle">Rectangle</option>
-                <option value="heart">Heart</option><option value="star">Star</option>
-              </select>
+              <ExamplePicker value={m.shape ?? ""} onChange={(v) => setM({ shape: v })} options={MASKS} tile="sm"
+                example={(o, small) => <MaskExample shape={o.value} small={small} />} />
             </label>
             {m.shape && <>
               <Knob label="Position x %" value={Math.round((m.x ?? 0.5) * 100)} min={0} max={100} step={1} onCommit={(v) => setM({ x: (v ?? 50) / 100 })} />
@@ -288,9 +315,9 @@ export function ShotPanel({ sid, fmt, k, plan, st, meta, onState, onErr }: {
       {tab === "text" && (
         <div className="vs-knobs">
           <label>Template
-            <select value={tpl} onChange={(e) => setTpl(e.target.value)}>
-              {Object.entries(meta.templates).map(([id, l]) => <option key={id} value={id}>{l}</option>)}
-            </select>
+            <ExamplePicker value={tpl} onChange={setTpl} tile={fmt === "reel" ? "tall" : "lg"}
+              options={Object.entries(meta.templates).map(([id, l]) => ({ value: id, label: l }))}
+              example={(o, small) => <ImageExample src={api.studioTemplateExample(o.value, fmt === "reel")} label={o.label} small={small} />} />
           </label>
           <label>Text<input value={txt} onChange={(e) => setTxt(e.target.value)} placeholder="Text" /></label>
           <button className="btn small-btn" onClick={() => send("add_text", { tpl, text: txt, t0: sh.t0, dur: Math.min(3, Math.max(1.5, sh.dur * 1.5)) })}>+ Add at this shot</button>

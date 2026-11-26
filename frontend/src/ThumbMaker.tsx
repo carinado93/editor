@@ -48,7 +48,7 @@ export function ThumbMakerPage({ wid }: { wid?: string }) {
           <button className="btn small-btn" onClick={async () => { const s = await api.tmNew(); window.location.hash = `#/thumbnail/${s.wid}`; }}>
             + New thumbnail
           </button>
-          {own.map((o) => <a key={o.wid} className="chip" href={`#/thumbnail/${o.wid}`}>{o.name} · {o.count} versions</a>)}
+          {own.map((o) => <a title="Open – this thumbnail project" key={o.wid} className="chip" href={`#/thumbnail/${o.wid}`}>{o.name} · {o.count} versions</a>)}
         </div>
       </section>
     </div>
@@ -95,7 +95,7 @@ function ThumbMaker({ wid }: { wid: string }) {
     <div className="page tm-page">
       <section className="card">
         <div className="letter-head">
-          <a className="link" href={st.has_video ? `#/p/${wid}` : "#/thumbnail"}>← back</a>
+          <a title="Back – to all thumbnails" className="link" href={st.has_video ? `#/p/${wid}` : "#/thumbnail"}>← back</a>
           <h2 style={{ margin: 0 }}>{st.has_video ? `Thumbnail · ${st.name}` : "Thumbnail maker"}</h2>
         </div>
         {err && <div className="banner error small">{err}</div>}
@@ -129,7 +129,7 @@ function ThumbMaker({ wid }: { wid: string }) {
             <img className="checker" src={`${v(st.cutout)}?v=${st.photo_v ?? 0}`} alt="You, cut out" />
             <span className="small muted">Your cut-out ({st.photo_source}). Your photo is never colour-graded.
               <br />Something from the room came along (a chair, a plant)?{" "}
-              <button className="link" onClick={() => setFixing(!fixing)}>{fixing ? "close the eraser" : "🧽 Fix the cut-out"}</button>
+              <button title="Fix the cut-out – erase or bring back parts around you" className="link" onClick={() => setFixing(!fixing)}>{fixing ? "close the eraser" : "🧽 Fix the cut-out"}</button>
             </span>
           </div>
         )}
@@ -144,7 +144,7 @@ function ThumbMaker({ wid }: { wid: string }) {
           <button className={`btn small-btn ${mode === "backgrounds" ? "" : "ghost"}`} onClick={() => setMode("backgrounds")}>3 backgrounds, same title</button>
           <button className={`btn small-btn ${mode === "titles" ? "" : "ghost"}`} onClick={() => setMode("titles")}>1 background, 3 titles</button>
           <button className={`btn small-btn ${mode === "blur" ? "" : "ghost"}`} onClick={() => setMode("blur")}>My own background, blurred</button>
-          <button className={`btn small-btn ${mode === "colours" ? "" : "ghost"}`} onClick={() => setMode("colours")}>
+          <button title="Colour pair – use these colours for the background" className={`btn small-btn ${mode === "colours" ? "" : "ghost"}`} onClick={() => setMode("colours")}>
             <span className="tm-swatch" style={{ background: "linear-gradient(90deg,#FEF8F3,#C9B3EC,#E8B9B7,#FAE8A5)" }} /> My colours (lilac · pink · yellow · white)
           </button>
           <button className="btn ghost small-btn" disabled={!!busy} onClick={() => act("suggest", () => api.tmSuggest(wid))}>
@@ -168,7 +168,7 @@ function ThumbMaker({ wid }: { wid: string }) {
           <div className="hook-chips small">
             <span className="muted">Title ideas (only proposals – click to use, then edit):</span>
             {ideas.titles.map((t, k) => (
-              <button key={k} className="chip" onClick={() => {
+              <button title="Colour pair – use these colours for the background" key={k} className="chip" onClick={() => {
                 const next = titles.map((x) => [...x]);
                 next[mode === "titles" ? k : 0] = [...t];
                 setTitles(next);
@@ -235,7 +235,7 @@ function ThumbMaker({ wid }: { wid: string }) {
         <section className="card">
           <div className="carousel-head">
             <h3>3 · Your versions</h3>
-            <a className="btn" href={api.tmZipUrl(wid)} download>⬇ Download all 3</a>
+            <a title="Download – all 3 thumbnails" className="btn" href={api.tmZipUrl(wid)} download>⬇ Download all 3</a>
           </div>
           <p className="small muted">Left: full size. Right: how it looks in the phone feed (360 px). Saved in the project folder and on your Desktop (SOCIAL MEDIA APP › Thumbnails).</p>
           <div className="tm-versions">
@@ -356,7 +356,7 @@ function VersionCard({ wid, v, busy, onState, onErr }: {
               setWorking(null);
             }
           }}>{working === "bg" ? "Making the background …" : "New background"}</button>
-          <a className="btn small-btn" href={`${url}?download=1`} download={`thumbnail_${v.id}.png`}>⬇ PNG</a>
+          <a title="Download – this thumbnail as PNG" className="btn small-btn" href={`${url}?download=1`} download={`thumbnail_${v.id}.png`}>⬇ PNG</a>
           <span className="muted">{Math.round((v.size ?? 0) / 1024)} KB · {v.layout_used}</span>
         </div>
       </div>
@@ -451,8 +451,8 @@ function CutoutFixer({ wid, v, onState, onErr, onDone }: {
       <p className="small muted">Paint over what does not belong to you (dark = gone, bright = you). Your photo itself is not changed.</p>
       <div className="tm-move small">
         <span className="seg">
-          <button className={mode === "erase" ? "on" : ""} onClick={() => setMode("erase")}>🧽 erase</button>
-          <button className={mode === "restore" ? "on" : ""} onClick={() => setMode("restore")}>🖌 bring back</button>
+          <button title="Erase – paint over parts that should go away" className={mode === "erase" ? "on" : ""} onClick={() => setMode("erase")}>🧽 erase</button>
+          <button title="Bring back – paint over parts that should come back" className={mode === "restore" ? "on" : ""} onClick={() => setMode("restore")}>🖌 bring back</button>
         </span>
         <label>brush
           <input type="range" min={0.006} max={0.08} step={0.002} value={size} onChange={(e) => setSize(Number(e.target.value))} />

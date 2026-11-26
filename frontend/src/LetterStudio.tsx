@@ -134,7 +134,7 @@ export function LetterStudio() {
     <div className="page letter-page">
       <section className="card">
         <div className="letter-head">
-          <button className="link" onClick={() => setLetter(null)}>← All letters</button>
+          <button title="Back – to the list of all letters" className="link" onClick={() => setLetter(null)}>← All letters</button>
           <input className="letter-no" value={letter.number} onChange={(e) => setLetter({ ...letter, number: e.target.value })}
             onBlur={() => api.letterMeta(letter.id, { number: letter.number })} />
           <input className="letter-title" value={letter.title} onChange={(e) => setLetter({ ...letter, title: e.target.value })}
@@ -142,7 +142,7 @@ export function LetterStudio() {
           {letter.langs.length > 1 && (
             <span className="tempo">
               {letter.langs.map((lg) => (
-                <button key={lg} className={lang === lg ? "on" : ""} onClick={() => { setLang(lg); setOpen(null); }}>{lg === "en" ? "English" : "Deutsch"}</button>
+                <button title="Language – show this language version" key={lg} className={lang === lg ? "on" : ""} onClick={() => { setLang(lg); setOpen(null); }}>{lg === "en" ? "English" : "Deutsch"}</button>
               ))}
             </span>
           )}
@@ -156,7 +156,7 @@ export function LetterStudio() {
             setLetter(await api.letterSuggest(letter.id, lang, "claude"));
             setMsg("Captions and picture ideas suggested ✓ – edit them as you like.");
           })}>{busy === "suggest" ? "Claude is thinking …" : "✨ Suggest captions + picture ideas"}</button>
-          <button className="btn ghost" disabled={!!busy} onClick={() => act("render", async () => {
+          <button title="Render – draw all slides as pictures" className="btn ghost" disabled={!!busy} onClick={() => act("render", async () => {
             setLetter(await api.letterRender(letter.id));
             setMsg("All slides rendered ✓ – PNG + JPG are ready.");
           })}>{busy === "render" ? "Rendering …" : "Render all slides"}</button>
@@ -164,7 +164,7 @@ export function LetterStudio() {
             {busy === "pictures" ? "Preparing …" : "🎨 Pictures with Canva (via Claude)"}
           </button>
           <button className="btn ghost" disabled={!!busy} onClick={sync}>{busy === "sync" ? "Checking …" : "⟳ Get pictures & status"}</button>
-          {allRendered && <a className="btn ghost" href={api.letterZip(letter.id)} download>⬇ ZIP (your folder layout)</a>}
+          {allRendered && <a title="Download – all slides as ZIP, in your folder layout" className="btn ghost" href={api.letterZip(letter.id)} download>⬇ ZIP (your folder layout)</a>}
           <button className="btn ghost" onClick={() => api.openOutbox("carousels").catch(() => {})} title="Rendered slides are saved on your Desktop: SOCIAL MEDIA APP › Carousels">📁 Open folder</button>
         </div>
         {sentence && <ClaudeSentence text={sentence} onClose={() => setSentence(null)} />}
@@ -298,12 +298,12 @@ function SlideEditor({ letter, lang, idx, k, part, onSave, onLetter, onErr }: {
       <textarea rows={Math.max(3, s.lines.length + 1)} value={lines} onChange={(e) => setLines(e.target.value)}
         onBlur={() => lines !== s.lines.join("\n") && patch({ lines: lines.split("\n").filter((x) => x.trim()) })} />
       <div className="row-buttons">
-        {k > 0 && <button className="link" onClick={() => setSlides((sl) => {
+        {k > 0 && <button title="Line up – move the first line to the slide before" className="link" onClick={() => setSlides((sl) => {
           const first = sl[k].lines.shift();
           if (first) sl[k - 1].lines.push(first);
           return sl.filter((x) => x.lines.length);
         })}>↑ first line to previous slide</button>}
-        {k < part.slides.length - 1 && <button className="link" onClick={() => setSlides((sl) => {
+        {k < part.slides.length - 1 && <button title="Line down – move the last line to the next slide" className="link" onClick={() => setSlides((sl) => {
           const last = sl[k].lines.pop();
           if (last) sl[k + 1].lines.unshift(last);
           return sl.filter((x) => x.lines.length);
@@ -357,7 +357,7 @@ function ClaudeSentence({ text, onClose }: { text: string; onClose: () => void }
       <strong>✓ Ready. Send this to Claude (it is already copied):</strong>
       <code>{text}</code>
       <div className="row-buttons">
-        <button className="btn small-btn" onClick={() => navigator.clipboard.writeText(text).then(() => setCopied(true))}>{copied ? "Copied ✓" : "Copy"}</button>
+        <button title="Copy – copy the text to paste it somewhere else" className="btn small-btn" onClick={() => navigator.clipboard.writeText(text).then(() => setCopied(true))}>{copied ? "Copied ✓" : "Copy"}</button>
         <a className="btn ghost small-btn" href="https://claude.ai/new" target="_blank" rel="noreferrer">Open Claude</a>
         <button className="link" onClick={onClose}>close</button>
       </div>

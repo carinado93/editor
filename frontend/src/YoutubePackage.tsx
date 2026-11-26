@@ -82,7 +82,7 @@ export function YoutubePackage({ id }: { id: string }) {
             </button>
           </div>
           <Status busy={busy} err={err} msg={msg} />
-          {err?.includes("Settings") && <a className="small" href="#/einstellungen">→ go to Settings</a>}
+          {err?.includes("Settings") && <a title="Go to Settings – add your AI key there" className="small" href="#/einstellungen">→ go to Settings</a>}
           {meta && (
             <MetaEditor meta={meta} fullDesc={fullDesc} busy={!!busy} onSave={save} onCopy={(t) => copy(t, setMsg)} />
           )}
@@ -91,7 +91,7 @@ export function YoutubePackage({ id }: { id: string }) {
         <div className="card" id="step-thumb">
           <div className="carousel-head">
             <h3>Thumbnail suggestions</h3>
-            <a className="btn" href={`#/thumbnail/${id}`}>🎨 Thumbnail maker (AI background + title)</a>
+            <a title="Thumbnail maker – make a thumbnail with AI background and title" className="btn" href={`#/thumbnail/${id}`}>🎨 Thumbnail maker (AI background + title)</a>
           </div>
           <p className="small muted">Frames where your eyes are open, you look into the camera and smile. Click = open full size.</p>
           <button className="btn" disabled={!!busy} onClick={() => act("thumbs", async () => setThumbs((await api.thumbnails(id)).thumbnails))}>

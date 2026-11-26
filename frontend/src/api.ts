@@ -489,6 +489,10 @@ export const api = {
   suggestEffects: (id: string, engine: "claude" | "ollama", allowed: string[], wish: string) =>
     call<CutView>(`/api/projects/${id}/effects/${engine}`, json({ allowed, wish })),
   effectPreviewUrl: (id: string, fid: string, v: number) => `/api/projects/${id}/effects/preview/${fid}?v=${v}`,
+  /** Beispielbild eines Effekt-Typs auf dem eigenen Video (für die Auswahl-Kacheln) */
+  effectExampleUrl: (id: string, type: string) => `/api/projects/${id}/effects/example/${encodeURIComponent(type)}`,
+  /** Beispielbild einer Text-Vorlage im Video Studio */
+  studioTemplateExample: (tpl: string, reel: boolean) => `/api/studio/template-example/${encodeURIComponent(tpl)}?reel=${reel}`,
   /** Vorschau-Bild eines Effekts, so wie er gerade im Formular steht (ohne Speichern) */
   effectPreviewLive: async (id: string, item: Overlay, signal?: AbortSignal): Promise<string> => {
     const r = await fetch(`/api/projects/${id}/effects-preview`, {

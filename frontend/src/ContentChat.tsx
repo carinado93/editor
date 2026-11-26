@@ -73,7 +73,7 @@ export function ContentChat() {
       </div>
       {configured === false && (
         <div className="banner">
-          The chat needs your Claude key once. <a href="#/einstellungen">→ Settings</a>
+          The chat needs your Claude key once. <a title="Go to Settings – add your AI key there" href="#/einstellungen">→ Settings</a>
         </div>
       )}
       <div className="card chat">

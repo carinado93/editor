@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, type CoverPhoto } from "./api";
+import { ExamplePicker, SwatchExample } from "./Pickers";
 
 type Kind = "youtube" | "center" | "meditation" | "reel";
 
@@ -11,6 +12,7 @@ const KIND_LABEL: Record<Kind, string> = {
 };
 
 const COLOR_LABEL: Record<string, string> = { lila: "Purple", hell: "Light", oliv: "Olive" };
+const COVER_SWATCH: Record<string, string[]> = { lila: ["#6a4c9c", "#cdbfe0"], hell: ["#fffdf9", "#ebe3d6"], oliv: ["#6b6f3a", "#c9a56b"] };
 
 /** Thumbnails & Reel-Cover im Stil von Carinas bisherigen Designs (3 Varianten aus verschiedenen Standbildern). */
 export function CoverStudio({ id, kinds }: { id: string; kinds: Kind[] }) {
@@ -176,12 +178,12 @@ export function CoverStudio({ id, kinds }: { id: string; kinds: Kind[] }) {
         {kind === "reel" && (
           <label>
             Colour
-            <select value={form.color} onChange={(e) => setForm({ ...form, color: e.target.value })}>
-              <option value="auto">automatic (next: {COLOR_LABEL[nextColor] ?? nextColor})</option>
-              <option value="lila">Purple</option>
-              <option value="hell">Light</option>
-              <option value="oliv">Olive</option>
-            </select>
+            <ExamplePicker value={form.color} onChange={(v) => setForm({ ...form, color: v })} search={false} tile="sm"
+              options={[
+                { value: "auto", label: `Automatic (next: ${COLOR_LABEL[nextColor] ?? nextColor})`, desc: "The colours take turns: purple, light, olive" },
+                { value: "lila", label: "Purple" }, { value: "hell", label: "Light" }, { value: "oliv", label: "Olive" },
+              ]}
+              example={(x, small) => <SwatchExample small={small} colors={COVER_SWATCH[x.value === "auto" ? nextColor : x.value] ?? ["#ccc"]} />} />
           </label>
         )}
       </div>
@@ -225,10 +227,10 @@ export function CoverStudio({ id, kinds }: { id: string; kinds: Kind[] }) {
           </div>
           <p className="small muted">
             Saved on your Desktop: SOCIAL MEDIA APP › Thumbnails.{" "}
-            <button className="link" onClick={() => api.openOutbox("thumbnails").catch(() => {})}>📁 Open folder</button>
+            <button title="Open folder – shows the covers on your Desktop" className="link" onClick={() => api.openOutbox("thumbnails").catch(() => {})}>📁 Open folder</button>
           </p>
           {kind === "reel" && usedColor && (
-            <button className="link" onClick={markUsed}>
+            <button title="Done – remember the colour, the next cover gets the next colour" className="link" onClick={markUsed}>
               ✓ Used one of them → next cover in the next colour
             </button>
           )}

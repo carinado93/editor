@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { api, formatTime, type TranslateRow, type CutView, type EffectType, type FxStyle, type Overlay, type RenderOptions, type SpeedRange } from "./api";
 import { Status } from "./ReelPackage";
 import { TimeRange } from "./TimeRange";
+import { ExamplePicker, ImageExample } from "./Pickers";
 
 const GROUP_LABEL: Record<string, string> = {
   A: "Boxes & cards",
@@ -159,7 +160,7 @@ function StudioFields({ o, spec, onChange }: { o: Overlay; spec: StudioSpec; onC
             <div key={k} className="studio-row">
               <input value={a} placeholder={spec.rows!.labels[0]} onChange={(e) => saveRows(rows.map((r, j) => (j === k ? [e.target.value, r[1]] : r)))} />
               <input value={b} placeholder={spec.rows!.labels[1]} onChange={(e) => saveRows(rows.map((r, j) => (j === k ? [r[0], e.target.value] : r)))} />
-              <button className="link danger" disabled={rows.length <= 1} onClick={() => saveRows(rows.filter((_, j) => j !== k))}>✕</button>
+              <button title="Remove line – delete this line" className="link danger" disabled={rows.length <= 1} onClick={() => saveRows(rows.filter((_, j) => j !== k))}>✕</button>
             </div>
           ))}
           {rows.length < 5 && <button className="link" onClick={() => saveRows([...rows, ["", ""]])}>+ add a line</button>}
@@ -225,7 +226,7 @@ function FxVersions({ id, onCuts }: { id: string; onCuts: (c: CutView) => void }
   const load = () => api.fxVersions(id).then((r) => setList(r.versions)).catch((e) => setErr(e.message));
   return (
     <div className="fx-versions small">
-      <button className="link" onClick={() => { setOpen(!open); if (!open) void load(); }}>🕘 Earlier versions (restore)</button>
+      <button title="Earlier versions – go back to effects you saved before" className="link" onClick={() => { setOpen(!open); if (!open) void load(); }}>🕘 Earlier versions (restore)</button>
       {open && (
         <div className="fx-versions-list">
           {err && <div className="banner error">{err}</div>}
@@ -236,7 +237,7 @@ function FxVersions({ id, onCuts }: { id: string; onCuts: (c: CutView) => void }
                 <strong>{v.ts ? new Date(v.ts * 1000).toLocaleString() : "earlier"}</strong> · {v.label} · {v.count} items ({v.fx} effects)
                 <ul>{v.summary.map((x, j) => <li key={j}>{x}</li>)}</ul>
               </div>
-              <button className="btn small-btn" onClick={async () => {
+              <button title="Restore – bring back this saved version" className="btn small-btn" onClick={async () => {
                 if (!confirm("Restore this version? Your current effects are saved as a version first, so you can go back.")) return;
                 try { onCuts(await api.fxRestore(id, k)); setOpen(false); } catch (e) { setErr((e as Error).message); }
               }}>↺ restore</button>
@@ -282,6 +283,7 @@ export function EffectsPanel({ id, cuts, onCuts, time, outTime, toSrc, toOut, on
         toOut={toOut}
         onSeek={onSeek}
         preview={(item, signal) => api.effectPreviewLive(id, item, signal)}
+        example={(t) => api.effectExampleUrl(id, t)}
         onSave={async (list) => {
           const others = (cuts.cutlist.overlays ?? []).filter((o) => o.kind !== "fx");
           onCuts(await api.setOverlays(id, [...others, ...list]));
@@ -359,7 +361,7 @@ function LanguageVersion({ id, cuts, onCuts }: { id: string; cuts: CutView; onCu
               <input value={r.dst} onChange={(e) => setRows(rows.map((x, j) => (j === k ? { ...x, dst: e.target.value } : x)))} />
             </div>
           ))}
-          <button className="btn" onClick={async () => { onCuts(await api.translateApply(id, lang, rows)); setRows(null); }}>
+          <button title="Use these texts – put the translated texts into the video" className="btn" onClick={async () => { onCuts(await api.translateApply(id, lang, rows)); setRows(null); }}>
             ✓ Use these texts
           </button>{" "}
           <button className="btn ghost" onClick={() => setRows(null)}>Cancel</button>
@@ -396,8 +398,10 @@ function inCutPart(keep: [number, number][] | undefined, t: number): boolean {
   return !!keep?.length && !keep.some(([a, b]) => t >= a - 0.05 && t <= b + 0.05);
 }
 
-export function EffectsEditor({ items: source, allowedInit, time, outTime, toSrc, toOut, onSeek, preview, onSave, onSuggest, children, compact, exclude, keep, endAt, renderOptions, onRenderOptions }: {
+export function EffectsEditor({ items: source, allowedInit, time, outTime, toSrc, toOut, onSeek, preview, onSave, onSuggest, children, compact, exclude, keep, endAt, renderOptions, onRenderOptions, example }: {
   items: Overlay[];
+  /** Beispielbild-Adresse pro Effekt-Typ (für die Auswahl-Kacheln) */
+  example?: (type: string) => string;
   allowedInit?: string[];
   time: number;
   outTime?: number | null;
@@ -587,6 +591,9 @@ export function EffectsEditor({ items: source, allowedInit, time, outTime, toSrc
 
   const groups = ["A", "B", "C", "D", "E"];
   const typeOf = (k?: string) => types.find((t) => t.key === k);
+  const typeOpts = types.map((t) => ({ value: t.key, label: t.label, desc: DESC[t.key], group: t.group }));
+  const typeEx = (o: { value: string; label: string }, small: boolean) =>
+    example ? <ImageExample src={example(o.value)} label={o.label} small={small} /> : <span className="ex-font small">✨</span>;
 
   return (
     <div className={compact ? "fx-editor compact" : "fx-editor"}>
@@ -659,11 +666,8 @@ export function EffectsEditor({ items: source, allowedInit, time, outTime, toSrc
             ? <>at {formatTime(outTime)} in your finished video (= {formatTime(time)} in the original)</>
             : <>at {formatTime(time)} (pause the video – or your finished video – where it should start)</>}</span></div>
         <div className="fx-add-row">
-          <select value={addType} onChange={(e) => setAddType(e.target.value)}>
-            {types.map((t) => (
-              <option key={t.key} value={t.key}>{t.label}</option>
-            ))}
-          </select>
+          <ExamplePicker value={addType} onChange={setAddType} options={typeOpts} groupLabels={GROUP_LABEL} example={typeEx} tile="lg"
+            tip="Effect – click to see every effect with an example picture on your video" />
           <textarea className="fx-add-text" rows={1} value={addText}
             placeholder={HINT[addType] ? `Your text (optional) – ${HINT[addType]}` : "Your text (optional)"}
             onChange={(e) => setAddText(e.target.value)} />
@@ -685,7 +689,7 @@ export function EffectsEditor({ items: source, allowedInit, time, outTime, toSrc
         </button>
       </div>
       <Status busy={busy} err={err} msg={msg} />
-      {err?.includes("Settings") && <a className="small" href="#/einstellungen">→ go to Settings</a>}
+      {err?.includes("Settings") && <a title="Go to Settings – add your AI key there" className="small" href="#/einstellungen">→ go to Settings</a>}
 
       <div className="fx-list">
         {items.map((o, i) => {
@@ -696,17 +700,15 @@ export function EffectsEditor({ items: source, allowedInit, time, outTime, toSrc
               <FxPreview preview={preview} item={o} />
               <div className="fx-row-main">
               <div className="fx-row-head">
-                <input type="checkbox" checked={o.on} onChange={(e) => upd(i, { on: e.target.checked })} />
-                <select value={o.type} onChange={(e) => {
-                  const nt = typeOf(e.target.value);
-                  upd(i, { type: e.target.value, place: nt && !nt.places.includes(o.place ?? "scene") ? nt.places[0] : o.place });
-                }}>
-                  {types.map((x) => (
-                    <option key={x.key} value={x.key}>{x.label}</option>
-                  ))}
-                </select>
+                <input type="checkbox" title="On / off – untick to hide this effect without deleting it" checked={o.on} onChange={(e) => upd(i, { on: e.target.checked })} />
+                <ExamplePicker value={o.type ?? ""} options={typeOpts} groupLabels={GROUP_LABEL} example={typeEx} tile="lg"
+                  tip="Effect type – click to switch to another effect (with example pictures)"
+                  onChange={(v) => {
+                    const nt = typeOf(v);
+                    upd(i, { type: v, place: nt && !nt.places.includes(o.place ?? "scene") ? nt.places[0] : o.place });
+                  }} />
                 {t && t.places.length > 1 && (
-                  <select value={o.place} onChange={(e) => upd(i, { place: e.target.value as "scene" | "side" })}>
+                  <select title="Where – full screen or next to you" value={o.place} onChange={(e) => upd(i, { place: e.target.value as "scene" | "side" })}>
                     {t.places.map((p) => (
                       <option key={p} value={p}>{PLACE_LABEL[p]}</option>
                     ))}
@@ -722,7 +724,7 @@ export function EffectsEditor({ items: source, allowedInit, time, outTime, toSrc
                              item_t: (o.item_t ?? []).map((x) => Math.round((x + d) * 10) / 10) });
                   }} />
                 {inCutPart(keep, o.start) && <span className="small error-text">starts in a cut part – shown at the next kept spot</span>}
-                <button className="link danger" onClick={() => { setDirty(true); setItems(items.filter((_, j) => j !== i)); }}>
+                <button className="link danger" title="Remove – delete this effect (press Save effects afterwards)" onClick={() => { setDirty(true); setItems(items.filter((_, j) => j !== i)); }}>
                   remove
                 </button>
               </div>
@@ -747,7 +749,7 @@ export function EffectsEditor({ items: source, allowedInit, time, outTime, toSrc
                             const sec = p2.length === 2 ? p2[0] * 60 + p2[1] : p2[0];
                             if (!Number.isNaN(sec)) setAt(k, src(sec));
                           }} />
-                        <button className="link" onClick={() => setAt(k, time)}>← now ({formatTime(outTime ?? out(time))})</button>
+                        <button title="Now – use the current video position for this step" className="link" onClick={() => setAt(k, time)}>← now ({formatTime(outTime ?? out(time))})</button>
                         {(o.item_t ?? []).length !== n && <span className="muted">auto</span>}
                       </div>
                     ))}
@@ -780,7 +782,7 @@ export function EffectsEditor({ items: source, allowedInit, time, outTime, toSrc
               {["behind", "typewriter", "circleword", "countup", "ringtimer"].includes(o.type ?? "") && (
                 <span className="fx-colors small">Colour:
                   {([["white", "#fffdf9"], ["pink", "#f096b9"], ["yellow", "#fae28c"], ["lilac", "#c9b3ec"], ["green", "#a0d696"]] as const).map(([c, hex]) => (
-                    <button key={c} title={c} className={`fx-color ${(o.color ?? "") === c || (!o.color && c === "white") ? "on" : ""}`}
+                    <button key={c} title={`${c[0].toUpperCase()}${c.slice(1)} – text colour of this effect`} className={`fx-color ${(o.color ?? "") === c || (!o.color && c === "white") ? "on" : ""}`}
                       style={{ background: hex }} onClick={() => upd(i, { color: c })} />
                   ))}
                 </span>
@@ -857,8 +859,8 @@ export function EffectsEditor({ items: source, allowedInit, time, outTime, toSrc
                       Poses:{" "}
                       {(o.pose_t ?? []).map((pt, k) => (
                         <span key={k} className="pill">
-                          <button className="link" onClick={() => onSeek(pt)}>{formatTime(pt)}</button>
-                          <button className="link danger" onClick={() => {
+                          <button className="link" title="Jump – go to this pose in the video" onClick={() => onSeek(pt)}>{formatTime(pt)}</button>
+                          <button title="Remove – delete this" className="link danger" onClick={() => {
                             const pose_t = (o.pose_t ?? []).filter((_, j) => j !== k);
                             upd(i, { pose_t, end: o.start + Math.max(0.9, pose_t.length * 0.45) });
                           }}>×</button>
@@ -880,35 +882,37 @@ export function EffectsEditor({ items: source, allowedInit, time, outTime, toSrc
                 <input type="range" min={0.5} max={2} step={0.1} value={o.scale ?? 1}
                   onChange={(e) => upd(i, { scale: Number(e.target.value) })} />
                 <span className="muted">{Math.round((o.scale ?? 1) * 100)} %</span>
-                {(o.scale ?? 1) !== 1 && <button className="link" onClick={() => upd(i, { scale: 1 })}>reset</button>}
+                {(o.scale ?? 1) !== 1 && <button className="link" title="Reset – back to 100 % size" onClick={() => upd(i, { scale: 1 })}>reset</button>}
               </label>
               {!NO_POSITION.includes(o.type ?? "") && (
                 <span className="small fx-pos">
                   Position
                   <span className="seg">
                     {(["auto", "left", "center", "right"] as const).map((v) => (
-                      <button key={v} className={(o.pos_x ?? "auto") === v ? "on" : ""} onClick={() => upd(i, { pos_x: v })}>
+                      <button key={v} className={(o.pos_x ?? "auto") === v ? "on" : ""} onClick={() => upd(i, { pos_x: v })}
+                        title={{ auto: "Auto – the app picks the best side (away from your face)", left: "Left – put the effect on the left", center: "Center – put the effect in the middle", right: "Right – put the effect on the right" }[v]}>
                         {v === "auto" ? "auto" : v === "left" ? "⇤ left" : v === "center" ? "center" : "right ⇥"}
                       </button>
                     ))}
                   </span>
                   <span className="seg">
                     {(["auto", "top", "middle", "bottom"] as const).map((v) => (
-                      <button key={v} className={(o.pos_y ?? "auto") === v ? "on" : ""} onClick={() => upd(i, { pos_y: v })}>
+                      <button key={v} className={(o.pos_y ?? "auto") === v ? "on" : ""} onClick={() => upd(i, { pos_y: v })}
+                        title={{ auto: "Auto – the app picks the best height", top: "Top – put the effect at the top", middle: "Middle – put the effect in the middle", bottom: "Bottom – put the effect at the bottom" }[v]}>
                         {v === "auto" ? "auto" : v === "top" ? "↑ top" : v === "middle" ? "middle" : "bottom ↓"}
                       </button>
                     ))}
                   </span>
                   <span className="nudge" title="Move a little with every click (Shift+click = bigger step)">
                     {([["←", -1, 0], ["↑", 0, -1], ["↓", 0, 1], ["→", 1, 0]] as const).map(([lbl, ddx, ddy]) => (
-                      <button key={lbl} onClick={(e) => {
+                      <button key={lbl} title={{ "←": "Nudge left – a little to the left (Shift = bigger step)", "↑": "Nudge up – a little higher (Shift = bigger step)", "↓": "Nudge down – a little lower (Shift = bigger step)", "→": "Nudge right – a little to the right (Shift = bigger step)" }[lbl]} onClick={(e) => {
                         const step = e.shiftKey ? 0.05 : 0.01;
                         const r = (v: number) => Math.round(Math.max(-1, Math.min(1, v)) * 1000) / 1000;
                         upd(i, { nudge_x: r((o.nudge_x ?? 0) + ddx * step), nudge_y: r((o.nudge_y ?? 0) + ddy * step) });
                       }}>{lbl}</button>
                     ))}
                     {(!!o.nudge_x || !!o.nudge_y) && (
-                      <button className="link" onClick={() => upd(i, { nudge_x: 0, nudge_y: 0 })}>reset</button>
+                      <button className="link" title="Reset – back to the automatic position" onClick={() => upd(i, { nudge_x: 0, nudge_y: 0 })}>reset</button>
                     )}
                   </span>
                 </span>
