@@ -9,14 +9,12 @@ const LAYOUTS: [string, string][] = [
 ];
 
 const PAIRS: [string, string][] = [
+  ["blur:own", "My own photo, blurred (default)"],
   ["colours:lilac+pink", "My colours: lilac + pink"],
   ["colours:pink+yellow", "My colours: pink + yellow"],
   ["colours:yellow+lilac", "My colours: yellow + lilac"],
   ["colours:white+pink", "My colours: white + pink"],
   ["colours:lilac+white", "My colours: lilac + white"],
-  ["blur:light", "My own background – a little blur"],
-  ["blur:medium", "My own background – medium blur"],
-  ["blur:strong", "My own background – strong blur"],
 ];
 const DEFAULT_PAIRS = ["colours:lilac+pink", "colours:pink+yellow", "colours:yellow+lilac"];
 
@@ -60,7 +58,7 @@ function ThumbMaker({ wid }: { wid: string }) {
   const [frames, setFrames] = useState<{ k: number; t: number; file: string }[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const [mode, setMode] = useState<"backgrounds" | "titles" | "colours" | "blur">("colours");
+  const [mode, setMode] = useState<"backgrounds" | "titles" | "colours" | "blur">("blur");
   const [prompts, setPrompts] = useState<string[]>(["", "", ""]);
   const [pairs, setPairs] = useState<string[]>(DEFAULT_PAIRS);
   const [titles, setTitles] = useState<string[][]>([["", ""], ["", ""], ["", ""]]);
@@ -141,12 +139,13 @@ function ThumbMaker({ wid }: { wid: string }) {
       <section className="card">
         <h3>2 · Background &amp; title</h3>
         <div className="row-buttons small">
-          <button className={`btn small-btn ${mode === "backgrounds" ? "" : "ghost"}`} onClick={() => setMode("backgrounds")}>3 backgrounds, same title</button>
-          <button className={`btn small-btn ${mode === "titles" ? "" : "ghost"}`} onClick={() => setMode("titles")}>1 background, 3 titles</button>
-          <button className={`btn small-btn ${mode === "blur" ? "" : "ghost"}`} onClick={() => setMode("blur")}>My own background, blurred</button>
+          <button className={`btn small-btn ${mode === "blur" ? "" : "ghost"}`} onClick={() => setMode("blur")}>My own photo, blurred (default)</button>
           <button className={`btn small-btn ${mode === "colours" ? "" : "ghost"}`} onClick={() => setMode("colours")}>
             <span className="tm-swatch" style={{ background: "linear-gradient(90deg,#FEF8F3,#C9B3EC,#E8B9B7,#FAE8A5)" }} /> My colours (lilac · pink · yellow · white)
           </button>
+          <span className="muted">AI (costs):</span>
+          <button className={`btn small-btn ${mode === "backgrounds" ? "" : "ghost"}`} onClick={() => setMode("backgrounds")}>🤖 AI: 3 backgrounds, same title</button>
+          <button className={`btn small-btn ${mode === "titles" ? "" : "ghost"}`} onClick={() => setMode("titles")}>🤖 AI: 1 background, 3 titles</button>
           <button className="btn ghost small-btn" disabled={!!busy} onClick={() => act("suggest", () => api.tmSuggest(wid))}>
             {busy === "suggest" ? "Claude is thinking …" : "✨ Suggest backgrounds + titles"}
           </button>
@@ -189,8 +188,8 @@ function ThumbMaker({ wid }: { wid: string }) {
           </div>
         )}
         {mode === "blur" && (
-          <p className="small muted">The real room from your photo, only softer – you stay sharp. 3 versions: a little, medium and strong blur.
-            The app removes you from the background first, so you are not there twice. Free, no AI.</p>
+          <p className="small muted">Your own photo, heavily blurred – calm and soft like a real room, you stay sharp in front.
+            With “Let the app choose”: 3 versions – you on the right, in the middle and on the left. Free, no AI.</p>
         )}
         {mode !== "colours" && mode !== "blur" && <div className="tm-prompts">
           {(mode === "titles" ? [0] : [0, 1, 2]).map((k) => (
@@ -221,8 +220,9 @@ function ThumbMaker({ wid }: { wid: string }) {
         </div>
         <p className="small muted">Cost: <strong>{mode === "colours" || mode === "blur" ? "free" : mode === "titles" ? st.cost.replace("3 images", "1 image") : st.cost}</strong> · change the image service in Settings.</p>
         <button className="btn" disabled={!!busy || !st.cutout} onClick={() => act("gen", () => api.tmGenerate(wid, { mode, prompts: mode === "colours" ? pairs : prompts, titles, layout, behind, doodles }))}>
-          {busy === "gen" ? "Making 3 versions … (up to a minute per background)" : !st.cutout ? "Choose your photo first" : "✨ Make 3 versions"}
+          {busy === "gen" ? "Making the versions … (up to a minute per background)" : !st.cutout ? "Choose your photo first" : "✨ Make versions"}
         </button>
+        {!!st.cut_warnings?.length && <div className="banner error small">{st.cut_warnings.join(" ")}</div>}
         {st.fallback_used && (
           <div className="banner error small">
             The image service could not be reached, so a blurred frame of your own photo was used as background. Check your internet

@@ -39,23 +39,17 @@ def font(name: str, size: int) -> ImageFont.FreeTypeFont:
 
 def cutout(photo: Image.Image, segmenter=None) -> tuple[Image.Image, list[float] | None]:
     """Carina aus einem Foto freistellen → (RGBA zugeschnitten auf sie, Gesichtsbox 0..1 relativ zum Ausschnitt).
-    Personen-Maske (fx.Segmenter) + Finger/Haar-Korrektur (GrabCut, Wand-/Pflanzen-Pixel raus, größte Fläche)."""
-    import cv2
-
-    from . import fx, gaze
+    IS-Net + alpha matting + immer die Kanten-Reinigung aus thumb_cutout (keine weißen Ränder)."""
+    from . import gaze, thumb_cutout
 
     img = photo.convert("RGB")
-    seg = segmenter or fx.Segmenter()
-    try:
-        m = np.asarray(seg.mask(img)).astype(np.float32) / 255
-    finally:
-        if segmenter is None:
-            seg.close()
-    m = refine_mask(np.asarray(img), m)
     face = gaze.photo_face(img)
-    cut, fbox = crop_cutout(img, m, face)
-    cut.info["mask"] = Image.fromarray((np.clip(m, 0, 1) * 255).astype(np.uint8))  # ganze Maske fürs Nachbessern
+    rgba, mask, report = thumb_cutout.cutout(img, face, segmenter)
+    cut, fbox = crop_cutout(rgba, np.asarray(mask).astype(np.float32) / 255, face)
+    cut.info["mask"] = mask                    # ganze Maske fürs Nachbessern
+    cut.info["clean_rgb"] = rgba.convert("RGB")  # entfärbte Kanten (für Radierer-Nachbesserung)
     cut.info["photo_face"] = face
+    cut.info["report"] = report
     return cut, fbox
 
 
@@ -111,7 +105,7 @@ def refine_mask(rgb: np.ndarray, m: np.ndarray) -> np.ndarray:
 
 def crop_cutout(img: Image.Image, m: np.ndarray, face: list[float] | None) -> tuple[Image.Image, list[float] | None]:
     a = (np.clip(m, 0, 1) * 255).astype(np.uint8)
-    rgba = img.convert("RGBA")
+    rgba = img.convert("RGB").convert("RGBA")
     rgba.putalpha(Image.fromarray(a))
     bbox = Image.fromarray(a).point(lambda v: 255 if v > 40 else 0).getbbox()
     if not bbox:
@@ -138,14 +132,74 @@ def darken_top(bg: Image.Image, strength: float = 0.5) -> Image.Image:
     return Image.fromarray(np.clip(a * ramp[:, None, None], 0, 255).astype(np.uint8))
 
 
-def soft_shadow(person: Image.Image, blur: int = 16, offset=(10, 12), alpha: float = 0.5) -> Image.Image:
+SHADOW = (0x28, 0x1E, 0x1E)       # shadow behind her (26 Nov 2026): #281E1E, 20 %, blur 30, offset +14/+10
+TEXT_SHADOW = (0x23, 0x0F, 0x2D)  # white text: #230F2D, 70 %, blur 10, offset +3/+5
+BG_DARK = (0x1E, 0x18, 0x1A)      # text-side darkening of her own blurred photo
+
+
+def soft_shadow(person: Image.Image, blur: int = 30, offset=(14, 10), alpha: float = 0.20) -> Image.Image:
+    """Soft shadow behind her – no purple halo, no dark outline."""
     a = person.getchannel("A").point(lambda v: int(v * alpha))
-    sh = Image.new("RGBA", person.size, PLUM + (0,))
+    sh = Image.new("RGBA", person.size, SHADOW + (0,))
     sh.putalpha(a)
     pad = blur * 3
     big = Image.new("RGBA", (person.width + 2 * pad, person.height + 2 * pad), (0, 0, 0, 0))
     big.alpha_composite(sh, (pad + offset[0], pad + offset[1]))
     return big.filter(ImageFilter.GaussianBlur(blur)), pad
+
+
+def own_blur_background(photo: Image.Image, side: str = "right") -> Image.Image:
+    """Default background (26 Nov 2026): her ORIGINAL photo, heavily blurred – calm like a blurred real room.
+    side = where SHE stands in the thumbnail: right | centre | left (left = photo mirrored).
+    Scale to width 1280*1.4, crop 1280x720 around (cx, 0.45), Gaussian 70, brightness x0.90, contrast x0.75,
+    text-side darkening #1E181A (max 22 %, centre: both edges max 20 %, middle 40 % free), vignette max 10 %,
+    then brightness pulled into 45–85 %. No tint, no saturation change."""
+    from PIL import ImageEnhance, ImageOps
+    img = photo.convert("RGB")
+    if side == "left":
+        img = ImageOps.mirror(img)
+    cx = {"right": 0.55, "centre": 0.50, "left": 0.45}.get(side, 0.50)
+    tw = int(W * 1.4)
+    th = max(H, round(img.height * tw / img.width))
+    if th == H and img.height * tw / img.width < H:      # very wide photo: fill the height instead
+        tw = round(img.width * H / img.height)
+    img = img.resize((tw, th), Image.LANCZOS)
+    x0 = int(min(max(0, cx * tw - W / 2), tw - W))
+    y0 = int(min(max(0, 0.45 * th - H / 2), th - H))
+    bg = img.crop((x0, y0, x0 + W, y0 + H))
+    # blur with a mirrored margin so the edges don't go dark/grey
+    pad = 140
+    arr = np.asarray(bg)
+    big_a = np.pad(arr, ((pad, pad), (pad, pad), (0, 0)), mode="reflect")
+    big = Image.fromarray(big_a).filter(ImageFilter.GaussianBlur(70))
+    bg = big.crop((pad, pad, pad + W, pad + H))
+    bg = ImageEnhance.Brightness(bg).enhance(0.90)
+    bg = ImageEnhance.Contrast(bg).enhance(0.75)
+    a = np.asarray(bg).astype(np.float32)
+    x = np.linspace(0, 1, W, dtype=np.float32)
+    if side == "right":      # text left: dark towards the left edge
+        op = 0.22 * (1 - x)
+    elif side == "left":
+        op = 0.22 * x
+    else:                    # text left AND right: both outer edges, middle 40 % untouched
+        op = 0.20 * np.clip((np.abs(x - 0.5) - 0.2) / 0.3, 0, 1)
+    a = a * (1 - op[None, :, None]) + np.array(BG_DARK, np.float32) * op[None, :, None]
+    # very soft vignette (blurred ellipse), max 10 %
+    vm = Image.new("L", (W, H), 0)
+    ImageDraw.Draw(vm).ellipse((-W * 0.1, -H * 0.15, W * 1.1, H * 1.15), fill=255)
+    vm = np.asarray(vm.filter(ImageFilter.GaussianBlur(160))).astype(np.float32) / 255
+    a = a * (1 - 0.10 * (1 - vm))[..., None]
+    # never dark, never washed out: mean brightness 45–85 %
+    lum = float((a @ np.array([0.299, 0.587, 0.114], np.float32)).mean()) / 255
+    target = min(0.85, max(0.45, lum))
+    if abs(target - lum) > 1e-3:
+        a = a * (target / max(lum, 1e-3))
+    return Image.fromarray(np.clip(a, 0, 255).astype(np.uint8))
+
+
+def bg_brightness(img: Image.Image) -> float:
+    a = np.asarray(img.convert("L")).astype(np.float32)
+    return float(a.mean()) / 255
 
 
 def play_tag(h: int) -> Image.Image:
@@ -187,8 +241,8 @@ def text_sprite(txt: str, f: ImageFont.FreeTypeFont, shadow: bool = True) -> Ima
     im = Image.new("RGBA", (tw + 2 * pad, th + 2 * pad), (0, 0, 0, 0))
     if shadow:
         sh = Image.new("RGBA", im.size, (0, 0, 0, 0))
-        ImageDraw.Draw(sh).text((pad - box[0] + 3, pad - box[1] + 5), txt, font=f, fill=(30, 18, 50, 150))
-        im.alpha_composite(sh.filter(ImageFilter.GaussianBlur(max(3, f.size // 18))))
+        ImageDraw.Draw(sh).text((pad - box[0] + 3, pad - box[1] + 5), txt, font=f, fill=TEXT_SHADOW + (178,))
+        im.alpha_composite(sh.filter(ImageFilter.GaussianBlur(10)))
     ImageDraw.Draw(im).text((pad - box[0], pad - box[1]), txt, font=f, fill=WHITE + (255,))
     return im
 
@@ -221,6 +275,8 @@ class Spec:
     edges: tuple = ()             # Seiten, an denen sie im Foto abgeschnitten ist: "left", "right", "bottom"
     shadow: bool = True           # weicher Schatten hinter ihr (nicht bei ihrem echten, unscharfen Raum)
     shade: float = 0.5            # wie stark oben abgedunkelt wird (Farb-Hintergründe haben schon Pflaume oben)
+    side: str = "right"           # layout "side": she stands right or left
+    own_photo: Image.Image | None = None   # set → background = her own photo, heavily blurred (built per layout)
 
 
 @dataclass
@@ -246,7 +302,7 @@ def _place_person(cut: Image.Image, layout: str, face: list[float] | None, scale
     if cut.width * s > W * 1.15:
         s = W * 1.15 / cut.width
     pw, ph = int(cut.width * s), int(cut.height * s)
-    cx = {"side": 0.73}.get(layout, 0.5) * W
+    cx = ({"side": 0.27 if spec.side == "left" else 0.73}.get(layout, 0.5)) * W
     fcx = ((face[0] + face[2]) / 2) if face else 0.5   # das Gesicht steht an der Zielstelle, nicht der Ausschnitt
     x = int(cx - fcx * pw)
     x = max(-int(pw * 0.25), min(W - int(pw * 0.75), x))
@@ -405,8 +461,19 @@ def compose(bg: Image.Image, cut: Image.Image, face: list[float] | None, spec: S
         else:
             warnings.append("The text gets close to your face – try another layout or move yourself.")
 
+    # phone check: in the 360 px wide preview every word must still be readable (letters >= 14 px)
+    for (txt, f, *_rest) in words:
+        if txt and f.size * 0.72 * 360 / W < 14:
+            warnings.append(f"“{txt}” is too small on a phone (360 px preview) – make the text bigger.")
+            break
+
     # ---------- zeichnen: Hintergrund → (Text) → Schatten + Carina → (Text) → Doodles
-    canvas = darken_top(bg.convert("RGB").resize((W, H)), spec.shade).convert("RGBA")
+    if spec.own_photo is not None:
+        pcx = (pbox[0] + pbox[2] / 2) / W
+        side = "left" if pcx < 0.4 else "right" if pcx > 0.6 else "centre"
+        canvas = own_blur_background(spec.own_photo, side).convert("RGBA")
+    else:
+        canvas = darken_top(bg.convert("RGB").resize((W, H)), spec.shade).convert("RGBA")
     person = cut.resize((pbox[2], pbox[3]), Image.LANCZOS)
     sh, pad = soft_shadow(person)
     text_layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))

@@ -98,20 +98,94 @@ def test_my_colours_mode_makes_three_colour_pairs(monkeypatch, tmp_path):
         assert v["spec"]["colours"] and (d / v["png"]).stat().st_size < 2_000_000
 
 
-def test_blur_mode_uses_own_photo_without_the_person(monkeypatch, tmp_path):
+def test_blur_mode_uses_own_original_photo_she_right_centre_left(monkeypatch, tmp_path):
+    """26 Nov 2026: default = her ORIGINAL photo heavily blurred, 3 looks (she right, centre, left)."""
     monkeypatch.setattr(thumbstore, "OWN", tmp_path)
     wid = thumbstore.new_own()
     d = thumbstore.wdir(wid)
-    photo = Image.new("RGB", (1600, 900), (40, 60, 200))      # blauer Raum
+    photo = Image.new("RGB", (1600, 900), (40, 60, 200))
     cut = fake_cutout().resize((300, 540))
-    photo.paste(cut, (650, 360), cut)                            # grüne Person im Foto
+    photo.paste(cut, (650, 360), cut)
     photo.save(d / "photo.png")
     cut.save(d / "cut.png")
     st = json.loads((d / "state.json").read_text(encoding="utf-8"))
     st.update(cutout="cut.png", photo="photo.png", face=FACE, cut_box=[650, 360, 950, 900])
     (d / "state.json").write_text(json.dumps(st), encoding="utf-8")
-    out = thumbstore.generate(wid, "blur", [], [["worth", "it?"]], "top", False, False)
-    assert [v["prompt"] for v in out["versions"]] == ["blur:light", "blur:medium", "blur:strong"]
-    bg = np.asarray(Image.open(d / out["versions"][1]["bg"])).astype(int)
-    green = (np.abs(bg - PERSON_RGB).sum(axis=2) < 80).mean()
-    assert green < 0.01, "the person should be removed from the blurred background"
+    out = thumbstore.generate(wid, "blur", [], [["worth", "it?"]], "auto", False, False)
+    looks = [(v["spec"]["layout"], v["spec"]["side"]) for v in out["versions"]]
+    assert looks == [("side", "right"), ("top", "right"), ("side", "left")]
+    assert all(v["spec"]["blur"] for v in out["versions"])
+    xs = [(v["person_box"][0] + v["person_box"][2]) / 2 for v in out["versions"]]
+    assert xs[0] > 700 and 400 < xs[1] < 880 and xs[2] < 580
+    for v in out["versions"]:
+        assert not v["face_box"] or not any(_overlap(b, v["face_box"]) for b in v["word_boxes"])
+
+
+def test_own_blur_background_brightness_always_in_range():
+    for col in ((8, 6, 10), (128, 120, 110), (252, 252, 250)):
+        for side in ("right", "centre", "left"):
+            bg = thumbmaker.own_blur_background(Image.new("RGB", (1600, 1000), col), side)
+            assert bg.size == (1280, 720)
+            assert 0.44 <= thumbmaker.bg_brightness(bg) <= 0.86
+
+
+def test_own_blur_background_darkens_the_text_side_only():
+    bg = np.asarray(thumbmaker.own_blur_background(Image.new("RGB", (1600, 1000), (150, 140, 135)), "right"))
+    left, right = bg[300:420, 20:80].mean(), bg[300:420, 1200:1260].mean()
+    assert left < right, "she stands right, so the text side (left) is darker"
+    c = np.asarray(thumbmaker.own_blur_background(Image.new("RGB", (1600, 1000), (150, 140, 135)), "centre"))
+    assert abs(c[300:420, 20:80].mean() - c[300:420, 1200:1260].mean()) < 4
+    assert c[360, 640].mean() > c[360, 30].mean()
+
+
+def test_shadow_is_soft_brownish_not_purple():
+    sh, pad = thumbmaker.soft_shadow(fake_cutout())
+    a = np.asarray(sh)
+    vis = a[..., 3] > 5
+    assert a[..., 3].max() <= int(255 * 0.2) + 2
+    r, g, b = (a[vis][:, :3].astype(int).mean(axis=0))
+    assert r >= b, "no purple halo"
+
+
+def _contaminated_person(size=(800, 900)):
+    """Brown 'person' on a white wall with a light, half-transparent seam around her and two holes."""
+    import cv2
+    w, h = size
+    rgb = np.full((h, w, 3), 246, np.uint8)
+    m = np.zeros((h, w), np.uint8)
+    cv2.ellipse(m, (400, 250), (120, 150), 0, 0, 360, 255, -1)       # head
+    cv2.rectangle(m, (180, 380), (620, h - 1), 255, -1)               # body to the bottom edge
+    person = m > 0
+    rgb[person] = (110, 70, 50)
+    alpha = person.astype(np.float32)
+    # small hole (gap in glasses) and big enclosed hole (between arm and body)
+    alpha[240:260, 380:400] = 0
+    alpha[520:680, 300:460] = 0
+    rgb[520:680, 300:460] = 246
+    # white seam: the mask is 8 px too wide, the extra ring is wall colour
+    ring = cv2.dilate(m, np.ones((17, 17), np.uint8)) > 0
+    alpha[ring & ~person] = 0.85
+    return rgb, alpha
+
+
+def test_cutout_cleanup_no_white_fringe_and_holes():
+    from editor_app import thumb_cutout as tc
+    rgb, alpha = _contaminated_person()
+    assert tc.fringe_pixels(rgb, alpha) > 0, "the test picture really has a white fringe"
+    col, a, info = tc.clean(rgb, alpha, face_px=(280, 100, 520, 400))
+    assert tc.fringe_pixels(col, a) == 0
+    assert a[250, 390] > 0.9, "small hole (glasses) is filled"
+    assert a[600, 380] < 0.05, "big enclosed hole (arm/body gap) is background"
+    assert info["holes_filled"] >= 1 and info["holes_cleared"] >= 1
+    assert a[800, 400] > 0.95, "the solid inside stays"
+    assert np.array_equal(col[700:760, 250:280], rgb[700:760, 250:280]), "her inside is never recoloured"
+
+
+def test_cutout_keeps_only_largest_piece():
+    from editor_app import thumb_cutout as tc
+    rgb, alpha = _contaminated_person()
+    alpha[50:90, 700:760] = 1.0     # floating dot (piece of furniture)
+    rgb[50:90, 700:760] = (200, 60, 90)
+    _, a, _ = tc.clean(rgb, alpha, face_px=(280, 100, 520, 400))
+    assert a[50:90, 700:760].max() < 0.05
+

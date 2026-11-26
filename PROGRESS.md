@@ -324,3 +324,26 @@ M6 Vorlagen-Bibliothek + B2 (Reel aus Idee), M6b Karussell-Generator, M7 Politur
   Dann prüfen, ob eine neuere CTranslate2-Version hilft.
 - Cover-Rotation: zuletzt lila → nächstes Cover **hell**, dann oliv.
 - Arbeitsumgebung „Carina Video-Editor“ erlaubt Google Drive und Hugging Face (für Testvideos und Modelle).
+
+## 26 Nov 2026 – Thumbnail maker: own blurred photo, new shadows, clean cut-out
+- Default background is now Carina's ORIGINAL photo, heavily blurred (`thumbmaker.own_blur_background`): width 1280×1.4,
+  crop around cx 0.55/0.50/0.45 (she right/centre/left, left = mirrored), cy 0.45, Gaussian 70, brightness ×0.90,
+  contrast ×0.75, text-side darkening #1E181A (22 %, centre layout 20 % on both edges, middle 40 % free), vignette ≤10 %,
+  mean brightness forced into 45–85 %. Built per render from where she actually stands. AI backgrounds only on the
+  separate "🤖 AI" buttons; "My colours" stays.
+- "Own photo, blurred" + layout auto = 3 versions like her reference thumbnails: she right / centre / left.
+- Shadow behind her: #281E1E 20 %, blur 30, offset +14/+10 (no purple). Text shadow: #230F2D 70 %, blur 10, +3/+5.
+- New `thumb_cutout.py`: IS-Net isnet-general-use (rembg's model + pre-processing, run directly with onnxruntime –
+  the rembg package itself would pull in opencv-python-headless, which clashes with opencv-contrib) + pymatting
+  closed-form alpha matting, then ALWAYS: holes (small filled, big enclosed → transparent), leftover bright/grey
+  background near the edge removed (inside protected; extra guard: must look like the nearby background so white
+  clothes survive), soft light glow around the hair removed, alpha open/erode/largest piece/head close+open+blur/
+  body open+close+blur, colour decontamination (pymatting foreground estimate + inside colour). Automatic fringe test,
+  up to 3 rounds with stronger cleanup, otherwise a warning in the UI. `check_sheet()` makes the zoom sheet on #5A4646.
+- 360 px phone check → warning if a word gets too small.
+- New dependency: pymatting (numba, scipy). Model downloads to modelle/ on first use (~170 MB); falls back to the
+  MediaPipe mask when offline.
+- Tests: brightness range, text-side darkening, shadow colour, no white fringe, small/big holes, largest piece,
+  3 own-blur looks with face free. 116 tests pass.
+- Limit: tested on her 3 reference thumbnails (no original photo in the repo). These already contain an old light
+  halo around the head, a little of it stays in the test; check with a real original photo.

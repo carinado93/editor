@@ -321,6 +321,7 @@ export interface TmVersion {
   id: string; prompt: string; bg: string; spec: TmSpec; png: string; layout_used: string; warnings: string[]; size: number;
 }
 export interface TmState {
+  cut_warnings?: string[];
   wid: string; name: string; has_video: boolean; cost: string; provider: string;
   photo?: string; cutout?: string; photo_source?: string; photo_v?: number;
   versions?: TmVersion[]; ideas?: { backgrounds: string[]; titles: string[][] }; fallback_used?: boolean;

@@ -131,7 +131,12 @@ def set_photo(wid: str, img: Image.Image, source: str) -> dict:
     if cut.info.get("mask") is not None:
         cut.info["mask"].save(d / "mask_auto.png")
         cut.info["mask"].save(d / "mask.png")
+    if cut.info.get("clean_rgb") is not None:
+        cut.info["clean_rgb"].save(d / "photo_clean.png")   # photo with cleaned (decontaminated) edge colours
     st = load(wid)
+    rep = cut.info.get("report") or {}
+    st.update(cut_report={k: rep.get(k) for k in ("engine", "tries", "fringe", "holes_filled", "holes_cleared")},
+              cut_warnings=rep.get("warnings") or [])
     st.update(photo="photo.png", cutout="cut.png", face=face, cut_box=list(cut.info.get("bbox") or []) or None,
               photo_face=cut.info.get("photo_face"), photo_source=source, photo_v=int(time.time()))
     return _save(wid, st)
@@ -144,7 +149,7 @@ def fix_cutout(wid: str, strokes: list[dict], reset: bool = False) -> dict:
     st = load(wid)
     if not (d / "photo.png").exists() or not (d / "mask.png").exists():
         raise UserError("Please choose your photo again first (step 1).")
-    photo = Image.open(d / "photo.png").convert("RGB")
+    photo = Image.open(d / ("photo_clean.png" if (d / "photo_clean.png").exists() else "photo.png")).convert("RGB")
     mask = Image.open(d / ("mask_auto.png" if reset else "mask.png")).convert("L")
     if strokes:
         mask = thumbmaker.apply_strokes(mask, strokes)
@@ -235,7 +240,7 @@ def _spec(d: dict) -> thumbmaker.Spec:
                            layout=d.get("layout", "auto"), behind=bool(d.get("behind")), doodles=bool(d.get("doodles")),
                            doodle_text=str(d.get("doodle_text", "me")), person=d.get("person") or {},
                            text=d.get("text") or {}, shade=0.15 if d.get("colours") else 0.5,
-                           shadow=not d.get("blur"))
+                           side=d.get("side") or "right", shadow=True)
 
 
 def _render(wid: str, v: dict) -> dict:
@@ -246,6 +251,8 @@ def _render(wid: str, v: dict) -> dict:
     cut = Image.open(d / st["cutout"]).convert("RGBA")
     bg = Image.open(d / v["bg"]).convert("RGB")
     spec = _spec(v["spec"])
+    if v["spec"].get("blur") and (d / "photo.png").exists():
+        spec.own_photo = Image.open(d / "photo.png").convert("RGB")   # the ORIGINAL photo, not the cut-out
     box = st.get("cut_box")
     if box and (d / "photo.png").exists():
         pw_, ph_ = Image.open(d / "photo.png").size
@@ -284,12 +291,8 @@ def _background(wid: str, prompt: str, seed: int) -> tuple[str, str]:
     if prompt.startswith("blur:"):
         if not (d / "photo.png").exists():
             raise UserError("Please choose your photo first.")
-        st = load(wid)
-        cut = Image.open(d / st["cutout"]).convert("RGBA") if st.get("cutout") else None
-        radius = {"light": 6, "medium": 12, "strong": 22}.get(prompt[5:], 24)
         name = f"bg_{int(time.time() * 1000)}_{seed}.png"
-        image_gen.blurred_own_background(Image.open(d / "photo.png"), cut, st.get("cut_box"),
-                                         thumbmaker.W, thumbmaker.H, radius).save(d / name)
+        thumbmaker.own_blur_background(Image.open(d / "photo.png"), "centre").save(d / name)
         return name, "blur"
     pair = colour_pair(prompt)
     if pair:
@@ -310,7 +313,7 @@ def generate(wid: str, mode: str, prompts: list[str], titles: list[list[str]], l
     if not st.get("cutout"):
         raise UserError("Please choose your photo first (step 1).")
     if mode == "blur":
-        prompts = ["blur:light", "blur:medium", "blur:strong"]
+        prompts = ["blur:own"]
     if mode == "colours":
         chosen = [p for p in prompts if p.startswith("colours:")]
         prompts = chosen[:3] if len(chosen) >= 3 else [f"colours:{a}+{b}" for a, b in image_gen.COLOUR_PAIRS]
@@ -319,7 +322,15 @@ def generate(wid: str, mode: str, prompts: list[str], titles: list[list[str]], l
     if not titles:
         raise UserError("Please write your title first (2 words) – or press “Suggest” and pick one.")
     versions, used_all = [], set()
-    if mode == "titles":
+    looks = [(layout, None)] * 3
+    if mode == "blur":
+        # own photo, blurred: 3 looks like her reference thumbnails – she right, centre, left
+        looks = {"auto": [("side", "right"), ("top", None), ("side", "left")],
+                 "side": [("side", "right"), ("side", "left")]}.get(layout, [(layout, None)])
+        bg, used = _background(wid, prompts[0], seed=11)
+        used_all.add(used)
+        plan = [(prompts[0], bg, titles[0]) for _ in looks]
+    elif mode == "titles":
         bg, used = _background(wid, prompts[0], seed=11)
         used_all.add(used)
         plan = [(prompts[0], bg, titles[k % len(titles)]) for k in range(3)]
@@ -331,8 +342,10 @@ def generate(wid: str, mode: str, prompts: list[str], titles: list[list[str]], l
             used_all.add(used)
             plan.append((pr, bg, titles[0]))
     for k, (pr, bg, tt) in enumerate(plan):
+        lay, side = looks[k] if k < len(looks) else (layout, None)
         v = {"id": f"v{k + 1}", "prompt": pr, "bg": bg,
-             "spec": {"title1": tt[0], "title2": tt[1] if len(tt) > 1 else "", "layout": layout, "behind": behind,
+             "spec": {"title1": tt[0], "title2": tt[1] if len(tt) > 1 else "", "layout": lay, "side": side or "right",
+                      "behind": behind,
                       "doodles": doodles, "doodle_text": "me", "person": {}, "text": {},
                       "colours": pr.startswith("colours:"), "blur": pr.startswith("blur:")}}
         versions.append(_render(wid, v))
@@ -346,7 +359,7 @@ def update_version(wid: str, vid: str, spec: dict) -> dict:
     st = load(wid)
     for v in st.get("versions", []):
         if v["id"] == vid:
-            allowed = ("title1", "title2", "layout", "behind", "doodles", "doodle_text", "person", "text")
+            allowed = ("title1", "title2", "layout", "side", "behind", "doodles", "doodle_text", "person", "text")
             v["spec"].update({k: spec[k] for k in allowed if k in spec})
             _render(wid, v)
             return _save(wid, st)
