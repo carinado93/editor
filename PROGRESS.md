@@ -361,3 +361,7 @@ M6 Vorlagen-Bibliothek + B2 (Reel aus Idee), M6b Karussell-Generator, M7 Politur
   they look like her (a gap showing a plant stays transparent); small green bits (plant leaves, also enclosed between
   hand and microphone) are removed (big green areas such as green clothes stay); areas removed on purpose are never
   refilled by the hole filling.
+- YouTube texts: chapter times now come from the LAST RENDERED video (export/*.schnitte.json of the newest MP4: its
+  keep ranges + time-lapse/slow-motion ranges + real duration), not from the current draft. The render now also
+  stores speed + duration next to the video; older renders fall back to the current speed ranges. The panel says
+  which video the times come from. Without any render: current edit (now also with time-lapse taken into account).

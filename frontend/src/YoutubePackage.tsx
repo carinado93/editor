@@ -18,6 +18,7 @@ export function YoutubePackage({ id }: { id: string }) {
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [thumbs, setThumbs] = useState<{ file: string; t: number }[]>([]);
+  const [timingFrom, setTimingFrom] = useState<string | null>(null);
 
   useEffect(() => {
     api
@@ -25,6 +26,7 @@ export function YoutubePackage({ id }: { id: string }) {
       .then((r) => {
         setMeta(r.meta);
         setFullDesc(r.full_description);
+        setTimingFrom(r.timing_from ?? null);
       })
       .catch((e) => setErr(e.message));
     api.project(id).then((p) => setThumbs(p.thumbnails ?? []));
@@ -62,7 +64,9 @@ export function YoutubePackage({ id }: { id: string }) {
         <div className="card" id="step-texts">
           <h3>Title, description, chapters, tags</h3>
           <p className="small muted">
-            The chapter times match the <strong>edited</strong> video. Please finish the cuts first.
+            {timingFrom
+              ? <>The chapter times come from your <strong>last rendered video</strong> ({timingFrom}) – incl. time-lapse/slow motion. Render again after changes, then make the texts again.</>
+              : <>No rendered video yet – the chapter times match the current edit. Best: press “Final render” first.</>}
           </p>
           <div className="row-buttons">
             <button className="btn ghost" disabled={!!busy} onClick={() => act("ollama", async () => {

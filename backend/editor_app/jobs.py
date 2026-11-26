@@ -159,7 +159,8 @@ def _render(pid: str, quality: str) -> None:
                            projects.path(pid, "cache"), quality, rep, options)
     # Schnittliste zum fertigen Video dazulegen (zum Nachvollziehen)
     (out.with_suffix(".schnitte.json")).write_text(
-        json.dumps({"keep": segments, "settings": v["cutlist"]["settings"]}, ensure_ascii=False, indent=1),
+        json.dumps({"keep": segments, "settings": v["cutlist"]["settings"], "speed": v["cutlist"].get("speed", []),
+                    "duration": result.get("duration")}, ensure_ascii=False, indent=1),
         encoding="utf-8")
     # auch auf den Desktop: SOCIAL MEDIA APP/YouTube videos (bzw. Reels beim "Reel veredeln")
     from . import outbox

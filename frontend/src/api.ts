@@ -516,7 +516,7 @@ export const api = {
     call<CutView>(`/api/projects/${id}/animations/${engine}`, { method: "POST" }),
   suggestBuzz: (id: string) => call<CutView>(`/api/projects/${id}/cuts/buzzwords-suggest`, { method: "POST" }),
   blick: (id: string) => call<{ events: { start: number; end: number }[]; face_box: number[] | null; ready: boolean }>(`/api/projects/${id}/blick`),
-  youtubeTexts: (id: string) => call<{ prompt: string; meta: YoutubeMeta | null; full_description: string }>(`/api/projects/${id}/youtube-texte`),
+  youtubeTexts: (id: string) => call<{ prompt: string; meta: YoutubeMeta | null; full_description: string; timing_from?: string | null }>(`/api/projects/${id}/youtube-texte`),
   youtubeTextsOllama: (id: string) =>
     call<{ prompt: string; meta: YoutubeMeta; full_description: string }>(`/api/projects/${id}/youtube-texte/ollama`, { method: "POST" }),
   importYoutubeTexts: (id: string, text: string) =>

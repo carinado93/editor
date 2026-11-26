@@ -672,26 +672,77 @@ def open_folder(pid: str):
 
 # ---------- YouTube-Paket: Export, Texte, Thumbnails ----------
 
-def _cut_context(pid: str):
-    """Transkript, Schnittliste, Auswertung und Sätze in der neuen Zeit."""
-    from . import subtitles
+def _last_render(pid: str) -> dict | None:
+    """Schnitt-Stand des zuletzt gerenderten Videos (export/*.schnitte.json neben der neuesten MP4)."""
+    folder = projects.path(pid, "export")
+    if not folder.exists():
+        return None
+    for mp4 in sorted(folder.glob("*.mp4"), key=lambda f: f.stat().st_mtime, reverse=True):
+        side = mp4.with_suffix(".schnitte.json")
+        if side.exists():
+            try:
+                data = json.loads(side.read_text(encoding="utf-8"))
+            except ValueError:
+                continue
+            if data.get("keep"):
+                data["file"] = mp4.name
+                return data
+    return None
 
+
+def _out_mapper(keep: list, speed: list):
+    """Zeit im Original → Zeit im fertigen Video (mit Zeitraffer/Zeitlupe). Gibt (map, Gesamtlänge) zurück."""
+    pieces, acc = [], 0.0
+    for a, b in keep:
+        marks = sorted({a, b, *[x for r in speed for x in (r["start"], r["end"]) if a < x < b]})
+        for s0, s1 in zip(marks, marks[1:]):
+            f = next((float(r.get("factor") or 1) for r in speed
+                      if s0 >= r["start"] - 1e-6 and s1 <= r["end"] + 1e-6), 1.0) or 1.0
+            pieces.append((s0, s1, acc, f))
+            acc += (s1 - s0) / f
+
+    def m(t: float) -> float | None:
+        for s0, s1, o, f in pieces:
+            if s0 - 1e-6 <= t <= s1 + 1e-6:
+                return o + max(0.0, t - s0) / f
+        return None
+    return m, acc
+
+
+def _cut_context(pid: str, rendered: bool = False):
+    """Transkript, Schnittliste, Auswertung und Sätze in der neuen Zeit.
+    rendered=True: Zeiten aus dem ZULETZT GERENDERTEN Video (dessen Schnitte + Zeitraffer), nicht aus dem
+    aktuellen Bearbeitungsstand – für die Kapitel. Ohne gerendertes Video: aktueller Stand."""
     t = cutstore._transcript(pid)
     v = cutstore.view(pid)
     words = cuts.flat_words(t)
-    tmap = subtitles.TimeMap([tuple(x) for x in v["evaluation"]["keep"]])
+    last = _last_render(pid) if rendered else None
+    if last:
+        keep = [tuple(x) for x in last["keep"]]
+        speed = last.get("speed")
+        if speed is None:                       # ältere Renderings: Zeitraffer von damals unbekannt → aktueller
+            speed = v["cutlist"].get("speed", [])
+        to_out, total = _out_mapper(keep, speed)
+        flags = [to_out((w["s"] + w["e"]) / 2) is None for w in words]   # Wort im gerenderten Video?
+        v = {**v, "evaluation": {**v["evaluation"], "new_duration": float(last.get("duration") or total)},
+             "rendered_file": last["file"]}
+    else:
+        to_out, _ = _out_mapper([tuple(x) for x in v["evaluation"]["keep"]], v["cutlist"].get("speed", []))
+        flags = v["evaluation"]["flags"]
     sentences, cur, start = [], [], None
-    for w, f in zip(words, v["evaluation"]["flags"]):
+    for w, f in zip(words, flags):
         if f:
             continue
         if start is None:
-            start = tmap.clamp(w["s"])
+            start = to_out(w["s"])
+            if start is None:
+                start = to_out((w["s"] + w["e"]) / 2) or 0.0
         cur.append(w["w"])
         if re.search(r"[.!?…]$", w["w"]) and len(cur) >= 3:
-            sentences.append((start, " ".join(cur)))
+            sentences.append((round(start, 2), " ".join(cur)))
             cur, start = [], None
     if cur:
-        sentences.append((start or 0.0, " ".join(cur)))
+        sentences.append((round(start or 0.0, 2), " ".join(cur)))
     return t, v, sentences
 
 
@@ -718,11 +769,12 @@ def get_meta(pid: str):
     from . import meta
 
     p = projects.load(pid)
-    t, v, sentences = _cut_context(pid)
+    t, v, sentences = _cut_context(pid, rendered=True)
     prompt = meta.build_prompt(sentences, t.get("language", "de"), v["evaluation"]["new_duration"], p["name"])
     f = _meta_file(pid)
     data = json.loads(f.read_text(encoding="utf-8")) if f.exists() else None
-    return {"prompt": prompt, "meta": data, "full_description": meta.full_description(data) if data else ""}
+    return {"prompt": prompt, "meta": data, "full_description": meta.full_description(data) if data else "",
+            "timing_from": v.get("rendered_file")}
 
 
 @app.post("/api/projects/{pid}/youtube-texte/ollama")
@@ -730,7 +782,7 @@ def meta_ollama(pid: str):
     from . import meta
 
     p = projects.load(pid)
-    t, v, sentences = _cut_context(pid)
+    t, v, sentences = _cut_context(pid, rendered=True)
     prompt = meta.build_prompt(sentences, t.get("language", "de"), v["evaluation"]["new_duration"], p["name"])
     data = meta.from_ollama(prompt, v["evaluation"]["new_duration"], t.get("language", "en"))
     data["source"] = "ollama"
@@ -742,7 +794,7 @@ def meta_ollama(pid: str):
 def meta_import(pid: str, body: MetaImportBody):
     from . import meta
 
-    t, v, _ = _cut_context(pid)
+    t, v, _ = _cut_context(pid, rendered=True)
     data = meta.parse(body.text, v["evaluation"]["new_duration"], t.get("language", "en"))
     data["source"] = "claude.ai"
     _meta_file(pid).write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
@@ -753,7 +805,7 @@ def meta_import(pid: str, body: MetaImportBody):
 def meta_save(pid: str, body: MetaSaveBody):
     from . import meta
 
-    t, v, _ = _cut_context(pid)
+    t, v, _ = _cut_context(pid, rendered=True)
     data = meta.parse(body.model_dump(), v["evaluation"]["new_duration"], t.get("language", "en"))
     data["source"] = "bearbeitet"
     _meta_file(pid).write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
@@ -1963,7 +2015,7 @@ def youtube_texts_claude(pid: str):
     from . import claude, meta
 
     p = projects.load(pid)
-    t, v, sentences = _cut_context(pid)
+    t, v, sentences = _cut_context(pid, rendered=True)
     prompt = meta.build_prompt(sentences, t.get("language", "de"), v["evaluation"]["new_duration"], p["name"])
     data = meta.parse(claude.ask_json(prompt, claude.YOUTUBE_SCHEMA), v["evaluation"]["new_duration"],
                       t.get("language", "en"))
