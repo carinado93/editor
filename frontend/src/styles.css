@@ -1679,6 +1679,7 @@ kbd {
 .fx-title {
   width: 100%;
 }
+textarea.fx-title { resize: vertical; font: inherit; line-height: 1.35; padding: 3px 6px; }
 .fx-preview {
   display: block;
   max-width: 100%;

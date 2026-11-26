@@ -72,3 +72,11 @@ def test_plan_add_update_delete(tmp_path, monkeypatch):
     items = plan.update(items[1]["id"], {"status": "done"})
     assert any(i["status"] == "done" for i in items)
     assert len(plan.delete(items[0]["id"])) == 1
+
+
+def test_enter_in_text_makes_a_new_line():
+    from PIL import ImageFont
+    from editor_app import fx
+    f = fx.font("head", 60)
+    assert fx.wrap("Dass die Gedanken\nlosslaufen", f, 5000) == ["Dass die Gedanken", "losslaufen"]
+    assert fx.wrap("a b", f, 5000) == ["a b"]

@@ -347,3 +347,7 @@ M6 Vorlagen-Bibliothek + B2 (Reel aus Idee), M6b Karussell-Generator, M7 Politur
   3 own-blur looks with face free. 116 tests pass.
 - Limit: tested on her 3 reference thumbnails (no original photo in the repo). These already contain an old light
   halo around the head, a little of it stays in the test; check with a real original photo.
+- Follow-up 26 Nov: cut-out also removes an opaque light band / grey patches at the hair outline (colour closer to
+  the wall than to her hair), face + glasses protected; test added.
+- Effects: text fields are now multi-line (Enter = new line); `fx.wrap` honours "\n" for all text effects
+  (typewriter etc.).

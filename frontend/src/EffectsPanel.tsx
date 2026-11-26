@@ -803,8 +803,10 @@ export function EffectsEditor({ items: source, allowedInit, time, outTime, toSrc
                 );
               })()}
               {!["poof", "glow", "bigwords", "lighttrail", "ghost", "whip", "vanish", "flash", "sticker", "sportpill", "ringtimer"].includes(o.type ?? "") && !STUDIO_FIELDS[o.type ?? ""] && (
-                <input
+                <textarea
                   className="fx-title"
+                  rows={Math.min(6, Math.max(1, (o.title ?? "").split("\n").length))}
+                  title="Enter = new line"
                   placeholder={
                     o.type === "headline" || o.type === "card" ? "Headline – lines with | , *word* = gold italic"
                       : o.type === "switch" ? "Big headline in the glowing box (your words)"

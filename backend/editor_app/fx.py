@@ -177,16 +177,19 @@ def card_sprite(w: int, h: int, u: float, fill=WEISS, radius: float = 22, border
 
 
 def wrap(text: str, f, max_w: int) -> list[str]:
-    lines, cur = [], ""
-    for wd in text.split():
-        trial = f"{cur} {wd}".strip()
-        if cur and f.getlength(trial.replace("*", "")) > max_w:
+    """Zeilen umbrechen; ein Enter im Text (\n) erzwingt eine neue Zeile."""
+    lines = []
+    for para in text.replace("\r", "").split("\n"):
+        cur = ""
+        for wd in para.split():
+            trial = f"{cur} {wd}".strip()
+            if cur and f.getlength(trial.replace("*", "")) > max_w:
+                lines.append(cur)
+                cur = wd
+            else:
+                cur = trial
+        if cur:
             lines.append(cur)
-            cur = wd
-        else:
-            cur = trial
-    if cur:
-        lines.append(cur)
     return lines
 
 
