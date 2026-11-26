@@ -80,3 +80,34 @@ def test_enter_in_text_makes_a_new_line():
     f = fx.font("head", 60)
     assert fx.wrap("Dass die Gedanken\nlosslaufen", f, 5000) == ["Dass die Gedanken", "losslaufen"]
     assert fx.wrap("a b", f, 5000) == ["a b"]
+
+
+def test_every_effect_draws_text_with_enter_new_lines():
+    """Enter = new line must work (and never crash) in every effect."""
+    frame = Image.new("RGB", (640, 360), (120, 110, 100))
+    mask = Image.new("L", (640, 360), 0)
+    for typ in fx.TYPES:
+        for place in fx.TYPES[typ][2]:
+            it = {"id": "x", "type": typ, "place": place, "title": "Dass die Gedanken\nlosslaufen|und *du*\nsie",
+                  "items": ["Grenzen\nsetzen|8", "Pausen // machen", "Hilfe holen"], "times": [0, 1, 2]}
+            ctx = fx.Ctx(640, 360, None, [{"w": "Burnout", "s": 0, "e": 3}])
+            out = fx.render_frame(frame, it, 1.5, 3.0, ctx, mask)
+            assert out.size == (640, 360), typ
+
+
+def test_multiline_text_is_two_lines_high():
+    from PIL import ImageDraw
+    f = fx.font("head", 60)
+    im = Image.new("L", (800, 400), 0)
+    ImageDraw.Draw(im).text((400, 200), "eins\nzwei", font=f, fill=255, anchor="mm")
+    box = im.getbbox()
+    assert box[3] - box[1] > 100, "two lines below each other"
+    assert f.getlength("eins\nzweiundzwanzig") == f.getlength("zweiundzwanzig")
+
+
+def test_card_words_stay_inside_the_card():
+    f = fx.font("head", 40)
+    ff, lines = fx.fit_wrap("ANGSZUSTÄNDE", f, 120, 3, 100)
+    assert all(ff.getlength(ln) <= 120 for ln in lines) and ff.size < 40
+    ff2, _ = fx.fit_wrap("Pausen", f, 400, 3, 300)
+    assert ff2.size == 40, "short words keep their size"

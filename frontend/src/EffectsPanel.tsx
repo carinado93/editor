@@ -143,12 +143,12 @@ function StudioFields({ o, spec, onChange }: { o: Overlay; spec: StudioSpec; onC
     <div className="studio-fields small">
       {spec.title?.map(([label, def], k) => (
         <label key={label}>{label}
-          <input value={parts[k] ?? ""} placeholder={def} onChange={(e) => setPart(k, e.target.value)} />
+          <TextBox value={parts[k] ?? ""} placeholder={def} onChange={(e) => setPart(k, e.target.value)} />
         </label>
       ))}
       {spec.items?.map(([label, def], k) => (
         <label key={label}>{label}
-          <input value={items[k] ?? ""} placeholder={def}
+          <TextBox value={items[k] ?? ""} placeholder={def}
             onChange={(e) => onChange({ items: spec.items!.map((_, j) => (j === k ? e.target.value : items[j] ?? "")) })} />
         </label>
       ))}
@@ -157,8 +157,8 @@ function StudioFields({ o, spec, onChange }: { o: Overlay; spec: StudioSpec; onC
           <span className="muted">{spec.rows.labels[0]} · {spec.rows.labels[1]}</span>
           {rows.map(([a, b], k) => (
             <div key={k} className="studio-row">
-              <input value={a} placeholder={spec.rows!.labels[0]} onChange={(e) => saveRows(rows.map((r, j) => (j === k ? [e.target.value, r[1]] : r)))} />
-              <input value={b} placeholder={spec.rows!.labels[1]} onChange={(e) => saveRows(rows.map((r, j) => (j === k ? [r[0], e.target.value] : r)))} />
+              <TextBox value={a} placeholder={spec.rows!.labels[0]} onChange={(e) => saveRows(rows.map((r, j) => (j === k ? [e.target.value, r[1]] : r)))} />
+              <TextBox value={b} placeholder={spec.rows!.labels[1]} onChange={(e) => saveRows(rows.map((r, j) => (j === k ? [r[0], e.target.value] : r)))} />
               <button className="link danger" disabled={rows.length <= 1} onClick={() => saveRows(rows.filter((_, j) => j !== k))}>✕</button>
             </div>
           ))}
@@ -167,7 +167,7 @@ function StudioFields({ o, spec, onChange }: { o: Overlay; spec: StudioSpec; onC
       )}
       {spec.name && (
         <label>{spec.name[0]}
-          <input value={nameLine ? nameLine.split("|")[1] ?? "" : ""} placeholder={spec.name[1]}
+          <TextBox value={nameLine ? nameLine.split("|")[1] ?? "" : ""} placeholder={spec.name[1]}
             onChange={(e) => saveRows(rows, e.target.value ? `name|${e.target.value}` : undefined)} />
         </label>
       )}
@@ -249,6 +249,12 @@ function FxVersions({ id, onCuts }: { id: string; onCuts: (c: CutView) => void }
 }
 
 /** Große Effekte im ganzen Video (YouTube / Reel veredeln) plus Zeitraffer/Zeitlupe. */
+/** Text field where Enter makes a new line (grows with the text). */
+function TextBox(props: React.TextareaHTMLAttributes<HTMLTextAreaElement> & { value: string }) {
+  const lines = String(props.value ?? "").split("\n").length;
+  return <textarea rows={Math.min(6, Math.max(1, lines))} title="Enter = new line" {...props} className={`fx-textbox ${props.className ?? ""}`} />;
+}
+
 export function EffectsPanel({ id, cuts, onCuts, time, outTime, toSrc, toOut, onSeek, keep }: {
   id: string; cuts: CutView; onCuts: (c: CutView) => void; time: number; outTime?: number | null; onSeek: (t: number) => void;
   toSrc?: (t: number) => number; toOut?: (t: number) => number;
@@ -762,7 +768,7 @@ export function EffectsEditor({ items: source, allowedInit, time, outTime, toSrc
                   upd(i, { title: u2 !== undefined && u2 !== "" ? `${n.trim()}|${m || "1"}|${u2}` : `${n.trim()}|${m || "30"}`, text: n || "meditation" });
                 return (
                   <div className="fx-sport small">
-                    <input className="fx-title" placeholder="Text, e.g. meditation time" value={nm} onChange={(e) => setT(e.target.value, tm, up ? upto : undefined)} />
+                    <TextBox className="fx-title" placeholder="Text, e.g. meditation time" value={nm} onChange={(e) => setT(e.target.value, tm, up ? upto : undefined)} />
                     <select value={up ? "up" : "down"} onChange={(e) => (e.target.value === "up" ? setT(nm, "1", "190000") : setT(nm, "30"))}>
                       <option value="down">counts down (minutes)</option><option value="up">counts up (number)</option>
                     </select>
@@ -795,7 +801,7 @@ export function EffectsEditor({ items: source, allowedInit, time, outTime, toSrc
                 };
                 return (
                   <div className="fx-sport small">
-                    <input className="fx-title" placeholder="Sport / text, e.g. ZUMBA" value={nm} onChange={(e) => setT(e.target.value, mins)} />
+                    <TextBox className="fx-title" placeholder="Sport / text, e.g. ZUMBA" value={nm} onChange={(e) => setT(e.target.value, mins)} />
                     <label>⏱ Minutes
                       <input type="number" min={1} max={600} value={mins} placeholder="30" onChange={(e) => setT(nm, e.target.value)} />
                     </label>

@@ -30,6 +30,7 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 from .config import ROOT
+from . import textlines  # noqa: F401  (Enter = new line in every effect text)
 
 FONTS = ROOT / "assets" / "fonts"
 
@@ -193,6 +194,20 @@ def wrap(text: str, f, max_w: int) -> list[str]:
     return lines
 
 
+def fit_wrap(text: str, f, max_w: int, max_lines: int, max_h: float | None = None, min_px: int = 10):
+    """Text in einen Kasten: umbrechen und die Schrift so lange verkleinern, bis jede Zeile (auch ein einzelnes
+    langes Wort) in die Breite passt und alle Zeilen in die Höhe – nie aus dem Kästchen raus."""
+    size = f.size
+    while True:
+        ff = f if size == f.size else f.font_variant(size=size)
+        lines = wrap(text, ff, max_w)
+        fits = (len(lines) <= max_lines and all(ff.getlength(ln.replace("*", "")) <= max_w for ln in lines)
+                and (max_h is None or len(lines) * ff.size * 1.15 <= max_h))
+        if fits or size <= min_px:
+            return ff, lines[:max_lines]
+        size = max(min_px, int(size * 0.92))
+
+
 def paste_scaled(layer: Image.Image, sprite: Image.Image, center: tuple[float, float], scale: float, alpha: float,
                  rot: float = 0.0) -> None:
     if scale <= 0.02 or alpha <= 0.01:
@@ -323,11 +338,11 @@ def draw_steps(layer, ctx, it, t, d, place):
             r = int(box_h * 0.32)
             sd.ellipse((int(24 * ctx.u), box_h // 2 - r, int(24 * ctx.u) + 2 * r, box_h // 2 + r), fill=LILA)
             sd.text((int(24 * ctx.u) + r, box_h // 2), num, font=fn, fill=WEISS, anchor="mm")
-            lines = wrap(txt, f, box_w - 2 * r - int(70 * ctx.u))[:2]
-            lh = f.size * 1.15
+            ff, lines = fit_wrap(txt, f, box_w - 2 * r - int(70 * ctx.u), 2, box_h * 0.86)
+            lh = ff.size * 1.15
             for j, ln in enumerate(lines):
                 sd.text((int(24 * ctx.u) + 2 * r + int(26 * ctx.u), box_h / 2 + (j - (len(lines) - 1) / 2) * lh),
-                        ln, font=f, fill=TINTE, anchor="lm")
+                        ln, font=ff, fill=TINTE, anchor="lm")
             ctx.cache[key] = _shadow(sp, int(14 * ctx.u), int(8 * ctx.u))
         s, a = appear(t, times[k], 0, d)
         paste_scaled(layer, ctx.cache[key], (cx, cy), s, a)
@@ -367,11 +382,11 @@ def draw_cards(layer, ctx, it, t, d, place):
         if key not in ctx.cache:
             sp = card_sprite(cw, ch, ctx.u)
             sd = ImageDraw.Draw(sp)
-            lines = wrap(title.strip(), f, int(cw * 0.84))[:3]
-            lh = f.size * 1.12
+            ff, lines = fit_wrap(title.strip(), f, int(cw * 0.84), 3, ch * (0.62 if sub.strip() else 0.8))
+            lh = ff.size * 1.12
             y = ch / 2 - (len(lines) - 1) * lh / 2 - (fs.size * 0.7 if sub else 0)
             for j, ln in enumerate(lines):
-                sd.text((cw / 2, y + j * lh), ln, font=f, fill=LILA, anchor="mm")
+                sd.text((cw / 2, y + j * lh), ln, font=ff, fill=LILA, anchor="mm")
             if sub.strip():
                 sd.text((cw / 2, y + len(lines) * lh + fs.size * 0.3), sub.strip().upper(), font=fs, fill=SALBEI_TIEF,
                         anchor="mm")
@@ -445,9 +460,9 @@ def draw_scores(layer, ctx, it, t, d, place):
             sp = card_sprite(box_w, box_h, ctx.u)
             sd = ImageDraw.Draw(sp)
             pad = int(30 * ctx.u)
-            lines = wrap(txt.strip(), f, box_w - 2 * pad)[:2]
+            ff, lines = fit_wrap(txt.strip(), f, box_w - 2 * pad, 2, box_h * 0.5)
             for j, ln in enumerate(lines):
-                sd.text((pad, pad + j * f.size * 1.15), ln, font=f, fill=TINTE, anchor="lt")
+                sd.text((pad, pad + j * ff.size * 1.15), ln, font=ff, fill=TINTE, anchor="lt")
             ctx.cache[key] = _shadow(sp, int(14 * ctx.u), int(8 * ctx.u))
         cy = top + k * (box_h + gap) + box_h / 2
         rot = (-1.5, 1.2, -0.8, 1.0)[k % 4]
@@ -1580,6 +1595,8 @@ def render_frame(frame: Image.Image, it: dict, t: float, d: float, ctx: Ctx, mas
     """Ein Bild des Effekts. frame: RGB-Bild des Videos in diesem Moment. mask: Person (L, 255 = Carina)."""
     typ = it.get("type", "headline")
     place = it.get("place", "scene")
+    if it.get("items") and any("//" in str(x) for x in it["items"]):   # in lists: "//" = new line inside one item
+        it = {**it, "items": [str(x).replace(" // ", "\n").replace("//", "\n") for x in it["items"]]}
     try:  # Größe, die Carina mit dem Schieberegler eingestellt hat
         ctx.u = ctx.base_u * max(0.4, min(2.5, float(it.get("scale") or 1)))
     except (TypeError, ValueError):

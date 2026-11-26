@@ -78,7 +78,7 @@ def clean(o: dict, duration: float | None = None) -> dict | None:
         if e_ - s_ < 0.5:
             return None
     places = fx.TYPES[typ][2]
-    title = str(o.get("title") or "").strip()[:80]
+    title = str(o.get("title") or "").strip()[:200]
     return {"id": str(o.get("id") or f"fx-{int(time.time() * 1000)}"), "kind": "fx", "type": typ,
             "place": o.get("place") if o.get("place") in places else places[0], "on": bool(o.get("on", True)),
             "title": title, "text": title or typ, "items": [str(x).strip()[:60] for x in o.get("items") or []
@@ -175,7 +175,7 @@ def parse(data: dict, words: list[dict], flags: list, allowed: list[str]) -> lis
         if item_t:
             end = max(end, min(start + 10, item_t[-1] + 2.0))
         out.append({"id": f"fx-{stamp}-{i}", "kind": "fx", "type": typ, "place": place, "on": True,
-                    "title": str(it.get("title") or "").strip()[:80], "text": str(it.get("title") or typ)[:80],
+                    "title": str(it.get("title") or "").strip()[:200], "text": str(it.get("title") or typ)[:200],
                     "items": items, "item_t": item_t, "start": round(start, 2), "end": round(end, 2),
                     "why": str(it.get("why") or "")[:160]})
     out.sort(key=lambda x: x["start"])

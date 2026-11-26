@@ -351,3 +351,9 @@ M6 Vorlagen-Bibliothek + B2 (Reel aus Idee), M6b Karussell-Generator, M7 Politur
   the wall than to her hair), face + glasses protected; test added.
 - Effects: text fields are now multi-line (Enter = new line); `fx.wrap` honours "\n" for all text effects
   (typewriter etc.).
+- Enter = new line in EVERY effect: all effect text fields are multi-line boxes; new `textlines.py` teaches Pillow's
+  text/textlength/textbbox/getlength/getbbox to handle "\n" (only where Pillow would otherwise raise), so every drawer
+  (incl. studio group E) draws line breaks. In list boxes Enter = next item, "//" = line break inside one item.
+  Titles may be up to 200 characters. Test renders every effect with line breaks.
+- Cards / steps / scores: new `fx.fit_wrap` shrinks the font until every line (even one long word like
+  ANGSZUSTÄNDE) fits inside the card – nothing sticks out of the box any more.
