@@ -357,3 +357,7 @@ M6 Vorlagen-Bibliothek + B2 (Reel aus Idee), M6b Karussell-Generator, M7 Politur
   Titles may be up to 200 characters. Test renders every effect with line breaks.
 - Cards / steps / scores: new `fx.fit_wrap` shrinks the font until every line (even one long word like
   ANGSZUSTÄNDE) fits inside the card – nothing sticks out of the box any more.
+- Tested on 2 real photos (white curtain + home office): no white at the hair. New: small holes are only filled if
+  they look like her (a gap showing a plant stays transparent); small green bits (plant leaves, also enclosed between
+  hand and microphone) are removed (big green areas such as green clothes stay); areas removed on purpose are never
+  refilled by the hole filling.

@@ -108,8 +108,10 @@ def _inside_colour(rgb: np.ndarray, alpha: np.ndarray, radius: int = 51) -> np.n
     return np.clip(col, 0, 255)
 
 
-def fill_holes(alpha: np.ndarray, small: int = 4000) -> tuple[np.ndarray, int, int]:
-    """a) Enclosed holes: small → filled, big → background (alpha 0). Returns (alpha, n_filled, n_cleared)."""
+def fill_holes(alpha: np.ndarray, small: int = 4000, rgb: np.ndarray | None = None, keep_out=None) -> tuple[np.ndarray, int, int]:
+    """a) Enclosed holes: small → filled, big → background (alpha 0). Returns (alpha, n_filled, n_cleared).
+    With rgb: a small hole is only filled if it looks like her around it (gap in the glasses = skin); a small gap
+    showing something else (a plant leaf between hand and microphone) stays background."""
     import cv2
     a = alpha.copy()
     hole = (a < 0.5).astype(np.uint8)
@@ -122,6 +124,20 @@ def fill_holes(alpha: np.ndarray, small: int = 4000) -> tuple[np.ndarray, int, i
             continue   # touches the image border = real background
         sel = lab == i
         if area < small:
+            if keep_out is not None and keep_out[sel].mean() > 0.3:   # removed on purpose (plant, wall) – stays out
+                a[sel] = 0.0
+                cleared += 1
+                continue
+            if rgb is not None and area > 40:
+                y0, y1, x0, x1 = max(0, y - 8), min(h, y + bh + 8), max(0, x - 8), min(w, x + bw + 8)
+                sub = sel[y0:y1, x0:x1]
+                ring = (cv2.dilate(sub.astype(np.uint8), np.ones((9, 9), np.uint8)) > 0) & ~sub & (a[y0:y1, x0:x1] > 0.5)
+                if ring.any():
+                    px = rgb[y0:y1, x0:x1].astype(np.float32)
+                    if np.linalg.norm(px[sub].mean(axis=0) - px[ring].mean(axis=0)) > 60:
+                        a[sel] = 0.0
+                        cleared += 1
+                        continue
             a[sel] = 1.0
             filled += 1
         else:
@@ -187,6 +203,27 @@ def remove_leftover(rgb: np.ndarray, alpha: np.ndarray, face_px, bright: float =
     kill &= ~face_keep
     out = alpha.copy()
     out[kill | glow | wallish | patch] = 0.0
+    return out
+
+
+def remove_plants(rgb: np.ndarray, alpha: np.ndarray) -> np.ndarray:
+    """Small green bits at the edge (plant leaves in a gap) → background. Big green areas (green clothes) stay."""
+    import cv2
+    hsv = cv2.cvtColor(rgb, cv2.COLOR_RGB2HSV)
+    solid = alpha > 0.5
+    green = solid & (hsv[..., 0] >= 26) & (hsv[..., 0] <= 88) & (hsv[..., 1] > 55) & (hsv[..., 2] > 30)
+    if not green.any():
+        return alpha
+    near_bg = cv2.dilate((~solid).astype(np.uint8), _ellipse(15)) > 0
+    n, lab, stats, _ = cv2.connectedComponentsWithStats(cv2.dilate(green.astype(np.uint8), _ellipse(5)), 8)
+    limit = 0.02 * solid.sum()
+    out = alpha.copy()
+    for i in range(1, n):
+        sel = lab == i
+        area = stats[i, cv2.CC_STAT_AREA]
+        # at the edge: up to 2 % of her; enclosed (gap between hand and microphone): up to 0.6 %
+        if area < limit and ((sel & near_bg).any() or area < 0.3 * limit):
+            out[sel & solid] = 0.0
     return out
 
 
@@ -263,10 +300,13 @@ def clean(rgb: np.ndarray, alpha: np.ndarray, face_px=None, strength: int = 0) -
     bright = (200, 188, 175)[strength]
     band = (40, 55, 70)[strength]
     erode = (3, 4, 6)[strength]
-    a, n_fill, n_clear = fill_holes(alpha)
+    a, n_fill, n_clear = fill_holes(alpha, rgb=rgb)
+    before = a > 0.5
     a = remove_leftover(rgb, a, face_px, bright=bright, band=band)
+    a = remove_plants(rgb, a)
+    removed = before & (a < 0.5)
     a = smooth_alpha(a, face_px, erode=erode)
-    a, _, _ = fill_holes(a)            # the morphology can open new tiny holes
+    a, _, _ = fill_holes(a, rgb=rgb, keep_out=removed)   # the morphology can open new tiny holes
     n, lab, stats, _ = cv2.connectedComponentsWithStats((a > 0.3).astype(np.uint8), 8)
     if n > 2:                          # only the largest piece – no floating bits of chair or wall
         keep = 1 + int(np.argmax(stats[1:, cv2.CC_STAT_AREA]))
