@@ -189,3 +189,27 @@ def test_cutout_keeps_only_largest_piece():
     _, a, _ = tc.clean(rgb, alpha, face_px=(280, 100, 520, 400))
     assert a[50:90, 700:760].max() < 0.05
 
+
+
+def test_light_band_around_hair_is_removed_but_face_kept():
+    """26 Nov: 'still a lot of white at the hair' – an opaque wall-coloured band at the hair outline goes away."""
+    import cv2
+    from editor_app import thumb_cutout as tc
+    h, w = 900, 800
+    rgb = np.full((h, w, 3), (232, 228, 224), np.uint8)               # light wall
+    m = np.zeros((h, w), np.uint8)
+    cv2.ellipse(m, (400, 300), (170, 210), 0, 0, 360, 255, -1)        # hair
+    cv2.rectangle(m, (150, 480), (650, h - 1), 255, -1)
+    rgb[m > 0] = (95, 60, 40)                                         # brown hair / dark top
+    face = (330, 220, 470, 400)
+    rgb[face[1]:face[3], face[0]:face[2]] = (225, 185, 160)           # skin
+    alpha = (m > 0).astype(np.float32)
+    band = (cv2.dilate(m, np.ones((21, 21), np.uint8)) > 0) & (m == 0)
+    band[480:] = False
+    alpha[band] = 1.0                                                 # model kept 10 px of wall around the hair
+    col, a, _ = tc.clean(rgb, alpha, face_px=face)
+    left = a[300, 400 - 170 - 8]                                      # inside the old white band
+    assert left < 0.1, "the white band at the hair is gone"
+    assert a[300, 400 - 120] > 0.9, "the hair itself stays"
+    assert a[310, 400] > 0.95, "the face stays"
+    assert tc.fringe_pixels(col, a) == 0

@@ -159,8 +159,34 @@ def remove_leftover(rgb: np.ndarray, alpha: np.ndarray, face_px, bright: float =
     # soft light glow around hair/head: semi-transparent, clearly lighter and greyer than her inside next to it
     _, vin = _hsv(_inside_colour(rgb, alpha).astype(np.uint8))
     glow = near_edge & upper & ~protect & (alpha < 0.9) & (v > vin + 25) & (s < 0.2) & (v > 150)
+    # hair edge: pixel colour closer to the wall behind her than to her own colour next to it → background.
+    # (catches the light band around hair that the model keeps fully opaque)
+    bgw = (alpha < 0.05).astype(np.float32)
+    nw = cv2.GaussianBlur(rgb.astype(np.float32) * bgw[..., None], (0, 0), 45)
+    dw = cv2.GaussianBlur(bgw, (0, 0), 45)[..., None]
+    wall = nw / np.maximum(dw, 1e-6)
+    inside = _inside_colour(rgb, alpha)
+    px = rgb.astype(np.float32)
+    d_bg = np.linalg.norm(px - wall, axis=2)
+    d_fg = np.linalg.norm(px - inside, axis=2)
+    face_keep = np.zeros_like(solid)          # face incl. glasses is never touched
+    if face_px:
+        fw_, fh_ = face_px[2] - face_px[0], face_px[3] - face_px[1]
+        x0_, x1_ = int(max(0, face_px[0] - 0.12 * fw_)), int(min(w, face_px[2] + 0.12 * fw_))
+        y0_, y1_ = int(max(0, face_px[1] + 0.15 * fh_)), int(min(h, face_px[3] + 0.05 * fh_))
+        face_keep[y0_:y1_, x0_:x1_] = True
+        face_core = np.zeros_like(solid)
+        face_core[int(face_px[1]):int(face_px[3]), int(face_px[0]):int(face_px[2])] = True
+    else:
+        face_core = face_keep
+    hair_band = upper & ~protect & ~face_keep & solid & (dist <= max(12, band // 2)) & (dw[..., 0] > 0.02)
+    wallish = hair_band & (d_bg < 0.8 * d_fg) & (v > vin + 10)
+    # light grey patches stuck to the hair outline (fully opaque in the model mask)
+    patch = upper & ~protect & ~face_core & solid & (dist <= band) & (v > 185) & (s < 0.15) & (v > vin + 25)
+    glow &= ~face_keep
+    kill &= ~face_keep
     out = alpha.copy()
-    out[kill | glow] = 0.0
+    out[kill | glow | wallish | patch] = 0.0
     return out
 
 
