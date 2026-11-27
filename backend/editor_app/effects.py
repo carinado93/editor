@@ -45,6 +45,7 @@ DESCRIBE = {
     **fx._studio.STUDIO_DESCRIBE,
     **fx._text.TEXT_DESCRIBE,
     **fx._stickers.STICKER_DESCRIBE,
+    **fx._vfx.VFX_DESCRIBE,
 }
 
 SCHEMA = {

@@ -11,6 +11,7 @@ const GROUP_LABEL: Record<string, string> = {
   E: "Studio – day in my life (trained with Claude, Nov 2026)",
   T: "Text templates (CapCut style, in my colours)",
   S: "Stickers (animated, in my colours)",
+  V: "Video effects (CapCut style)",
 };
 
 const PLACE_LABEL = { scene: "Full screen", side: "Next to you" };
@@ -82,6 +83,21 @@ const DESC: Record<string, string> = {
   logoff: "A glitch on the picture, then a lilac 'logging off…' pill. For shutting the computer down.",
   sportpill: "A lilac pill top left with a ticking stopwatch: sport + duration. Put one on each sport scene.",
   ringtimer: "A ring timer counts down (e.g. 30:00 → 00:00) – or a number counts up in the ring (e.g. 1 → 190.000) – while the title writes itself.",
+  v_confetti: "Confetti rains down over the picture.",
+  v_lightleak: "A warm light leak drifts across the picture (colour dots change the light).",
+  v_flare: "A pulsing lens flare top right.",
+  v_dust: "Floating glitter dust.",
+  v_laser: "Laser lines sweep across.",
+  v_radial: "A soft glow pulses from the middle.",
+  v_develop: "The picture develops like a photo: white → sepia → full colour.",
+  v_zoompulse: "The picture pulses in (zoom on the beat).",
+  v_shake: "Camera shake – keep it short (0.5–1 s).",
+  v_rgbsplit: "Colour channels split and shake (glitch).",
+  v_flash: "A white flash.",
+  v_film: "Old film: grain, flicker, scratches, dark rounded frame.",
+  v_vhs: "VHS: scan lines, colour bleed, date stamp (text = your date).",
+  v_blurin: "The picture goes from blurry to sharp.",
+  v_heartframe: "A soft heart-shaped frame in your colour.",
   s_circle: "A hand-drawn circle draws itself (put it on the spot with the position buttons). Optional label as text.",
   s_arrow: "A hand-drawn arrow draws itself and bobs. Optional label as text.",
   s_countdown: "3 · 2 · 1 in a ring. Text = start number. Make it as long as the count.",
@@ -467,7 +483,7 @@ export function EffectsEditor({ items: source, allowedInit, time, outTime, toSrc
       r.types = r.types.filter((t) => !(exclude ?? []).includes(t.key))
         .sort((x, y) => x.label.localeCompare(y.label, "en", { sensitivity: "base" }));  // A–Z in allen Listen
       setTypes(r.types);
-      setAllowed((a) => (a.length ? a : r.types.filter((t) => t.group !== "C" && !["E", "T", "S"].includes(t.group)).map((t) => t.key)));
+      setAllowed((a) => (a.length ? a : r.types.filter((t) => t.group !== "C" && !["E", "T", "S", "V"].includes(t.group)).map((t) => t.key)));
     }).catch(() => {});
   }, []);
   // ---------- gespeicherte Stile ----------
@@ -811,7 +827,7 @@ export function EffectsEditor({ items: source, allowedInit, time, outTime, toSrc
                   </div>
                 );
               })()}
-              {(["behind", "typewriter", "circleword", "countup", "ringtimer"].includes(o.type ?? "") || /^(t|s)_/.test(o.type ?? "")) && (
+              {(["behind", "typewriter", "circleword", "countup", "ringtimer"].includes(o.type ?? "") || /^(t|s|v)_/.test(o.type ?? "")) && (
                 <span className="fx-colors small">Colour:
                   {([["white", "#fffdf9"], ["pink", "#f096b9"], ["yellow", "#fae28c"], ["lilac", "#c9b3ec"], ["green", "#a0d696"]] as const).map(([c, hex]) => (
                     <button key={c} title={c} className={`fx-color ${(o.color ?? "") === c || (!o.color && c === "white") ? "on" : ""}`}

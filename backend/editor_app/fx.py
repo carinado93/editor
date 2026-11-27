@@ -1828,4 +1828,8 @@ from . import fx_stickers as _stickers  # noqa: E402  (group "S": animated stick
 STUDIO_DRAWERS.update(_stickers.STICKER_DRAWERS)
 TYPES.update(_stickers.STICKER_TYPES)
 STUDIO_MOVABLE |= _stickers.STICKER_MOVABLE
+
+from . import fx_vfx as _vfx  # noqa: E402  (group "V": picture effects)
+STUDIO_DRAWERS.update(_vfx.VFX_DRAWERS)
+TYPES.update(_vfx.VFX_TYPES)
 NEEDS_MASK |= _studio.STUDIO_MASK
