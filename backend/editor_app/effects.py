@@ -43,6 +43,7 @@ DESCRIBE = {
     "wordswap": "fester Satz, das letzte Wort wechselt (title = fester Teil, items = 4–6 wechselnde Wörter) – Gefühle, Zustände",
     "poof": "Puff-Wolke (Verschwinden/Auftauchen) – nur genau an einem Schnitt, an dem sie den Ort wechselt",
     **fx._studio.STUDIO_DESCRIBE,
+    **fx._text.TEXT_DESCRIBE,
 }
 
 SCHEMA = {

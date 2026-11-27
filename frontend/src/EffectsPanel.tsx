@@ -9,6 +9,7 @@ const GROUP_LABEL: Record<string, string> = {
   C: "You cut out (needs more render time)",
   D: "Tripod tricks (film on a tripod + a few seconds of the empty room)",
   E: "Studio – day in my life (trained with Claude, Nov 2026)",
+  T: "Text templates (CapCut style, in my colours)",
 };
 
 const PLACE_LABEL = { scene: "Full screen", side: "Next to you" };
@@ -80,6 +81,20 @@ const DESC: Record<string, string> = {
   logoff: "A glitch on the picture, then a lilac 'logging off…' pill. For shutting the computer down.",
   sportpill: "A lilac pill top left with a ticking stopwatch: sport + duration. Put one on each sport scene.",
   ringtimer: "A ring timer counts down (e.g. 30:00 → 00:00) – or a number counts up in the ring (e.g. 1 → 190.000) – while the title writes itself.",
+  t_stamp: "A rubber stamp with your words slams in, tilted (like SOLD OUT). Pick the colour with the dots.",
+  t_badge: "A round starburst badge with 1–3 words or a number (e.g. -50 %, NEU) pops in.",
+  t_saleblock: "2–4 short lines on coloured bars slide in from the sides. One line per Enter.",
+  t_neon: "Neon glow writing that flickers on.",
+  t_bubble: "A speech bubble with a short sentence pops in.",
+  t_brush: "A painted brush stroke wipes in, white words on top.",
+  t_marker: "A highlighter sweeps behind each line.",
+  t_outline: "Big white words with a coloured outline bounce in one after another.",
+  t_glitch: "Glitch look (RGB split, jumping slices), then clean text.",
+  t_tape: "Your note on a strip of washi tape.",
+  t_sticky: "A sticky note with handwriting drops in.",
+  t_scribble: "White words, a hand-drawn underline draws itself.",
+  t_letters: "The letters pop in one by one.",
+  t_gradient: "A title with a lilac → pink gradient rises in.",
   loop: "Your steps as a cycle: dots in a circle with arrows; the step you talk about lights up and is shown big in the middle. Make it as long as you talk about the steps.",
   circleword: "A word written around a circle that keeps turning – e.g. 'Gedanken' for Gedankenkreisen.",
   countup: "A text with a number that counts up faster and faster, e.g. 'Gedanken = 190.000'.",
@@ -439,7 +454,7 @@ export function EffectsEditor({ items: source, allowedInit, time, outTime, toSrc
       r.types = r.types.filter((t) => !(exclude ?? []).includes(t.key))
         .sort((x, y) => x.label.localeCompare(y.label, "en", { sensitivity: "base" }));  // A–Z in allen Listen
       setTypes(r.types);
-      setAllowed((a) => (a.length ? a : r.types.filter((t) => t.group !== "C" && t.group !== "E").map((t) => t.key)));
+      setAllowed((a) => (a.length ? a : r.types.filter((t) => t.group !== "C" && t.group !== "E" && t.group !== "T").map((t) => t.key)));
     }).catch(() => {});
   }, []);
   // ---------- gespeicherte Stile ----------
@@ -783,7 +798,7 @@ export function EffectsEditor({ items: source, allowedInit, time, outTime, toSrc
                   </div>
                 );
               })()}
-              {["behind", "typewriter", "circleword", "countup", "ringtimer"].includes(o.type ?? "") && (
+              {(["behind", "typewriter", "circleword", "countup", "ringtimer"].includes(o.type ?? "") || (o.type ?? "").startsWith("t_")) && (
                 <span className="fx-colors small">Colour:
                   {([["white", "#fffdf9"], ["pink", "#f096b9"], ["yellow", "#fae28c"], ["lilac", "#c9b3ec"], ["green", "#a0d696"]] as const).map(([c, hex]) => (
                     <button key={c} title={c} className={`fx-color ${(o.color ?? "") === c || (!o.color && c === "white") ? "on" : ""}`}

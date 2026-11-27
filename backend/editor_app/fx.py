@@ -1818,4 +1818,9 @@ STUDIO_MOVABLE = {"battery", "codechips", "logoff", "sportpill", "ringtimer", "c
 
 STUDIO_DRAWERS = dict(_studio.STUDIO_DRAWERS)
 TYPES.update(_studio.STUDIO_TYPES)
+
+from . import fx_text as _text  # noqa: E402  (group "T": CapCut-style text templates)
+STUDIO_DRAWERS.update(_text.TEXT_DRAWERS)
+TYPES.update(_text.TEXT_TYPES)
+STUDIO_MOVABLE |= set(_text.TEXT_DRAWERS)
 NEEDS_MASK |= _studio.STUDIO_MASK
