@@ -472,6 +472,8 @@ export function EffectsEditor({ items: source, allowedInit, time, outTime, toSrc
   const [items, setItems] = useState<Overlay[]>(source);
   const [dirty, setDirty] = useState(false);
   const [addType, setAddType] = useState("headline");
+  const [addTab, setAddTab] = useState<string>("T");
+  const [addQ, setAddQ] = useState("");
   const [addText, setAddText] = useState("");
   const [wish, setWish] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
@@ -546,18 +548,19 @@ export function EffectsEditor({ items: source, allowedInit, time, outTime, toSrc
   };
 
   const LIST_TYPES = ["steps", "cards", "tags", "scores", "checklist", "endcard", "bigwords", "clothesline", "wordswap", "stickers", "loop"];
-  const add = () => {
-    const t = types.find((x) => x.key === addType);
-    const dur = addType === "poof" ? 1 : addType === "whip" ? 0.6 : addType === "loop" ? 40 : 4;
-    const start = Math.max(0, addType === "poof" ? time - 0.25 : addType === "whip" ? time - 0.3 : time);
+  const add = (typeKey?: string) => {
+    const addType_ = typeKey ?? addType;
+    const t = types.find((x) => x.key === addType_);
+    const dur = addType_ === "poof" ? 1 : addType_ === "whip" ? 0.6 : addType_ === "loop" ? 40 : 4;
+    const start = Math.max(0, addType_ === "poof" ? time - 0.25 : addType_ === "whip" ? time - 0.3 : time);
     // Dein Text macht den Effekt: bei Listen eine Zeile pro Punkt, sonst wird er zur Überschrift
     const lines = addText.split("\n").map((x) => x.trim()).filter(Boolean);
-    const isList = LIST_TYPES.includes(addType);
-    const title = isList ? "" : lines.join("|");
+    const isList = LIST_TYPES.includes(addType_);
+    const title = isList ? "" : lines.join("\n");
     setDirty(true);
     setItems([...items, {
-      id: `fx-${Date.now()}`, kind: "fx", type: addType, place: t?.places[0] ?? "scene", on: true,
-      title, text: title || addType, items: isList ? lines : [], item_t: [], start, end: start + dur,
+      id: `fx-${Date.now()}`, kind: "fx", type: addType_, place: t?.places[0] ?? "scene", on: true,
+      title, text: title || addType_, items: isList ? lines : [], item_t: [], start, end: start + dur,
       bg_t: null, pose_t: [], mode: "vanish" as const,
     }].sort((a, b) => a.start - b.start));
     setAddText("");
@@ -708,16 +711,31 @@ export function EffectsEditor({ items: source, allowedInit, time, outTime, toSrc
           {outTime != null
             ? <>at {formatTime(outTime)} in your finished video (= {formatTime(time)} in the original)</>
             : <>at {formatTime(time)} (pause the video – or your finished video – where it should start)</>}</span></div>
-        <div className="fx-add-row">
-          <select value={addType} onChange={(e) => setAddType(e.target.value)}>
-            {types.map((t) => (
-              <option key={t.key} value={t.key}>{t.label}</option>
+        <div className="fx-browser">
+          <div className="fx-browser-tabs">
+            {["T", "S", "V", "B", "A", "C", "D", "E"].filter((g) => types.some((t) => t.group === g)).map((g) => (
+              <button key={g} className={addTab === g && !addQ ? "on" : ""} onClick={() => { setAddTab(g); setAddQ(""); }}>
+                {{ T: "Text", S: "Stickers", V: "Effects", B: "Text on video", A: "Boxes", C: "Cut-out", D: "Tripod", E: "Studio" }[g]}
+              </button>
             ))}
-          </select>
+            <input placeholder="🔍 search …" value={addQ} onChange={(e) => setAddQ(e.target.value)} />
+          </div>
+          <div className="fx-browser-grid">
+            {types.filter((t) => (addQ.trim() ? t.label.toLowerCase().includes(addQ.trim().toLowerCase()) : t.group === addTab)).map((t) => (
+              <button key={t.key} className={`fx-tile ${addType === t.key ? "on" : ""}`} title={DESC[t.key] ?? t.label}
+                onClick={() => setAddType(t.key)} onDoubleClick={() => { setAddType(t.key); add(t.key); }}>
+                <img src={`/api/effects/sample/${t.key}.jpg`} alt="" loading="lazy" />
+                <span>{t.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="fx-add-row">
+          <strong className="small">{types.find((t) => t.key === addType)?.label}</strong>
           <textarea className="fx-add-text" rows={1} value={addText}
             placeholder={HINT[addType] ? `Your text (optional) – ${HINT[addType]}` : "Your text (optional)"}
             onChange={(e) => setAddText(e.target.value)} />
-          <button className="btn" onClick={add}>+ Add at {formatTime(outTime ?? time)}{outTime != null ? " (finished video)" : ""}</button>
+          <button className="btn" onClick={() => add()}>+ Add at {formatTime(outTime ?? time)}{outTime != null ? " (finished video)" : ""}</button>
         </div>
         {DESC[addType] && <div className="small muted fx-desc">ⓘ {DESC[addType]}</div>}
         {endAt != null && (

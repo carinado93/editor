@@ -378,6 +378,45 @@ def effect_types():
     return {"types": [{"key": k, "group": g, "label": lbl, "places": list(pl)} for k, (g, lbl, pl) in fx.TYPES.items()]}
 
 
+_FX_SAMPLES: dict[str, bytes] = {}
+
+
+@app.get("/api/effects/sample/{typ}.jpg")
+def effect_sample(typ: str):
+    """Small preview tile of an effect (CapCut-style browser): drawn on a neutral sample picture, cached."""
+    import io
+
+    from fastapi.responses import Response
+    from PIL import Image, ImageDraw
+
+    from . import fx
+    if typ not in fx.TYPES:
+        raise UserError("Unknown effect.")
+    if typ not in _FX_SAMPLES:
+        W, H = 320, 180
+        frame = Image.new("RGB", (W, H), (150, 140, 130))
+        d = ImageDraw.Draw(frame)
+        for y in range(H):   # soft room-like gradient
+            d.line((0, y, W, y), fill=(int(196 - y * 0.25), int(186 - y * 0.25), int(178 - y * 0.2)))
+        d.ellipse((W * 0.40, H * 0.22, W * 0.60, H * 0.58), fill=(214, 170, 150))      # a simple "person"
+        d.rounded_rectangle((W * 0.30, H * 0.55, W * 0.70, H * 1.1), 30, fill=(70, 62, 80))
+        mask = Image.new("L", (W, H), 0)
+        md = ImageDraw.Draw(mask)
+        md.ellipse((W * 0.40, H * 0.22, W * 0.60, H * 0.58), fill=255)
+        md.rounded_rectangle((W * 0.30, H * 0.55, W * 0.70, H * 1.1), 30, fill=255)
+        place = fx.TYPES[typ][2][0]
+        it = {"id": "sample", "type": typ, "place": place, "title": "", "items": []}
+        try:
+            tt = 0.2 if typ in ("v_flash", "v_develop", "v_blurin") else 1.6   # quick effects: show their start
+            out = fx.render_frame(frame, it, tt, 3.0, fx.Ctx(W, H, None, [{"w": "Burnout", "s": 0, "e": 3}]), mask)
+        except Exception:  # noqa: BLE001 – a tile must never break the panel
+            out = frame
+        buf = io.BytesIO()
+        out.convert("RGB").save(buf, "JPEG", quality=80)
+        _FX_SAMPLES[typ] = buf.getvalue()
+    return Response(_FX_SAMPLES[typ], media_type="image/jpeg", headers={"Cache-Control": "max-age=86400"})
+
+
 @app.post("/api/projects/{pid}/effects/{engine}")
 def effects_suggest(pid: str, engine: str, body: EffectsBody):
     if engine not in ("claude", "ollama"):

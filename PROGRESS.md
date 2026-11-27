@@ -365,3 +365,19 @@ M6 Vorlagen-Bibliothek + B2 (Reel aus Idee), M6b Karussell-Generator, M7 Politur
   keep ranges + time-lapse/slow-motion ranges + real duration), not from the current draft. The render now also
   stores speed + duration next to the video; older renders fall back to the current speed ranges. The panel says
   which video the times come from. Without any render: current edit (now also with time-lapse taken into account).
+
+## 27 Nov 2026 – CapCut library ("baue alles von CapCut ein")
+All drawn from scratch in Carina's colours/fonts – no CapCut assets (templates, sticker images, LUTs).
+- Text templates, group T (`fx_text.py`, 14): stamp, starburst badge, block lines, neon, speech bubble, brush stroke,
+  highlighter, outline words, glitch, washi tape, sticky note, scribble underline, letters pop, gradient title.
+- Stickers, group S (`fx_stickers.py`, 12): hand-drawn circle/arrow, countdown, hearts, sparkles, tick, cross, bell,
+  smiley (happy/wow/sad/love/wink), question marks, lightning, pixel censor box.
+- Video effects, group V (`fx_vfx.py`, 15): confetti, light leak, lens flare, glitter dust, laser, radial glow, photo
+  develop, zoom pulse, shake, RGB split, flash, old film, VHS, blur in, heart frame.
+- All movable/sizable, colour dots, Enter = new line; registered in fx.TYPES + effects.DESCRIBE; every-effect test
+  covers them. Claude does not use T/S/V by default (palette unticked) – Carina adds them herself.
+- Filters (Video Studio, colour rule exception): 39 new looks with CapCut-like moods, own names/values, 9 categories;
+  filter grid has category chips + search.
+- Transitions (Video Studio): 25 more xfade transitions (49 total), all checked against ffmpeg 6.1.
+- Cut editor: "Add an effect yourself" is now a CapCut-style browser – tabs (Text, Stickers, Effects, …), search,
+  tiles with a preview picture (`/api/effects/sample/{type}.jpg`, cached), click = choose, double-click = add.
