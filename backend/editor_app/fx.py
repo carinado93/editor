@@ -1823,4 +1823,9 @@ from . import fx_text as _text  # noqa: E402  (group "T": CapCut-style text temp
 STUDIO_DRAWERS.update(_text.TEXT_DRAWERS)
 TYPES.update(_text.TEXT_TYPES)
 STUDIO_MOVABLE |= set(_text.TEXT_DRAWERS)
+
+from . import fx_stickers as _stickers  # noqa: E402  (group "S": animated stickers)
+STUDIO_DRAWERS.update(_stickers.STICKER_DRAWERS)
+TYPES.update(_stickers.STICKER_TYPES)
+STUDIO_MOVABLE |= _stickers.STICKER_MOVABLE
 NEEDS_MASK |= _studio.STUDIO_MASK

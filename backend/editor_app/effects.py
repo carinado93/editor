@@ -44,6 +44,7 @@ DESCRIBE = {
     "poof": "Puff-Wolke (Verschwinden/Auftauchen) – nur genau an einem Schnitt, an dem sie den Ort wechselt",
     **fx._studio.STUDIO_DESCRIBE,
     **fx._text.TEXT_DESCRIBE,
+    **fx._stickers.STICKER_DESCRIBE,
 }
 
 SCHEMA = {

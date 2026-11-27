@@ -10,6 +10,7 @@ const GROUP_LABEL: Record<string, string> = {
   D: "Tripod tricks (film on a tripod + a few seconds of the empty room)",
   E: "Studio – day in my life (trained with Claude, Nov 2026)",
   T: "Text templates (CapCut style, in my colours)",
+  S: "Stickers (animated, in my colours)",
 };
 
 const PLACE_LABEL = { scene: "Full screen", side: "Next to you" };
@@ -81,6 +82,18 @@ const DESC: Record<string, string> = {
   logoff: "A glitch on the picture, then a lilac 'logging off…' pill. For shutting the computer down.",
   sportpill: "A lilac pill top left with a ticking stopwatch: sport + duration. Put one on each sport scene.",
   ringtimer: "A ring timer counts down (e.g. 30:00 → 00:00) – or a number counts up in the ring (e.g. 1 → 190.000) – while the title writes itself.",
+  s_circle: "A hand-drawn circle draws itself (put it on the spot with the position buttons). Optional label as text.",
+  s_arrow: "A hand-drawn arrow draws itself and bobs. Optional label as text.",
+  s_countdown: "3 · 2 · 1 in a ring. Text = start number. Make it as long as the count.",
+  s_hearts: "Little hearts float up.",
+  s_sparkles: "Twinkling sparkles.",
+  s_check: "A tick in a circle. Optional label.",
+  s_cross: "A cross in a circle (wrong / don't). Optional label.",
+  s_bell: "A notification bell rings.",
+  s_emoji: "A smiley. Text = happy, wow, sad, love or wink.",
+  s_question: "Bouncing question marks.",
+  s_lightning: "A lightning bolt flashes.",
+  s_censor: "Pixel mosaic over part of the video – choose where with the position buttons, bigger with the size slider.",
   t_stamp: "A rubber stamp with your words slams in, tilted (like SOLD OUT). Pick the colour with the dots.",
   t_badge: "A round starburst badge with 1–3 words or a number (e.g. -50 %, NEU) pops in.",
   t_saleblock: "2–4 short lines on coloured bars slide in from the sides. One line per Enter.",
@@ -454,7 +467,7 @@ export function EffectsEditor({ items: source, allowedInit, time, outTime, toSrc
       r.types = r.types.filter((t) => !(exclude ?? []).includes(t.key))
         .sort((x, y) => x.label.localeCompare(y.label, "en", { sensitivity: "base" }));  // A–Z in allen Listen
       setTypes(r.types);
-      setAllowed((a) => (a.length ? a : r.types.filter((t) => t.group !== "C" && t.group !== "E" && t.group !== "T").map((t) => t.key)));
+      setAllowed((a) => (a.length ? a : r.types.filter((t) => t.group !== "C" && !["E", "T", "S"].includes(t.group)).map((t) => t.key)));
     }).catch(() => {});
   }, []);
   // ---------- gespeicherte Stile ----------
@@ -798,7 +811,7 @@ export function EffectsEditor({ items: source, allowedInit, time, outTime, toSrc
                   </div>
                 );
               })()}
-              {(["behind", "typewriter", "circleword", "countup", "ringtimer"].includes(o.type ?? "") || (o.type ?? "").startsWith("t_")) && (
+              {(["behind", "typewriter", "circleword", "countup", "ringtimer"].includes(o.type ?? "") || /^(t|s)_/.test(o.type ?? "")) && (
                 <span className="fx-colors small">Colour:
                   {([["white", "#fffdf9"], ["pink", "#f096b9"], ["yellow", "#fae28c"], ["lilac", "#c9b3ec"], ["green", "#a0d696"]] as const).map(([c, hex]) => (
                     <button key={c} title={c} className={`fx-color ${(o.color ?? "") === c || (!o.color && c === "white") ? "on" : ""}`}
