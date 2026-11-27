@@ -601,7 +601,7 @@ export const api = {
     call<StudioProject>(`/api/studio/${sid}/plan/${fmt}/shot/${k}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, value }) }),
   studioShotThumb: (sid: string, fmt: string, k: number, v: string) => `/api/studio/${sid}/shot-thumb/${fmt}/${k}?v=${encodeURIComponent(v)}`,
   studioLooks: (sid: string, fmt: string, k: number, strength: number) =>
-    call<{ looks: { look: string; file: string }[] }>(`/api/studio/${sid}/looks/${fmt}/${k}?strength=${strength}`),
+    call<{ looks: { look: string; file: string }[]; categories?: Record<string, string[]> }>(`/api/studio/${sid}/looks/${fmt}/${k}?strength=${strength}`),
   studioLut: (sid: string, f: File) => call<StudioProject>(`/api/studio/${sid}/lut?name=${encodeURIComponent(f.name)}`, { method: "PUT", body: f }),
   studioRanges: (sid: string, cid: string, must: number[][], never: number[][]) =>
     call<StudioProject>(`/api/studio/${sid}/clips/${cid}/ranges`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ must, never }) }),

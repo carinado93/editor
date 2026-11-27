@@ -37,6 +37,73 @@ PRESETS: dict[str, dict] = {
     "vintage_film": {"fade": 14, "sat": -14, "temp": 6, "contrast": -6, "split": {"shadows": [0.5, 0.08]}},
 }
 
+# CapCut-style filter library (27 Nov 2026): our own looks with a similar mood to the CapCut filters Carina
+# showed (own names, own values – no CapCut LUTs).
+PRESETS.update({
+    # Leben / Life
+    "cool_aqua": {"temp": -12, "tint": -3, "contrast": 6, "sat_by": {"cyan": 18, "blue": 10}, "highlights": -10, "fade": 4},
+    "soft_glow": {"highlights": -8, "shadows": 14, "contrast": -8, "fade": 10, "vibrance": 6, "lights": 6},
+    "honey_film": {"temp": 16, "tint": 4, "fade": 10, "sat": -6, "contrast": 4, "split": {"highlights": [0.11, 0.18]}},
+    "selfie_colours": {"vibrance": 18, "contrast": 6, "shadows": 10, "temp": 4, "highlights": -10},
+    "london_fog": {"temp": -6, "sat": -24, "fade": 16, "contrast": -6, "highlights": -6},
+    "faded_blue": {"temp": -10, "sat": -16, "fade": 18, "split": {"shadows": [0.6, 0.18]}},
+    "blazing_sun": {"temp": 14, "exposure": 0.12, "contrast": 10, "vibrance": 16, "highlights": -6, "sat_by": {"orange": 10, "yellow": 10}},
+    "soft_mist": {"fade": 20, "contrast": -12, "sat": -8, "lights": 10, "shadows": 12},
+    "bold_city": {"contrast": 24, "sat": -10, "darks": -10, "temp": -4, "split": {"shadows": [0.55, 0.14], "highlights": [0.1, 0.1]}},
+    "flame_glow": {"temp": 18, "tint": 6, "contrast": 14, "vibrance": 14, "sat_by": {"red": 14, "orange": 16}},
+    # Mono
+    "soft_bw": {"sat": -100, "contrast": -4, "fade": 10, "shadows": 10},
+    "noir": {"sat": -100, "contrast": 34, "darks": -16, "highlights": -6},
+    "silver": {"sat": -100, "contrast": 10, "lights": 10, "split": {"shadows": [0.6, 0.06]}},
+    "sepia": {"sat": -100, "split": {"shadows": [0.08, 0.3], "highlights": [0.1, 0.22]}, "fade": 8},
+    # Retro / Filme
+    "old_photobook": {"fade": 16, "sat": -20, "temp": 10, "split": {"shadows": [0.08, 0.2]}, "contrast": -4},
+    "wine_grain": {"tint": 8, "temp": 6, "contrast": 12, "sat": -8, "split": {"shadows": [0.95, 0.14]}, "fade": 6},
+    "lofi_haze": {"fade": 22, "contrast": -10, "sat": -10, "temp": 6, "tint": 4},
+    "aged_flash": {"exposure": 0.15, "contrast": 16, "fade": 12, "sat": -12, "temp": 8},
+    "retro_colours": {"contrast": 10, "sat": 10, "fade": 10, "split": {"shadows": [0.5, 0.18], "highlights": [0.12, 0.16]}},
+    "kodak_warm": {"temp": 10, "contrast": 8, "fade": 8, "sat_by": {"red": 8, "yellow": 10}, "split": {"highlights": [0.1, 0.12]}},
+    "cine_green": {"tint": -6, "contrast": 12, "sat": -10, "split": {"shadows": [0.42, 0.14], "highlights": [0.14, 0.08]}},
+    "movie_teal": {"contrast": 16, "split": {"shadows": [0.5, 0.2], "highlights": [0.08, 0.16]}, "sat": -6, "darks": -6},
+    # Porträt
+    "pastel_rose": {"tint": 8, "temp": 4, "fade": 10, "sat": -6, "split": {"highlights": [0.95, 0.12]}, "lights": 6},
+    "porcelain": {"sat": -14, "lights": 10, "contrast": -4, "temp": -2, "fade": 6},
+    "peach": {"temp": 8, "tint": 5, "vibrance": 10, "shadows": 8, "split": {"highlights": [0.06, 0.12]}},
+    "tropical_pink": {"tint": 10, "vibrance": 14, "sat_by": {"magenta": 18, "red": 8, "cyan": 10}, "contrast": 6},
+    # Reise / Querformat
+    "holiday_mood": {"temp": 8, "vibrance": 22, "contrast": 10, "sat_by": {"cyan": 14, "blue": 10}, "highlights": -14},
+    "glowing_coast": {"temp": 6, "exposure": 0.08, "vibrance": 20, "sat_by": {"cyan": 20}, "highlights": -12},
+    "alpine_clear": {"temp": -6, "contrast": 14, "vibrance": 12, "highlights": -18, "darks": -6},
+    "sunset_purple": {"tint": 10, "temp": 6, "split": {"highlights": [0.08, 0.2], "shadows": [0.75, 0.2]}, "vibrance": 10},
+    # Nacht
+    "night_blue": {"temp": -18, "exposure": -0.15, "contrast": 12, "sat": -10, "darks": -8},
+    "neon_night": {"contrast": 18, "vibrance": 24, "sat_by": {"magenta": 20, "blue": 16, "cyan": 14}, "darks": -10},
+    "warm_nights": {"temp": 12, "exposure": -0.08, "contrast": 10, "split": {"shadows": [0.7, 0.16], "highlights": [0.1, 0.16]}},
+    # Kühl / Warm
+    "ice": {"temp": -20, "sat": -8, "lights": 6, "contrast": 4},
+    "frost": {"temp": -12, "tint": 4, "fade": 10, "sat": -14},
+    "cozy": {"temp": 12, "fade": 6, "contrast": 4, "shadows": 6},
+    "amber": {"temp": 20, "tint": 3, "contrast": 8, "sat": -4},
+    # Weihnachten
+    "xmas_warm": {"temp": 12, "contrast": 10, "sat_by": {"red": 18, "green": 12}, "shadows": 6},
+    "snow_white": {"temp": -6, "exposure": 0.12, "lights": 10, "sat": -10, "contrast": 4},
+})
+
+LOOK_CATEGORIES: dict[str, list[str]] = {
+    "Travel": ["vivid_travel", "natural_plus", "tropical_pop", "golden_hour", "teal_orange", "epic_mountains",
+               "deep_blue_ocean", "emerald_jungle", "holiday_mood", "glowing_coast", "alpine_clear", "sunset_purple"],
+    "Life": ["cool_aqua", "soft_glow", "honey_film", "selfie_colours", "london_fog", "faded_blue", "blazing_sun",
+             "soft_mist", "bold_city", "flame_glow"],
+    "Portrait": ["pastel_rose", "porcelain", "peach", "tropical_pink"],
+    "Mono": ["bw_drama", "soft_bw", "noir", "silver", "sepia"],
+    "Retro & film": ["vintage_film", "old_photobook", "wine_grain", "lofi_haze", "aged_flash", "retro_colours",
+                     "kodak_warm", "cine_green", "movie_teal"],
+    "Night": ["moody_dusk", "night_blue", "neon_night", "warm_nights"],
+    "Cool": ["ice", "frost"],
+    "Warm": ["cozy", "amber"],
+    "Christmas": ["xmas_warm", "snow_white"],
+}
+
 # Farbtöne in Grad für "pro Farbe"-Regler
 HUES = {"red": 0, "orange": 30, "yellow": 55, "green": 120, "cyan": 185, "blue": 225, "purple": 275, "magenta": 320}
 

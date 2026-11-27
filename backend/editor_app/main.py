@@ -1802,7 +1802,8 @@ def studio_shot_thumb(sid: str, fmt: str, k: int):
 def studio_looks(sid: str, fmt: str, k: int, strength: float = 1.0):
     from .video_studio import store
 
-    return {"looks": store.looks_preview(sid, fmt, k, max(0.0, min(1.5, strength)))}
+    from .video_studio.color import LOOK_CATEGORIES
+    return {"looks": store.looks_preview(sid, fmt, k, max(0.0, min(1.5, strength))), "categories": LOOK_CATEGORIES}
 
 
 @app.put("/api/studio/{sid}/lut")

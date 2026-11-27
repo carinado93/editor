@@ -51,6 +51,9 @@ export function ShotPanel({ sid, fmt, k, plan, st, meta, onState, onErr }: {
   const [tab, setTab] = useState<"filters" | "adjust" | "hsl" | "curves" | "wheels" | "mask" | "effects" | "frame" | "ai" | "text">("filters");
   const [curveCh, setCurveCh] = useState<"rgb" | "r" | "g" | "b">("rgb");
   const [looks, setLooks] = useState<{ look: string; file: string }[]>([]);
+  const [lookCats, setLookCats] = useState<Record<string, string[]>>({});
+  const [lookCat, setLookCat] = useState("All");
+  const [lookQ, setLookQ] = useState("");
   const [strength, setStrength] = useState(1);
   const [compare, setCompare] = useState(50);
   const [hover, setHover] = useState<string | null>(null);
@@ -81,7 +84,7 @@ export function ShotPanel({ sid, fmt, k, plan, st, meta, onState, onErr }: {
   };
   useEffect(() => {
     if (tab !== "filters") return;
-    api.studioLooks(sid, fmt, k, strength).then((r) => setLooks(r.looks)).catch((e) => onErr(e.message));
+    api.studioLooks(sid, fmt, k, strength).then((r) => { setLooks(r.looks); setLookCats(r.categories ?? {}); }).catch((e) => onErr(e.message));
   }, [sid, fmt, k, strength, tab, st.settings.grade.look]);
   const current = sh.look ?? st.settings.grade.look;
   const shown = looks.find((l) => l.look === (hover ?? current));
@@ -119,8 +122,15 @@ export function ShotPanel({ sid, fmt, k, plan, st, meta, onState, onErr }: {
           <label className="vs-knob"><span>Strength {Math.round(strength * 100)} %</span>
             <input type="range" min={0} max={1.5} step={0.05} value={strength} onChange={(e) => setStrength(Number(e.target.value))} />
           </label>
+          <div className="vs-look-cats">
+            {["All", ...Object.keys(lookCats), "My LUTs"].map((c) => (
+              <button key={c} className={lookCat === c ? "on" : ""} onClick={() => setLookCat(c)}>{c}</button>
+            ))}
+            <input placeholder="search filter …" value={lookQ} onChange={(e) => setLookQ(e.target.value)} />
+          </div>
           <div className="vs-look-grid">
-            {looks.map((l) => (
+            {looks.filter((l) => (lookCat === "All" || (lookCat === "My LUTs" ? l.look.startsWith("file:") : (lookCats[lookCat] ?? []).includes(l.look)) || l.look === "none")
+              && (!lookQ.trim() || LOOK_LABEL(l.look).toLowerCase().includes(lookQ.trim().toLowerCase()))).map((l) => (
               <button key={l.look} className={`vs-look ${l.look === current ? "on" : ""}`} onMouseEnter={() => setHover(l.look)} onMouseLeave={() => setHover(null)}
                 onClick={() => send("set", { look: l.look, strength })}>
                 <img src={api.studioFile(sid, "looks", l.file)} alt={l.look} loading="lazy" />

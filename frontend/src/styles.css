@@ -2186,3 +2186,8 @@ a.chip { text-decoration: none; color: inherit; }
 .fx-loop-time { display: flex; gap: 8px; align-items: center; }
 .fx-loop-time > span:first-child { min-width: 230px; }
 .fx-loop-time input { width: 70px; }
+
+.vs-look-cats { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 6px 0; }
+.vs-look-cats button { border: 1px solid var(--lila, #c9b3ec); background: transparent; border-radius: 999px; padding: 3px 10px; font: inherit; font-size: 12px; cursor: pointer; }
+.vs-look-cats button.on { background: var(--lila, #c9b3ec); color: #3d2b5c; }
+.vs-look-cats input { flex: 1; min-width: 120px; font: inherit; font-size: 12px; padding: 3px 8px; border-radius: 999px; border: 1px solid #ddd; }
