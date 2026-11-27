@@ -106,7 +106,7 @@ export interface Overlay {
 
 export interface EffectType {
   key: string;
-  group: "A" | "B" | "C" | "D" | "E";
+  group: "A" | "B" | "C" | "D" | "E" | "T" | "S" | "V";
   label: string;
   places: ("scene" | "side")[];
 }
