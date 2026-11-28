@@ -2204,3 +2204,32 @@ a.chip { text-decoration: none; color: inherit; }
 .fx-tile span { line-height: 1.2; padding: 0 2px 2px; }
 .fx-tile:hover { border-color: #e2d6f6; }
 .fx-tile.on { border-color: #8f6fc9; }
+
+/* ---------- CapCut-style workspace (28 Nov 2026): video fixed left, tabs right, each part scrolls by itself */
+.page.cc-page { max-width: none; padding: 12px 18px 0; }
+.page.cc-page .review-head { margin-bottom: 8px; }
+.review-grid.cc-workspace {
+  grid-template-columns: minmax(0, 1.05fr) minmax(380px, 1fr);
+  height: calc(100vh - 150px);
+  min-height: 520px;
+  gap: 14px;
+  align-items: stretch;
+}
+.review-grid.cc-workspace.portrait { grid-template-columns: minmax(280px, 0.7fr) minmax(420px, 1.3fr); }
+.cc-workspace .player { position: static; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 8px; }
+.cc-workspace .player video { max-height: calc(100vh - 290px); object-fit: contain; }
+.cc-side { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+.cc-tabs { display: flex; gap: 4px; background: var(--weiss); border-radius: var(--rund) var(--rund) 0 0; padding: 6px 6px 0;
+  box-shadow: var(--schatten); position: relative; z-index: 1; flex-wrap: wrap; }
+.cc-tabs button { border: 0; background: transparent; padding: 9px 14px; font: inherit; font-size: 14px; cursor: pointer;
+  border-radius: 10px 10px 0 0; color: #5a4a78; }
+.cc-tabs button.on { background: #efe7fb; color: #2f2245; font-weight: 600; box-shadow: inset 0 -3px 0 #8f6fc9; }
+.cc-panel { flex: 1; min-height: 0; overflow-y: auto; background: #f6f1fc; border-radius: 0 0 var(--rund) var(--rund);
+  padding: 10px; display: flex; flex-direction: column; gap: 12px; }
+.cc-panel[hidden] { display: none; }
+.cc-panel > .card, .cc-panel > section, .cc-panel > div > .card { box-shadow: none; }
+.cc-workspace .transcript-card { overflow: visible; max-height: none; }
+@media (max-width: 980px) {
+  .review-grid.cc-workspace, .review-grid.cc-workspace.portrait { grid-template-columns: 1fr; height: auto; }
+  .cc-panel { overflow: visible; }
+}

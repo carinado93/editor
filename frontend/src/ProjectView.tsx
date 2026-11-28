@@ -43,14 +43,10 @@ function findAt<T>(list: T[], t: number, start: (x: T) => number): number {
 }
 
 /** Zu einem Schritt scrollen (ohne die #/p/…-Adresse der App zu ändern). */
-function jump(e: React.MouseEvent<HTMLAnchorElement>) {
-  e.preventDefault();
-  const id = e.currentTarget.getAttribute("href")?.slice(1);
-  if (id) document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
-}
-
 export function ProjectView({ id }: { id: string }) {
   const [project, setProject] = useState<Project | null>(null);
+  const [panel, setPanel] = useState<string>(() => { try { return localStorage.getItem("cc-panel") || "cut"; } catch { return "cut"; } });
+  useEffect(() => { try { localStorage.setItem("cc-panel", panel); } catch { /* egal */ } }, [panel]);
   const [transcript, setTranscript] = useState<Transcript | null>(null);
   const [cuts, setCuts] = useState<CutView | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -461,7 +457,7 @@ export function ProjectView({ id }: { id: string }) {
   }
 
   return (
-    <div className="page review">
+    <div className={`page review ${editMode && cuts ? "cc-page" : ""}`}>
       <div className="review-head">
         <a href="#/" className="link">
           ← All projects
@@ -476,17 +472,6 @@ export function ProjectView({ id }: { id: string }) {
       {project.from_idea && project.idea_note && <div className="banner error small">⚠ {project.idea_note}</div>}
       {project.from_idea && project.status === "fertig" && !project.idea_note && (
         <div className="banner small">✓ Claude wrote the texts from your idea and added text effects – watch the preview, change anything below, then “Render reel”.</div>
-      )}
-      {editMode && cuts && <AskClaude id={id} onCuts={setCuts} canUndo={cuts.can_undo} />}
-      {editMode && cuts && (
-        <nav className="step-nav" aria-label="Steps">
-          <a href="#step-cut" onClick={jump}>{cutMode ? "1 · Cut" : "1 · Texts"}</a>
-          <a href="#step-effects" onClick={jump}>2 · Effects</a>
-          <a href="#step-render" onClick={jump}>3 · Render</a>
-          {cutMode && <a href="#step-reels" onClick={jump}>4 · Reels</a>}
-          {cutMode && <a href="#step-texts" onClick={jump}>5 · Title &amp; texts</a>}
-          {cutMode && <a href="#step-thumb" onClick={jump}>6 · Thumbnail</a>}
-        </nav>
       )}
 
       {error && <div className="banner error">{error}</div>}
@@ -509,52 +494,7 @@ export function ProjectView({ id }: { id: string }) {
         </div>
       )}
 
-      {cutMode && cuts && (
-        <div className="card cut-bar">
-          <div className="cut-stats">
-            <span className="big">
-              {formatTime(oldDur)} → <strong>{formatTime(newDur)}</strong>
-            </span>
-            <span className="muted small">{oldDur ? `${Math.round((1 - newDur / oldDur) * 100)} % shorter` : ""}</span>
-          </div>
-          <div className="legend small">
-            {(Object.keys(TYPE_LABEL) as CutType[]).map((t) =>
-              counts[t] ? (
-                <span key={t} className={`chip cut-${t}`}>
-                  {TYPE_LABEL[t]}: {counts[t]}
-                </span>
-              ) : null,
-            )}
-            {pausesCut > 0 && <span className="chip cut-pause">Pauses shortened: {pausesCut}</span>}
-            {noisesCut > 0 && <span className="chip cut-fuellwort">Sounds without words: {noisesCut}</span>}
-            {suggestions > 0 && <span className="chip suggestion">Suggestions: {suggestions}</span>}
-          </div>
-          {cutMode && <TimeCutBox id={id} cuts={cuts} time={time} clips={project.clip_starts ?? []} busy={busy}
-            onSeek={(t) => seek(t, false)} run={run} />}
-          <div className="tempo" role="radiogroup" aria-label="Tempo">
-            <span className="small muted">Tempo</span>
-            {(["original", "locker", "normal", "straff"] as const).map((t) => (
-              <button
-                key={t}
-                role="radio"
-                aria-checked={cuts.cutlist.settings.tempo === t}
-                className={cuts.cutlist.settings.tempo === t ? "on" : ""}
-                disabled={busy}
-                onClick={() => run(() => api.cutSettings(id, { tempo: t }))}
-              >
-                {TEMPO_LABEL[t]}
-              </button>
-            ))}
-          </div>
-          <div className="cut-actions">
-            <button className="btn ghost" disabled={!cuts.can_undo || busy} onClick={() => run(() => api.undo(id))} title="Ctrl+Z">
-              ↶ Undo
-            </button>
-          </div>
-        </div>
-      )}
-
-      <div className={`review-grid ${portrait ? "portrait" : ""}`}>
+      <div className={`review-grid ${portrait ? "portrait" : ""} ${editMode && cuts ? "cc-workspace" : ""}`}>
         <div className="player card">
           {project.step !== "pruefen" && project.step !== "ton" && project.step !== "vorschau" && project.info ? (
             <div className="video-wrap">
@@ -612,124 +552,63 @@ export function ProjectView({ id }: { id: string }) {
             </p>
           )}
 
-          {editMode && (
-            <div className="render-box" id="step-render">
-              <h3>{reelMode ? "Render reel" : "Final render"}</h3>
-              <p className="small muted">
-                {reelMode
-                  ? "Length, pace, format and sound stay exactly as in the original. Only your texts are added. Under 30 MB."
-                  : "The finished video is only created when you click here. Your original stays unchanged."}
-              </p>
-              {cuts && (
-                <div className="render-options small">
-                  {!reelMode && (
-                  <>
-                  <label>
-                    <input type="checkbox" checked={cuts.cutlist.render_options.zoom} disabled={busy} onChange={(e) => run(() => api.renderOptions(id, { zoom: e.target.checked }))} />{" "}
-                    Zoom change at cuts (100/108/115 %)
-                  </label>
-                  <label>
-                    <input type="checkbox" checked={cuts.cutlist.render_options.loudness} disabled={busy} onChange={(e) => run(() => api.renderOptions(id, { loudness: e.target.checked }))} />{" "}
-                    Even out loudness (−14 LUFS for YouTube)
-                  </label>
-                  <label>
-                    <input type="checkbox" checked={cuts.cutlist.render_options.denoise} disabled={busy} onChange={(e) => run(() => api.renderOptions(id, { denoise: e.target.checked }))} />{" "}
-                    Reduce noise
-                  </label>
-                  <label>
-                    <input type="checkbox" checked={!!cuts.cutlist.render_options.declick} disabled={busy} onChange={(e) => run(() => api.renderOptions(id, { declick: e.target.checked }))} />{" "}
-                    Remove mouth clicks (lip smacks, "Schmatzen")
-                  </label>
-                  </>
-                  )}
-                  <label>
-                    Subtitles{" "}
-                    <select value={cuts.cutlist.render_options.subtitles} disabled={busy} onChange={(e) => run(() => api.renderOptions(id, { subtitles: e.target.value as "aus" }))}>
-                      <option value="aus">none</option>
-                      <option value="srt">only as SRT file</option>
-                      <option value="einbrennen">burn into the video (+ SRT)</option>
-                    </select>
-                  </label>
-                  {cuts.cutlist.render_options.subtitles === "einbrennen" && (
-                    <label>
-                      <input type="checkbox" checked={cuts.cutlist.render_options.karaoke} disabled={busy} onChange={(e) => run(() => api.renderOptions(id, { karaoke: e.target.checked }))} />{" "}
-                      Karaoke (spoken word turns purple)
-                    </label>
-                  )}
-                </div>
-              )}
-              <div className="render-row">
-                {!reelMode && (
-                <select value={quality} onChange={(e) => setQuality(e.target.value)} disabled={!!rendering}>
-                  {Object.entries(QUALITIES).map(([k, v]) => (
-                    <option key={k} value={k}>
-                      {v}
-                    </option>
-                  ))}
-                </select>
-                )}
-                <button className="btn" onClick={startRender} disabled={!!rendering || busy || !newDur}>
-                  {reelMode ? "Render reel" : "Final render"}
-                </button>
-              </div>
-              {rendering && r && (
-                <div className="small">
-                  <progress value={r.progress} max={1} /> {r.message}{" "}
-                  <button className="link danger" onClick={async () => {
-                    if (!confirm("Cancel this render? The half-finished video is deleted.")) return;
-                    try { setProject(await api.cancelRender(id)); } catch (e) { setError((e as Error).message); }
-                  }}>✕ Cancel</button>
-                </div>
-              )}
-              {r?.status === "abgebrochen" && <div className="small muted">Render cancelled.</div>}
-              {doneMsg && !rendering && <div className="banner small">{doneMsg}</div>}
-              <label className="small check-line">
-                <input type="checkbox" checked={autoDl} onChange={(e) => {
-                  setAutoDl(e.target.checked);
-                  try { localStorage.setItem("final-browser-download", e.target.checked ? "1" : "0"); } catch { /* egal */ }
-                }} />{" "}
-                Also download it in the browser (it is always saved on your Desktop in “SOCIAL MEDIA APP”)
-              </label>
-              <button className="link" onClick={() => api.openOutbox(reelMode ? "reels" : "youtube").catch(() => {})}>
-                📁 Open the {reelMode ? "Reels" : "YouTube videos"} folder
-              </button>
-              {r?.status === "fehler" && <div className="small error-text">⚠ {r.error}</div>}
-              {!!project.exports?.length && !rendering && (() => {
-                const shown = watch ?? project.exports[project.exports.length - 1].file;
-                return (
-                  <div className="watch">
-                    <h4>Your finished video</h4>
-                    <video key={shown} className="watch-video" src={api.exportWatchUrl(id, shown)} controls preload="metadata" playsInline
-                      onTimeUpdate={(e) => { const t = e.currentTarget.currentTime; setOutTime(t); setTime(outToSrc(t)); }}
-                      onSeeked={(e) => { const t = e.currentTarget.currentTime; setOutTime(t); setTime(outToSrc(t)); }} />
-                    <div className="small muted">{shown} · pause here and add an effect below – it is placed at this moment</div>
-                  </div>
-                );
-              })()}
-              {!!project.exports?.length && (
-                <ul className="exports small">
-                  {[...project.exports].reverse().map((x) => (
-                    <li key={x.file}>
-                      <button className="link" onClick={() => setWatch(x.file)}>▶ watch</button>{" "}
-                      <a href={api.exportUrl(id, x.file)} download>
-                        ⬇ {x.file}
-                      </a>
-                      <span className="muted">
-                        {" "}
-                        · {formatTime(x.duration)} · {formatSize(x.size)}
-                      </span>
-                    </li>
-                  ))}
-                  <li>
-                    <button className="link" onClick={() => api.openFolder(id).catch((e) => setError(e.message))}>
-                      Open export folder
-                    </button>
-                  </li>
-                </ul>
-              )}
+        </div>
+
+        <div className="cc-side">
+          {editMode && cuts && (
+            <div className="cc-tabs" role="tablist">
+              {([["cut", cutMode ? "✂ Cut" : "📝 Texts"], ["effects", "✨ Effects"], ["render", "🎬 Render"],
+                 ...(cutMode || reelMode ? [["package", cutMode ? "📦 Reels & texts" : "📦 Reel package"]] : [])] as [string, string][]).map(([k, label]) => (
+                <button key={k} role="tab" aria-selected={panel === k} className={panel === k ? "on" : ""} onClick={() => setPanel(k)}>{label}</button>
+              ))}
             </div>
           )}
-        </div>
+          <div className="cc-panel" hidden={!!editMode && !!cuts && panel !== "cut"}>
+            {editMode && cuts && <AskClaude id={id} onCuts={setCuts} canUndo={cuts.can_undo} />}
+            {cutMode && cuts && (
+              <div className="card cut-bar">
+                <div className="cut-stats">
+                  <span className="big">
+                    {formatTime(oldDur)} → <strong>{formatTime(newDur)}</strong>
+                  </span>
+                  <span className="muted small">{oldDur ? `${Math.round((1 - newDur / oldDur) * 100)} % shorter` : ""}</span>
+                </div>
+                <div className="legend small">
+                  {(Object.keys(TYPE_LABEL) as CutType[]).map((t) =>
+                    counts[t] ? (
+                      <span key={t} className={`chip cut-${t}`}>
+                        {TYPE_LABEL[t]}: {counts[t]}
+                      </span>
+                    ) : null,
+                  )}
+                  {pausesCut > 0 && <span className="chip cut-pause">Pauses shortened: {pausesCut}</span>}
+                  {noisesCut > 0 && <span className="chip cut-fuellwort">Sounds without words: {noisesCut}</span>}
+                  {suggestions > 0 && <span className="chip suggestion">Suggestions: {suggestions}</span>}
+                </div>
+                {cutMode && <TimeCutBox id={id} cuts={cuts} time={time} clips={project.clip_starts ?? []} busy={busy}
+                  onSeek={(t) => seek(t, false)} run={run} />}
+                <div className="tempo" role="radiogroup" aria-label="Tempo">
+                  <span className="small muted">Tempo</span>
+                  {(["original", "locker", "normal", "straff"] as const).map((t) => (
+                    <button
+                      key={t}
+                      role="radio"
+                      aria-checked={cuts.cutlist.settings.tempo === t}
+                      className={cuts.cutlist.settings.tempo === t ? "on" : ""}
+                      disabled={busy}
+                      onClick={() => run(() => api.cutSettings(id, { tempo: t }))}
+                    >
+                      {TEMPO_LABEL[t]}
+                    </button>
+                  ))}
+                </div>
+                <div className="cut-actions">
+                  <button className="btn ghost" disabled={!cuts.can_undo || busy} onClick={() => run(() => api.undo(id))} title="Ctrl+Z">
+                    ↶ Undo
+                  </button>
+                </div>
+              </div>
+            )}
 
         <div className="card transcript-card" id="step-cut">
           <div className="transcript-toolbar">
@@ -927,11 +806,140 @@ export function ProjectView({ id }: { id: string }) {
             />
           )}
         </div>
+          </div>
+          {editMode && cuts && (
+            <>
+              <div className="cc-panel" hidden={panel !== "effects"}>
+                {<EffectsPanel id={id} cuts={cuts} onCuts={setCuts} time={time} outTime={outTime} toSrc={cutMode ? outToSrc : undefined} toOut={cutMode ? srcToOut : undefined} onSeek={(t) => seek(t, false)}
+                  keep={cutMode ? cuts.evaluation.keep : undefined} />}
+                    </div>
+              <div className="cc-panel" hidden={panel !== "package"}>
+          {cutMode && <YoutubePackage id={id} />}
+                {reelMode && cuts && <ReelPackage id={id} cuts={cuts} onCuts={setCuts} time={time} duration={duration} />}
+              </div>
+              <div className="cc-panel" hidden={panel !== "render"}>
+          {editMode && (
+            <div className="render-box" id="step-render">
+              <h3>{reelMode ? "Render reel" : "Final render"}</h3>
+              <p className="small muted">
+                {reelMode
+                  ? "Length, pace, format and sound stay exactly as in the original. Only your texts are added. Under 30 MB."
+                  : "The finished video is only created when you click here. Your original stays unchanged."}
+              </p>
+              {cuts && (
+                <div className="render-options small">
+                  {!reelMode && (
+                  <>
+                  <label>
+                    <input type="checkbox" checked={cuts.cutlist.render_options.zoom} disabled={busy} onChange={(e) => run(() => api.renderOptions(id, { zoom: e.target.checked }))} />{" "}
+                    Zoom change at cuts (100/108/115 %)
+                  </label>
+                  <label>
+                    <input type="checkbox" checked={cuts.cutlist.render_options.loudness} disabled={busy} onChange={(e) => run(() => api.renderOptions(id, { loudness: e.target.checked }))} />{" "}
+                    Even out loudness (−14 LUFS for YouTube)
+                  </label>
+                  <label>
+                    <input type="checkbox" checked={cuts.cutlist.render_options.denoise} disabled={busy} onChange={(e) => run(() => api.renderOptions(id, { denoise: e.target.checked }))} />{" "}
+                    Reduce noise
+                  </label>
+                  <label>
+                    <input type="checkbox" checked={!!cuts.cutlist.render_options.declick} disabled={busy} onChange={(e) => run(() => api.renderOptions(id, { declick: e.target.checked }))} />{" "}
+                    Remove mouth clicks (lip smacks, "Schmatzen")
+                  </label>
+                  </>
+                  )}
+                  <label>
+                    Subtitles{" "}
+                    <select value={cuts.cutlist.render_options.subtitles} disabled={busy} onChange={(e) => run(() => api.renderOptions(id, { subtitles: e.target.value as "aus" }))}>
+                      <option value="aus">none</option>
+                      <option value="srt">only as SRT file</option>
+                      <option value="einbrennen">burn into the video (+ SRT)</option>
+                    </select>
+                  </label>
+                  {cuts.cutlist.render_options.subtitles === "einbrennen" && (
+                    <label>
+                      <input type="checkbox" checked={cuts.cutlist.render_options.karaoke} disabled={busy} onChange={(e) => run(() => api.renderOptions(id, { karaoke: e.target.checked }))} />{" "}
+                      Karaoke (spoken word turns purple)
+                    </label>
+                  )}
+                </div>
+              )}
+              <div className="render-row">
+                {!reelMode && (
+                <select value={quality} onChange={(e) => setQuality(e.target.value)} disabled={!!rendering}>
+                  {Object.entries(QUALITIES).map(([k, v]) => (
+                    <option key={k} value={k}>
+                      {v}
+                    </option>
+                  ))}
+                </select>
+                )}
+                <button className="btn" onClick={startRender} disabled={!!rendering || busy || !newDur}>
+                  {reelMode ? "Render reel" : "Final render"}
+                </button>
+              </div>
+              {rendering && r && (
+                <div className="small">
+                  <progress value={r.progress} max={1} /> {r.message}{" "}
+                  <button className="link danger" onClick={async () => {
+                    if (!confirm("Cancel this render? The half-finished video is deleted.")) return;
+                    try { setProject(await api.cancelRender(id)); } catch (e) { setError((e as Error).message); }
+                  }}>✕ Cancel</button>
+                </div>
+              )}
+              {r?.status === "abgebrochen" && <div className="small muted">Render cancelled.</div>}
+              {doneMsg && !rendering && <div className="banner small">{doneMsg}</div>}
+              <label className="small check-line">
+                <input type="checkbox" checked={autoDl} onChange={(e) => {
+                  setAutoDl(e.target.checked);
+                  try { localStorage.setItem("final-browser-download", e.target.checked ? "1" : "0"); } catch { /* egal */ }
+                }} />{" "}
+                Also download it in the browser (it is always saved on your Desktop in “SOCIAL MEDIA APP”)
+              </label>
+              <button className="link" onClick={() => api.openOutbox(reelMode ? "reels" : "youtube").catch(() => {})}>
+                📁 Open the {reelMode ? "Reels" : "YouTube videos"} folder
+              </button>
+              {r?.status === "fehler" && <div className="small error-text">⚠ {r.error}</div>}
+              {!!project.exports?.length && !rendering && (() => {
+                const shown = watch ?? project.exports[project.exports.length - 1].file;
+                return (
+                  <div className="watch">
+                    <h4>Your finished video</h4>
+                    <video key={shown} className="watch-video" src={api.exportWatchUrl(id, shown)} controls preload="metadata" playsInline
+                      onTimeUpdate={(e) => { const t = e.currentTarget.currentTime; setOutTime(t); setTime(outToSrc(t)); }}
+                      onSeeked={(e) => { const t = e.currentTarget.currentTime; setOutTime(t); setTime(outToSrc(t)); }} />
+                    <div className="small muted">{shown} · pause here and add an effect below – it is placed at this moment</div>
+                  </div>
+                );
+              })()}
+              {!!project.exports?.length && (
+                <ul className="exports small">
+                  {[...project.exports].reverse().map((x) => (
+                    <li key={x.file}>
+                      <button className="link" onClick={() => setWatch(x.file)}>▶ watch</button>{" "}
+                      <a href={api.exportUrl(id, x.file)} download>
+                        ⬇ {x.file}
+                      </a>
+                      <span className="muted">
+                        {" "}
+                        · {formatTime(x.duration)} · {formatSize(x.size)}
+                      </span>
+                    </li>
+                  ))}
+                  <li>
+                    <button className="link" onClick={() => api.openFolder(id).catch((e) => setError(e.message))}>
+                      Open export folder
+                    </button>
+                  </li>
+                </ul>
+              )}
+            </div>
+          )}
+              </div>
+            </>
+          )}
+        </div>
       </div>
-      {editMode && cuts && <EffectsPanel id={id} cuts={cuts} onCuts={setCuts} time={time} outTime={outTime} toSrc={cutMode ? outToSrc : undefined} toOut={cutMode ? srcToOut : undefined} onSeek={(t) => seek(t, false)}
-        keep={cutMode ? cuts.evaluation.keep : undefined} />}
-      {cutMode && <YoutubePackage id={id} />}
-      {reelMode && cuts && <ReelPackage id={id} cuts={cuts} onCuts={setCuts} time={time} duration={duration} />}
     </div>
   );
 }
