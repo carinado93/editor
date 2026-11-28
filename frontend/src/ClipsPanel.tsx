@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { api, formatSize, formatTime, type Clip } from "./api";
 import { Status } from "./ReelPackage";
 import { EffectsEditor } from "./EffectsPanel";
-import { ReelParts, ReelWish } from "./ReelEdit";
+import { ReelTimeline, ReelParts, ReelWish } from "./ReelEdit";
 
 function copy(text: string, done: (m: string) => void) {
   navigator.clipboard.writeText(text).then(
@@ -207,6 +207,10 @@ function ClipCard({ id, clip, onChange, onMsg, onErr }: {
         <button className="btn ghost small-btn" onClick={() => (playing ? video.current?.pause() : preview())}>
           {playing ? "❚❚ Stop" : "▶ Preview"}
         </button>
+        <button className="btn small-btn" title="Plays exactly these parts in the big video – no rendering needed"
+          onClick={() => window.dispatchEvent(new CustomEvent("cc-play-segments", { detail: { segments: clip.segments } }))}>
+          ▶ Play in the big video
+        </button>
       </div>
       <div className="clip-body">
         <div className="clip-title">
@@ -238,8 +242,9 @@ function ClipCard({ id, clip, onChange, onMsg, onErr }: {
             onChange={(e) => run(() => api.editClip(id, clip.id, { subs: e.target.checked }))} />{" "}
           Subtitles in the reel (word by word, burned in)
         </label>
+        <ReelTimeline id={id} clip={clip} run={run} busy={rendering} />
         <details className="small">
-          <summary>What is said – cut sentences or add more ({formatTime(clip.duration)})</summary>
+          <summary>What is said – by sentences: cut sentences or add more ({formatTime(clip.duration)})</summary>
           <ReelParts id={id} clip={clip} run={run} busy={rendering} />
         </details>
         <ReelWish id={id} clip={clip} run={run} />

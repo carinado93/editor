@@ -74,3 +74,23 @@ def test_overlay_plan_hook_first_then_texts():
     assert plan[0]["s"] == 0.0 and plan[0]["anim"] == "pop"
     assert [p["anim"] for p in plan[1:]] == ["karte", "wort"]
     assert all(a["e"] <= b["s"] for a, b in zip(plan, plan[1:])) and plan[-1]["e"] <= 18.0
+
+
+def test_reel_part_seconds_more_or_less():
+    """Carina: '5 s mehr oder weniger' per reel part."""
+    from editor_app import clips
+    segs = [[10.0, 14.0], [15.0, 20.0]]
+    assert clips._pad(segs, 5, 0, 100) == [[5.0, 14.0], [15.0, 20.0]]
+    assert clips._pad(segs, 0, 5, 100) == [[10.0, 14.0], [15.0, 25.0]]
+    assert clips._pad(segs, -2, -1, 100) == [[12.0, 14.0], [15.0, 19.0]]
+    assert clips._pad(segs, -5, 0, 100) == [[16.0, 20.0]]          # first piece gone, 1 s off the next
+    assert clips._pad(segs, 20, 90, 22) == [[0.0, 14.0], [15.0, 22.0]]  # clamped to the video
+
+
+def test_reel_free_timeline_keeps_order_and_trims():
+    from editor_app import clips
+    words = [{"w": w, "s": s, "e": s + 0.4} for w, s in [("eins", 1.0), ("zwei", 5.0), ("drei", 9.0)]]
+    c = clips.set_segments({"id": "c"}, [[8.5, 10.0], [0.5, 2.0], [4.0, 4.1], [-3, 1.0]], words, 30.0)
+    assert c["segments"] == [[8.5, 10.0], [0.5, 2.0], [0.0, 1.0]]   # order kept, too-short piece dropped, clamped
+    assert c["text"].startswith("drei") and c["manual"]
+    assert abs(c["duration"] - 4.0) < 0.01

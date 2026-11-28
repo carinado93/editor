@@ -381,3 +381,13 @@ All drawn from scratch in Carina's colours/fonts – no CapCut assets (templates
 - Transitions (Video Studio): 25 more xfade transitions (49 total), all checked against ffmpeg 6.1.
 - Cut editor: "Add an effect yourself" is now a CapCut-style browser – tabs (Text, Stickers, Effects, …), search,
   tiles with a preview picture (`/api/effects/sample/{type}.jpg`, cached), click = choose, double-click = add.
+
+## 28 Nov 2026 – CapCut-style workspace + reel editing
+- Cut editor layout: video (with cut timeline) fixed on the left, tabs on the right (Cut · Effects · Render ·
+  Reels & texts); each column scrolls by itself, the page doesn't. Tabs are hidden, not unmounted (no lost edits).
+  Ask-Claude box moved into the Cut tab. Narrow screens fall back to one column.
+- Reels: new reel timeline (`ReelTimeline`): every piece as a block – select, move, trim start/end ±1/±5 s,
+  split in the middle or at the big video's position, duplicate, delete, add 5 s from the big video's position.
+  Saved instantly (`PUT /clips/{cid}/segments`, `clips.set_segments`, order kept, render uses the same pieces).
+- "▶ Play reel in the big video": plays exactly the reel pieces in the main player – no rendering.
+- Sentence editor (still there): per part start/end ±1/±5 s (`pads`, `clips._pad`), "add at the start (as hook)".

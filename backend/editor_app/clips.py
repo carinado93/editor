@@ -215,23 +215,83 @@ def context(transcript: dict, cutlist: dict, flags: list) -> tuple[list[dict], l
     return words, sent, transcript.get("duration", 0), tempo
 
 
+def _pad(segs: list[list[float]], before: float, after: float, duration: float) -> list[list[float]]:
+    """Ein Stück vorne/hinten um Sekunden länger (+) oder kürzer (−) machen – Carinas "5 s mehr/weniger"."""
+    segs = [list(x) for x in segs]
+    if not segs:
+        return segs
+    if before >= 0:
+        segs[0][0] = max(0.0, segs[0][0] - before)
+    else:
+        cut = -before
+        while segs and cut > 0:
+            ln = segs[0][1] - segs[0][0]
+            if ln - cut > 0.3:
+                segs[0][0] += cut
+                cut = 0
+            else:
+                cut -= ln
+                segs.pop(0)
+    if after >= 0:
+        if segs:
+            segs[-1][1] = min(duration, segs[-1][1] + after)
+    else:
+        cut = -after
+        while segs and cut > 0:
+            ln = segs[-1][1] - segs[-1][0]
+            if ln - cut > 0.3:
+                segs[-1][1] -= cut
+                cut = 0
+            else:
+                cut -= ln
+                segs.pop()
+    return segs
+
+
 def apply_parts(clip: dict, parts: list[list[int]], words: list[dict], flags: list, sent: list[dict],
-                duration: float, tempo: str) -> dict:
-    """Andere Sätze für ein Reel: Zeitbereiche, Länge und Text neu berechnen."""
+                duration: float, tempo: str, pads: list[list[float]] | None = None) -> dict:
+    """Andere Sätze für ein Reel: Zeitbereiche, Länge und Text neu berechnen.
+    pads: pro Stück [Sekunden davor, Sekunden danach] (negativ = kürzer). Ohne Angabe bleiben die alten Werte,
+    solange die Stücke gleich bleiben."""
     known = {s["id"] for s in sent}
-    parts = [sorted({int(x) for x in p if int(x) in known}) for p in parts]
-    parts = [p for p in parts if p]
+    raw = [sorted({int(x) for x in p if int(x) in known}) for p in parts]
+    if pads is None:
+        old = {tuple(p): pd for p, pd in zip(clip.get("parts") or [], clip.get("pads") or [])}
+        pads = [list(old.get(tuple(p), [0.0, 0.0])) for p in raw]
+    keep = [(p, pads[k] if k < len(pads) else [0.0, 0.0]) for k, p in enumerate(raw) if p]
+    parts = [p for p, _ in keep]
+    pads = [[max(-30.0, min(30.0, float(a or 0))), max(-30.0, min(30.0, float(b or 0)))] for _, (a, b) in keep]
     if not parts:
         raise UserError("A reel needs at least one sentence.")
     segs: list = []
-    for ids in parts:
-        segs.extend(part_segments(words, flags, sent, ids, duration, tempo))
+    for ids, (a, b) in zip(parts, pads):
+        segs.extend(_pad(part_segments(words, flags, sent, ids, duration, tempo), a, b, duration))
     segs = no_overlap(segs)
     dur = round(sum(e - s for s, e in segs), 2)
     warnings = [] if MIN_SEC - 1 <= dur <= MAX_SEC + 1 else [f"Length {dur:.1f} s (target 15–20 s)."]
-    return {**clip, "parts": parts, "segments": [[round(s, 3), round(e, 3)] for s, e in segs], "duration": dur,
+    return {**clip, "parts": parts, "pads": pads, "segments": [[round(s, 3), round(e, 3)] for s, e in segs], "duration": dur,
             "text": " … ".join(" ".join(s["text"] for s in sent if s["id"] in ids) for ids in parts),
             "warnings": warnings}
+
+
+def set_segments(clip: dict, segments: list[list[float]], words: list[dict], duration: float) -> dict:
+    """Free reel timeline (CapCut-style): Carina's own pieces in her order – split, trimmed, moved, deleted.
+    The pieces are exact times in the original video; the render and the live preview use exactly these."""
+    segs = []
+    for x in segments[:80]:
+        try:
+            a, b = float(x[0]), float(x[1])
+        except (TypeError, ValueError, IndexError):
+            continue
+        a, b = max(0.0, min(a, duration)), max(0.0, min(b, duration))
+        if b - a >= 0.2:
+            segs.append([round(a, 3), round(b, 3)])
+    if not segs:
+        raise UserError("A reel needs at least one piece.")
+    dur = round(sum(b - a for a, b in segs), 2)
+    text = " … ".join(" ".join(w["w"] for w in words if a <= (w["s"] + w["e"]) / 2 <= b) for a, b in segs)
+    warnings = [] if MIN_SEC - 1 <= dur <= MAX_SEC + 10 else [f"Length {dur:.1f} s."]
+    return {**clip, "segments": segs, "duration": dur, "text": text.strip(), "manual": True, "warnings": warnings}
 
 
 def refine_one(engine: str, transcript: dict, cutlist: dict, flags: list, clip: dict, wish: str) -> dict:

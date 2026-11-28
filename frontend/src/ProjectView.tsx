@@ -107,6 +107,34 @@ export function ProjectView({ id }: { id: string }) {
     return () => clearInterval(t);
   }, [project?.status, project?.render?.status, id]);
   const video = useRef<HTMLVideoElement>(null);
+  // tell the reel timeline where the big video is (for "split here" / "add from here")
+  useEffect(() => { window.dispatchEvent(new CustomEvent("cc-time", { detail: time })); }, [time]);
+  // Reels: play only the reel's parts in the big video (no rendering) – sent by ClipsPanel
+  useEffect(() => {
+    let stop = false;
+    const on = (e: Event) => {
+      const segs = ((e as CustomEvent).detail?.segments ?? []) as number[][];
+      const v = video.current;
+      if (!v || !segs.length) return;
+      stop = false;
+      setPreview(false);
+      let k = 0;
+      v.currentTime = segs[0][0];
+      void v.play();
+      const tick = () => {
+        if (stop || v.paused) return;
+        if (v.currentTime >= segs[k][1] - 0.02) {
+          k += 1;
+          if (k >= segs.length) { v.pause(); return; }
+          v.currentTime = segs[k][0];
+        }
+        requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    };
+    window.addEventListener("cc-play-segments", on);
+    return () => { stop = true; window.removeEventListener("cc-play-segments", on); };
+  }, []);
   const textBox = useRef<HTMLDivElement>(null);
   const previewRef = useRef(preview);
   previewRef.current = preview;

@@ -2083,6 +2083,7 @@ class ClipEditBody(BaseModel):
 
 class PartsBody(BaseModel):
     parts: list[list[int]]
+    pads: list[list[float]] | None = None
 
 
 class RefineBody(BaseModel):
@@ -2139,7 +2140,26 @@ def set_clip_parts(pid: str, cid: str, body: PartsBody):
         for k, c in enumerate(data["clips"]):
             if c["id"] == cid:
                 data["clips"][k] = clips.apply_parts(c, body.parts, words, v["evaluation"]["flags"], sent,
-                                                     duration, tempo)
+                                                     duration, tempo, body.pads)
+        return clips.save(pid, data)
+
+
+class SegmentsBody(BaseModel):
+    segments: list[list[float]]
+
+
+@app.put("/api/projects/{pid}/clips/{cid}/segments")
+def set_clip_segments(pid: str, cid: str, body: SegmentsBody):
+    """Reel timeline: save Carina's own pieces (order, trims, splits) – no rendering needed to watch them."""
+    from . import clips
+
+    v = cutstore.view(pid)
+    words, _sent, duration, _tempo = clips.context(cutstore._transcript(pid), v["cutlist"], v["evaluation"]["flags"])
+    with clips._lock:
+        data = clips.load(pid)
+        for k, c in enumerate(data["clips"]):
+            if c["id"] == cid:
+                data["clips"][k] = clips.set_segments(c, body.segments, words, duration)
         return clips.save(pid, data)
 
 

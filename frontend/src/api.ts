@@ -134,6 +134,7 @@ export interface Clip {
   texts?: string[];
   fx?: Overlay[];
   parts: number[][];
+  pads?: number[][];
   segments: [number, number][];
   duration: number;
   why: string;
@@ -565,8 +566,10 @@ export const api = {
   clipSentences: (id: string) => call<{ sentences: { id: number; text: string; dur: number; t: number }[] }>(`/api/projects/${id}/clip-sentences`),
   ownClip: (id: string, start: number, end: number, engine = "claude") =>
     call<{ clips: Clip[]; new: string; note: string }>(`/api/projects/${id}/clips/own`, json({ start, end, engine })),
-  setClipParts: (id: string, cid: string, parts: number[][]) =>
-    call<{ clips: Clip[] }>(`/api/projects/${id}/clips/${cid}/parts`, { ...json({ parts }), method: "PUT" }),
+  setClipParts: (id: string, cid: string, parts: number[][], pads?: number[][]) =>
+    call<{ clips: Clip[] }>(`/api/projects/${id}/clips/${cid}/parts`, { ...json({ parts, pads }), method: "PUT" }),
+  setClipSegments: (id: string, cid: string, segments: number[][]) =>
+    call<{ clips: Clip[] }>(`/api/projects/${id}/clips/${cid}/segments`, { ...json({ segments }), method: "PUT" }),
   refineClip: (id: string, cid: string, engine: string, wish: string) =>
     call<{ clips: Clip[] }>(`/api/projects/${id}/clips/${cid}/refine/${engine}`, json({ wish })),
   deleteClip: (id: string, cid: string) => call<{ clips: Clip[] }>(`/api/projects/${id}/clips/${cid}`, { method: "DELETE" }),

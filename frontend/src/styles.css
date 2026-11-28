@@ -2233,3 +2233,16 @@ a.chip { text-decoration: none; color: inherit; }
   .review-grid.cc-workspace, .review-grid.cc-workspace.portrait { grid-template-columns: 1fr; height: auto; }
   .cc-panel { overflow: visible; }
 }
+
+.reel-pad { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; color: #6b5a88; margin: 2px 0 4px; }
+.reel-pad strong { color: #8f6fc9; }
+
+/* reel timeline (CapCut-style) */
+.reel-tl { border: 1px solid #e6dcf5; border-radius: 12px; padding: 8px; background: #fbf9ff; display: flex; flex-direction: column; gap: 6px; }
+.reel-tl-strip { display: flex; gap: 3px; height: 46px; }
+.reel-tl-block { flex-basis: 0; min-width: 34px; border: 2px solid transparent; border-radius: 8px; background: #d9c8f3; color: #2f2245;
+  font: inherit; font-size: 11px; cursor: pointer; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 0 4px; overflow: hidden; }
+.reel-tl-block:nth-child(even) { background: #e8dcfa; }
+.reel-tl-block.on { border-color: #6d4fb0; background: #c9b3ec; }
+.reel-tl-tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.reel-tl-tools .sep { width: 1px; height: 18px; background: #ddd; }
