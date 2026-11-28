@@ -111,3 +111,13 @@ def test_card_words_stay_inside_the_card():
     assert all(ff.getlength(ln) <= 120 for ln in lines) and ff.size < 40
     ff2, _ = fx.fit_wrap("Pausen", f, 400, 3, 300)
     assert ff2.size == 40, "short words keep their size"
+
+
+def test_effect_window_in_the_finished_video():
+    from editor_app import main
+    keep = [(0, 10), (20, 30), (40, 50)]
+    o0, o1, pieces = main._out_window(keep, 8, 25)      # starts before a cut, ends after it
+    assert (o0, o1) == (8, 15)
+    assert pieces == [(8, 10), (20, 25)]                   # the cut part 10–20 is not shown
+    o0, o1, pieces = main._out_window(keep, 12, 22)      # starts inside a cut part → next kept spot
+    assert (o0, o1, pieces) == (10, 12, [(20, 22)])

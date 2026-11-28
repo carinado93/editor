@@ -472,6 +472,17 @@ export function EffectsEditor({ items: source, allowedInit, time, outTime, toSrc
   const [items, setItems] = useState<Overlay[]>(source);
   const [dirty, setDirty] = useState(false);
   const [addType, setAddType] = useState("headline");
+  const [openFx, setOpenFx] = useState<string | null>(null);
+  // a click on an effect block under the big video opens that effect here
+  useEffect(() => {
+    const on = (e: Event) => {
+      const fid = String((e as CustomEvent).detail ?? "");
+      setOpenFx(fid);
+      setTimeout(() => document.getElementById(fid)?.scrollIntoView({ behavior: "smooth", block: "center" }), 60);
+    };
+    window.addEventListener("cc-select-fx", on);
+    return () => window.removeEventListener("cc-select-fx", on);
+  }, []);
   const [addTab, setAddTab] = useState<string>("T");
   const [addQ, setAddQ] = useState("");
   const [addText, setAddText] = useState("");
@@ -530,8 +541,16 @@ export function EffectsEditor({ items: source, allowedInit, time, outTime, toSrc
     act("save", async () => {
       await onSave(list);
       setDirty(false);
-      setMsg("Saved ✓ – the effects are built in when you render.");
+      setMsg("Saved ✓ – shown live in the big video.");
     });
+
+  // save automatically shortly after every change → the big video shows the effect right away (no render needed)
+  useEffect(() => {
+    if (!dirty) return;
+    const tm = setTimeout(() => { void save(); }, 1500);
+    return () => clearTimeout(tm);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dirty, JSON.stringify(items)]);
 
   const suggest = (engine: "claude" | "ollama") =>
     act(engine, async () => {
@@ -643,11 +662,47 @@ export function EffectsEditor({ items: source, allowedInit, time, outTime, toSrc
 
   return (
     <div className={compact ? "fx-editor compact" : "fx-editor"}>
-      <p className="small muted">
-        Big effects in your purple, sage and gold. Let Claude suggest moments, or add one yourself at the current
-        video position. Every effect below can be changed: type, text, times and size.
-      </p>
+      <div className="fx-tool">
+        <div className="fx-tool-title">＋ Add an effect yourself <span className="muted small">
+          {outTime != null
+            ? <>at {formatTime(outTime)} in your finished video (= {formatTime(time)} in the original)</>
+            : <>at {formatTime(time)} (pause the video – or your finished video – where it should start)</>}</span></div>
+        <div className="fx-browser">
+          <div className="fx-browser-tabs">
+            {["T", "S", "V", "B", "A", "C", "D", "E"].filter((g) => types.some((t) => t.group === g)).map((g) => (
+              <button key={g} className={addTab === g && !addQ ? "on" : ""} onClick={() => { setAddTab(g); setAddQ(""); }}>
+                {{ T: "Text", S: "Stickers", V: "Effects", B: "Text on video", A: "Boxes", C: "Cut-out", D: "Tripod", E: "Studio" }[g]}
+              </button>
+            ))}
+            <input placeholder="🔍 search …" value={addQ} onChange={(e) => setAddQ(e.target.value)} />
+          </div>
+          <div className="fx-browser-grid">
+            {types.filter((t) => (addQ.trim() ? t.label.toLowerCase().includes(addQ.trim().toLowerCase()) : t.group === addTab)).map((t) => (
+              <button key={t.key} className={`fx-tile ${addType === t.key ? "on" : ""}`} title={DESC[t.key] ?? t.label}
+                onClick={() => setAddType(t.key)} onDoubleClick={() => { setAddType(t.key); add(t.key); }}>
+                <img src={`/api/effects/sample/${t.key}.jpg`} alt="" loading="lazy" />
+                <span>{t.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="fx-add-row">
+          <strong className="small">{types.find((t) => t.key === addType)?.label}</strong>
+          <textarea className="fx-add-text" rows={1} value={addText}
+            placeholder={HINT[addType] ? `Your text (optional) – ${HINT[addType]}` : "Your text (optional)"}
+            onChange={(e) => setAddText(e.target.value)} />
+          <button className="btn" onClick={() => add()}>+ Add at {formatTime(outTime ?? time)}{outTime != null ? " (finished video)" : ""}</button>
+        </div>
+        {DESC[addType] && <div className="small muted fx-desc">ⓘ {DESC[addType]}</div>}
+        {endAt != null && (
+          <button className="btn ghost" onClick={addOutro} title="'Thank you for watching' + Like & Subscribe buttons in the last 6 seconds">
+            + Like &amp; Subscribe at the end
+          </button>
+        )}
+      </div>
 
+      <details className="fx-more">
+        <summary>✨ Let Claude suggest effects · saved styles</summary>
       <div className="fx-style-row small">
         <strong>Style</strong>
         <select value={styleId} onChange={(e) => setStyleId(e.target.value)}>
@@ -706,44 +761,7 @@ export function EffectsEditor({ items: source, allowedInit, time, outTime, toSrc
         </details>
       </div>
 
-      <div className="fx-tool">
-        <div className="fx-tool-title">＋ Add an effect yourself <span className="muted small">
-          {outTime != null
-            ? <>at {formatTime(outTime)} in your finished video (= {formatTime(time)} in the original)</>
-            : <>at {formatTime(time)} (pause the video – or your finished video – where it should start)</>}</span></div>
-        <div className="fx-browser">
-          <div className="fx-browser-tabs">
-            {["T", "S", "V", "B", "A", "C", "D", "E"].filter((g) => types.some((t) => t.group === g)).map((g) => (
-              <button key={g} className={addTab === g && !addQ ? "on" : ""} onClick={() => { setAddTab(g); setAddQ(""); }}>
-                {{ T: "Text", S: "Stickers", V: "Effects", B: "Text on video", A: "Boxes", C: "Cut-out", D: "Tripod", E: "Studio" }[g]}
-              </button>
-            ))}
-            <input placeholder="🔍 search …" value={addQ} onChange={(e) => setAddQ(e.target.value)} />
-          </div>
-          <div className="fx-browser-grid">
-            {types.filter((t) => (addQ.trim() ? t.label.toLowerCase().includes(addQ.trim().toLowerCase()) : t.group === addTab)).map((t) => (
-              <button key={t.key} className={`fx-tile ${addType === t.key ? "on" : ""}`} title={DESC[t.key] ?? t.label}
-                onClick={() => setAddType(t.key)} onDoubleClick={() => { setAddType(t.key); add(t.key); }}>
-                <img src={`/api/effects/sample/${t.key}.jpg`} alt="" loading="lazy" />
-                <span>{t.label}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="fx-add-row">
-          <strong className="small">{types.find((t) => t.key === addType)?.label}</strong>
-          <textarea className="fx-add-text" rows={1} value={addText}
-            placeholder={HINT[addType] ? `Your text (optional) – ${HINT[addType]}` : "Your text (optional)"}
-            onChange={(e) => setAddText(e.target.value)} />
-          <button className="btn" onClick={() => add()}>+ Add at {formatTime(outTime ?? time)}{outTime != null ? " (finished video)" : ""}</button>
-        </div>
-        {DESC[addType] && <div className="small muted fx-desc">ⓘ {DESC[addType]}</div>}
-        {endAt != null && (
-          <button className="btn ghost" onClick={addOutro} title="'Thank you for watching' + Like & Subscribe buttons in the last 6 seconds">
-            + Like &amp; Subscribe at the end
-          </button>
-        )}
-      </div>
+      </details>
 
       <div className="fx-save-row">
         <strong>{items.length ? `${items.length} effect${items.length > 1 ? "s" : ""}` : "No effects yet"}</strong>
@@ -760,7 +778,18 @@ export function EffectsEditor({ items: source, allowedInit, time, outTime, toSrc
           const t = typeOf(o.type);
           const listType = ["steps", "cards", "tags", "scores", "checklist", "endcard", "bigwords", "clothesline", "repeat", "wordswap", "switch", "stickers", "loop"].includes(o.type ?? "");
           return (
-            <div key={o.id} id={o.id} className={`fx-row ${o.on ? "" : "off"}`}>
+            openFx !== o.id ? (
+            <div key={o.id} id={o.id} className={`fx-mini ${o.on ? "" : "off"}`} onClick={() => { setOpenFx(o.id); onSeek(o.start); }}>
+              <input type="checkbox" checked={o.on} onClick={(e) => e.stopPropagation()} onChange={(e) => upd(i, { on: e.target.checked })} />
+              <img src={`/api/effects/sample/${o.type}.jpg`} alt="" loading="lazy" />
+              <span className="fx-mini-time">{formatTime(toCut(keep, o.start))}</span>
+              <strong>{t?.label ?? o.type}</strong>
+              <span className="fx-mini-text">{(o.title || (o.items ?? []).join(" · ") || "").replace(/\n/g, " ")}</span>
+              <span className="fx-mini-edit">✎ edit</span>
+            </div>
+            ) : (
+            <div key={o.id} id={o.id} className={`fx-row open ${o.on ? "" : "off"}`}>
+              <button className="fx-close link" onClick={() => setOpenFx(null)}>▲ close</button>
               <FxPreview preview={preview} item={o} />
               <div className="fx-row-main">
               <div className="fx-row-head">
@@ -986,6 +1015,7 @@ export function EffectsEditor({ items: source, allowedInit, time, outTime, toSrc
               {o.why && <div className="small muted">{o.why}</div>}
               </div>
             </div>
+            )
           );
         })}
       </div>

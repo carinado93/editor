@@ -45,6 +45,7 @@ function findAt<T>(list: T[], t: number, start: (x: T) => number): number {
 /** Zu einem Schritt scrollen (ohne die #/p/…-Adresse der App zu ändern). */
 export function ProjectView({ id }: { id: string }) {
   const [project, setProject] = useState<Project | null>(null);
+  const srcToOutRef = useRef<(t: number) => number>((t) => t);
   const [panel, setPanel] = useState<string>(() => { try { return localStorage.getItem("cc-panel") || "cut"; } catch { return "cut"; } });
   useEffect(() => { try { localStorage.setItem("cc-panel", panel); } catch { /* egal */ } }, [panel]);
   const [transcript, setTranscript] = useState<Transcript | null>(null);
@@ -59,7 +60,6 @@ export function ProjectView({ id }: { id: string }) {
   const [busy, setBusy] = useState(false);
   const [quality, setQuality] = useState("1080");
   const [faceBox, setFaceBox] = useState<number[] | null>(null);
-  const [watch, setWatch] = useState<string | null>(null);
   // Fertiges Video gleich herunterladen (wie bei den Reels) – abschaltbar
   const [autoDl, setAutoDl] = useState(() => {
     try { return localStorage.getItem("final-browser-download") === "1"; } catch { return false; }
@@ -85,7 +85,7 @@ export function ProjectView({ id }: { id: string }) {
       } else {
         setDoneMsg(`Your video is ready ✓ – saved on your Desktop: SOCIAL MEDIA APP › ${project?.mode === "reel" ? "Reels" : "YouTube videos"}.`);
       }
-      setWatch(r.file);
+
     }
   }, [project?.render?.status, project?.render?.file, autoDl, id]);
   const [busyWith, setBusyWith] = useState<string | null>(null);
@@ -107,6 +107,7 @@ export function ProjectView({ id }: { id: string }) {
     return () => clearInterval(t);
   }, [project?.status, project?.render?.status, id]);
   const video = useRef<HTMLVideoElement>(null);
+  useEffect(() => { setOutTime(preview && cutMode ? srcToOutRef.current(time) : null); }, [time, preview]);  // eslint-disable-line react-hooks/exhaustive-deps
   // tell the reel timeline where the big video is (for "split here" / "add from here")
   useEffect(() => { window.dispatchEvent(new CustomEvent("cc-time", { detail: time })); }, [time]);
   // Reels: play only the reel's parts in the big video (no rendering) – sent by ClipsPanel
@@ -436,6 +437,48 @@ export function ProjectView({ id }: { id: string }) {
     return acc;
   };
 
+  srcToOutRef.current = srcToOut;
+  // ---- live effects in the big video (no rendering): the saved effects are drawn on the cut video by the server
+  const hashOf = (x: unknown) => { const str = JSON.stringify(x); let h = 0; for (let k = 0; k < str.length; k++) h = (h * 31 + str.charCodeAt(k)) | 0; return (h >>> 0).toString(36); };
+  const fxItems = (cuts?.cutlist.overlays ?? []).filter((o) => o.on && o.kind === "fx");
+  // effects that overlap in time get their own row in the effect track (none hides another)
+  const fxLanes = (() => {
+    const ends: number[] = [];
+    const lane: Record<string, number> = {};
+    for (const o of [...fxItems].sort((a, b) => a.start - b.start)) {
+      let k = ends.findIndex((e) => e <= o.start + 0.01);
+      if (k < 0) { k = ends.length; ends.push(0); }
+      ends[k] = o.end;
+      lane[o.id] = k;
+    }
+    return { lane, n: Math.max(1, ends.length) };
+  })();
+  const liveNow = fxItems.filter((o) => time >= o.start && time < o.end).pop();
+  const liveFx = liveNow ? { id: liveNow.id, start: liveNow.start, v: hashOf([liveNow, cuts?.evaluation.keep]) } : null;
+  const liveRef = useRef<HTMLVideoElement>(null);
+  const syncLive = () => {
+    const lv = liveRef.current, v = video.current;
+    if (!lv || !v || !liveFx) return;
+    const want = srcToOut(time) - srcToOut(liveFx.start);
+    if (Math.abs(lv.currentTime - want) > 0.3) lv.currentTime = Math.max(0, want);
+    if (v.paused && !lv.paused) lv.pause();
+    if (!v.paused && lv.paused) void lv.play().catch(() => {});
+  };
+  useEffect(syncLive);
+  // build the live previews in the background so they are ready when you get there
+  const fxKey = hashOf([fxItems, cuts?.evaluation.keep]);
+  useEffect(() => {
+    let stop = false;
+    (async () => {
+      for (const o of fxItems) {
+        if (stop) return;
+        try { await fetch(`/api/projects/${id}/effects/live/${o.id}?v=${hashOf([o, cuts?.evaluation.keep])}`); } catch { /* egal */ }
+      }
+    })();
+    return () => { stop = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fxKey]);
+
   // ---------- Rendern ----------
   const startRender = async () => {
     if (reelMode && !(cuts?.cutlist.overlays ?? []).some((o) => o.on)) {
@@ -526,6 +569,10 @@ export function ProjectView({ id }: { id: string }) {
         <div className="player card">
           {project.step !== "pruefen" && project.step !== "ton" && project.step !== "vorschau" && project.info ? (
             <div className="video-wrap">
+              {liveFx && (
+                <video key={liveFx.id + liveFx.v} ref={liveRef} className="fx-live" src={`/api/projects/${id}/effects/live/${liveFx.id}?v=${liveFx.v}`}
+                  muted playsInline preload="auto" onLoadedData={syncLive} />
+              )}
               <video ref={video} src={api.proxyUrl(id, project.preview_v)} controls preload="auto" playsInline
                 onError={() => setPreviewBroken(true)} onLoadedMetadata={() => setPreviewBroken(false)} />
               {previewBroken && (
@@ -569,6 +616,17 @@ export function ProjectView({ id }: { id: string }) {
                 ))}
                 <span className="playhead" style={{ left: `${(time / duration) * 100}%` }} />
               </div>
+              {fxItems.length > 0 && (
+                <div className="fx-track" title="Your effects – click one to edit it" style={{ height: 6 + 14 * fxLanes.n }}>
+                  {fxItems.map((o) => (
+                    <button key={o.id} className={`fx-block ${o.id === liveFx?.id ? "now" : ""}`}
+                      style={{ left: `${(o.start / duration) * 100}%`, width: `max(6px, ${((o.end - o.start) / duration) * 100}%)`, top: 3 + 14 * (fxLanes.lane[o.id] ?? 0) }}
+                      title={`${o.type} · ${formatTime(o.start)}`}
+                      onClick={() => { setPanel("effects"); seek(o.start, false); window.dispatchEvent(new CustomEvent("cc-select-fx", { detail: o.id })); }} />
+                  ))}
+                  <span className="playhead" style={{ left: `${(time / duration) * 100}%` }} />
+                </div>
+              )}
             </>
           )}
 
@@ -928,23 +986,11 @@ export function ProjectView({ id }: { id: string }) {
                 📁 Open the {reelMode ? "Reels" : "YouTube videos"} folder
               </button>
               {r?.status === "fehler" && <div className="small error-text">⚠ {r.error}</div>}
-              {!!project.exports?.length && !rendering && (() => {
-                const shown = watch ?? project.exports[project.exports.length - 1].file;
-                return (
-                  <div className="watch">
-                    <h4>Your finished video</h4>
-                    <video key={shown} className="watch-video" src={api.exportWatchUrl(id, shown)} controls preload="metadata" playsInline
-                      onTimeUpdate={(e) => { const t = e.currentTarget.currentTime; setOutTime(t); setTime(outToSrc(t)); }}
-                      onSeeked={(e) => { const t = e.currentTarget.currentTime; setOutTime(t); setTime(outToSrc(t)); }} />
-                    <div className="small muted">{shown} · pause here and add an effect below – it is placed at this moment</div>
-                  </div>
-                );
-              })()}
               {!!project.exports?.length && (
                 <ul className="exports small">
                   {[...project.exports].reverse().map((x) => (
                     <li key={x.file}>
-                      <button className="link" onClick={() => setWatch(x.file)}>▶ watch</button>{" "}
+                      <a className="link" href={api.exportWatchUrl(id, x.file)} target="_blank" rel="noreferrer">▶ watch</a>{" "}
                       <a href={api.exportUrl(id, x.file)} download>
                         ⬇ {x.file}
                       </a>

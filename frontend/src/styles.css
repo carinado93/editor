@@ -2246,3 +2246,43 @@ a.chip { text-decoration: none; color: inherit; }
 .reel-tl-block.on { border-color: #6d4fb0; background: #c9b3ec; }
 .reel-tl-tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .reel-tl-tools .sep { width: 1px; height: 18px; background: #ddd; }
+
+/* compact effect list: one line per effect, click = open editor */
+.fx-mini { display: grid; grid-template-columns: 20px 64px 52px minmax(90px, auto) 1fr auto; gap: 8px; align-items: center;
+  padding: 4px 8px; border-radius: 10px; background: #fff; border: 1px solid #eee6f8; cursor: pointer; font-size: 13px; }
+.fx-mini:hover { border-color: #c9b3ec; background: #fbf8ff; }
+.fx-mini.off { opacity: 0.5; }
+.fx-mini img { width: 64px; height: 36px; object-fit: cover; border-radius: 6px; }
+.fx-mini-time { color: #8f6fc9; font-variant-numeric: tabular-nums; }
+.fx-mini-text { color: #6b5a88; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fx-mini-edit { color: #8f6fc9; font-size: 12px; }
+.fx-list { display: flex; flex-direction: column; gap: 4px; }
+.fx-row.open { position: relative; border: 2px solid #c9b3ec; }
+.fx-close { position: absolute; right: 10px; top: 6px; z-index: 2; }
+
+/* live effects over the big video + effect track */
+.video-wrap { position: relative; }
+.fx-live { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; pointer-events: none; z-index: 2;
+  border-radius: 10px; }
+.fx-track { position: relative; height: 16px; background: #f1ebfa; border-radius: 6px; margin-top: 4px; }
+.fx-block { position: absolute; height: 11px; border: 0; border-radius: 4px; background: #b79ce0; cursor: pointer; padding: 0; }
+.fx-block:hover, .fx-block.now { background: #6d4fb0; }
+.fx-track .playhead { position: absolute; top: -2px; bottom: -2px; width: 2px; background: #e2404c; }
+.video-wrap:hover .fx-live { clip-path: inset(0 0 52px 0); }  /* player controls stay reachable */
+
+/* cut panel: compact stats bar */
+.cc-panel .cut-bar { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; padding: 12px; }
+.cc-panel .cut-bar .legend { display: flex; flex-wrap: wrap; gap: 4px; flex: 1 1 100%; }
+.cc-panel .cut-bar .legend .chip { padding: 2px 8px; font-size: 12px; white-space: nowrap; }
+.cc-panel .cut-bar .cut-stats { display: flex; gap: 10px; align-items: baseline; }
+.cc-panel .cut-bar .tempo { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+
+.fx-more { border: 1px solid #e6dcf5; border-radius: 12px; padding: 8px 12px; background: #fff; margin: 8px 0; }
+.fx-more > summary { cursor: pointer; font-weight: 600; color: #5a3d94; }
+.cc-panel .fx-card > h3:first-child, .cc-panel .fx-card > h2:first-child { margin: 0 0 4px; font-size: 18px; }
+/* in the side panel the open effect editor stacks: small preview on top, settings below */
+.cc-panel .fx-row.open { display: flex; flex-direction: column; gap: 8px; padding-top: 30px; }
+.cc-panel .fx-row.open .fx-preview-box { max-width: 320px; }
+.cc-panel .fx-row.open .fx-row-head { flex-wrap: wrap; }
+.cc-panel .fx-row.open .fx-preview-box { min-height: 0; height: auto; width: 100%; }
+.cc-panel .fx-row.open .fx-preview-box .fx-preview { width: 100%; height: auto; }

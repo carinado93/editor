@@ -391,3 +391,11 @@ All drawn from scratch in Carina's colours/fonts – no CapCut assets (templates
   Saved instantly (`PUT /clips/{cid}/segments`, `clips.set_segments`, order kept, render uses the same pieces).
 - "▶ Play reel in the big video": plays exactly the reel pieces in the main player – no rendering.
 - Sentence editor (still there): per part start/end ±1/±5 s (`pads`, `clips._pad`), "add at the start (as hook)".
+- One player, live effects: the big player now shows the saved effects live (`GET /effects/live/{fid}`: the effect
+  drawn on the CUT video – only kept parts – 540p/15 fps, cached by content in cache/fxlive, prebuilt in the
+  background, overlaid and synced in finished-video time). Effects autosave 1.5 s after a change. The separate
+  "Your finished video" player is gone (exports: ▶ watch opens in a new tab). Effect track under the cut timeline
+  (overlapping effects in their own lanes); click = open that effect in the Effects tab.
+- Effects tab: the add-browser comes first, Claude/styles collapsed; every effect is one compact line
+  (thumbnail, time, type, text) – click opens the editor (one at a time). Checked in a real browser (Playwright)
+  with a test project: tabs, live stamp over the video, track, compact list, open editor, render tab.

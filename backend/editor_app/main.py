@@ -577,6 +577,107 @@ def _effect_preview_video(pid: str, item: dict, clip: dict | None = None):
     return FileResponse(out, media_type="video/mp4", headers={"Cache-Control": "no-store"})
 
 
+def _out_window(keep: list, s0: float, s1: float) -> tuple[float, float, list[tuple[float, float]]]:
+    """Effect window in the finished video: (out start, out end, source pieces that are really shown)."""
+    acc, o0, o1 = 0.0, None, None
+    for a, b in keep:
+        if o0 is None and s0 <= b:
+            o0 = acc + max(0.0, s0 - a)
+        if o1 is None and s1 <= b:
+            o1 = acc + max(0.0, s1 - a)
+        acc += b - a
+    o0 = acc if o0 is None else o0
+    o1 = acc if o1 is None else o1
+    pieces, acc = [], 0.0
+    for a, b in keep:
+        lo, hi = max(o0, acc), min(o1, acc + (b - a))
+        if hi > lo + 0.01:
+            pieces.append((a + lo - acc, a + hi - acc))
+        acc += b - a
+    return o0, o1, pieces
+
+
+@app.get("/api/projects/{pid}/effects/live/{fid}")
+def effect_live(pid: str, fid: str, v: str = ""):
+    """Live preview of a saved effect for the big player: the effect on the CUT video (only the parts that stay),
+    small (540p, 15 fps, no sound – the player plays the sound). Cached by the effect's content."""
+    import hashlib
+    import subprocess
+
+    import numpy as np
+    from PIL import Image
+
+    from . import fx, fxrender, gaze
+    view = cutstore.view(pid)
+    item = next((o for o in view["cutlist"].get("overlays", []) if o.get("id") == fid), None)
+    if not item or item.get("kind") != "fx" or item.get("type") not in fx.TYPES:
+        raise HTTPException(404)
+    keep = [tuple(x) for x in view["evaluation"]["keep"]]
+    key = hashlib.sha1(json.dumps([item, keep], sort_keys=True, default=str).encode()).hexdigest()[:16]
+    cache = projects.path(pid, "cache") / "fxlive"
+    cache.mkdir(parents=True, exist_ok=True)
+    out = cache / f"{fid}_{key}.mp4"
+    if out.exists():
+        return FileResponse(out, media_type="video/mp4", headers={"Cache-Control": "max-age=3600"})
+    for old in cache.glob(f"{fid}_*.mp4"):
+        old.unlink(missing_ok=True)
+    p = projects.load(pid)
+    info = p.get("info") or {}
+    sw, sh = info.get("width", 1920), info.get("height", 1080)
+    scale = 540 / min(sw, sh)
+    w, h = int(sw * scale) // 2 * 2, int(sh * scale) // 2 * 2
+    fps = 15
+    o0, o1, pieces = _out_window(keep, float(item["start"]), float(item["end"]))
+    d = max(0.5, min(60.0, o1 - o0))
+    proxy = projects.path(pid, "vorschau.mp4")
+    size = w * h * 3
+    frames: list = []
+    for a, b in pieces:
+        r = subprocess.run([media.ffmpeg(), "-hide_banner", "-loglevel", "error", "-ss", f"{a:.3f}", "-i", str(proxy),
+                            "-t", f"{b - a:.3f}", "-vf", f"fps={fps},scale={w}:{h}", "-f", "rawvideo", "-pix_fmt",
+                            "rgb24", "-"], capture_output=True, creationflags=media._NO_WINDOW)
+        frames += [Image.frombuffer("RGB", (w, h), r.stdout[k:k + size], "raw", "RGB", 0, 1)
+                   for k in range(0, len(r.stdout) - size + 1, size)]
+    frames = frames or [Image.new("RGB", (w, h), (90, 90, 90))]
+    gf = projects.path(pid, "blick.json")
+    face = gaze.face_box(json.loads(gf.read_text(encoding="utf-8"))) if gf.exists() else None
+    it = fx.with_placeholders(item)
+    # item_t are source times → seconds into the effect in the finished video
+    it["times"] = [max(0.0, _out_window(keep, float(item["start"]), float(x))[1] - o0) for x in item.get("item_t") or []] or None
+    words = []
+    try:
+        for x in cuts.flat_words(cutstore._transcript(pid)):
+            if item["start"] - 0.3 <= x["s"] <= item["end"]:
+                ws = _out_window(keep, float(item["start"]), float(x["s"]))[1] - o0
+                words.append({"w": x["w"], "s": ws, "e": ws + (x["e"] - x["s"])})
+    except Exception:  # noqa: BLE001
+        words = []
+    ctx = fx.Ctx(w, h, face, words or [{"w": "Beispiel", "s": 0, "e": 99}])
+    seg = fx.Segmenter() if item.get("type") in fx.NEEDS_MASK | {"flash"} else None
+    tmp = out.with_suffix(".part.mp4")
+    try:
+        ctx.stills = fxrender.load_stills(item, proxy, w, h, seg)
+        enc = subprocess.Popen([media.ffmpeg(), "-hide_banner", "-loglevel", "error", "-y", "-f", "rawvideo",
+                                "-pix_fmt", "rgb24", "-s", f"{w}x{h}", "-r", str(fps), "-i", "-", "-c:v", "libx264",
+                                "-preset", "ultrafast", "-crf", "26", "-pix_fmt", "yuv420p", "-movflags", "+faststart",
+                                str(tmp)], stdin=subprocess.PIPE, creationflags=media._NO_WINDOW)
+        mask = None
+        for k in range(max(1, int(d * fps))):
+            frame = frames[min(k, len(frames) - 1)]
+            if seg and (mask is None or k % 2 == 0):
+                mask = seg.mask(frame)
+            enc.stdin.write(np.asarray(fx.render_frame(frame, it, k / fps, d, ctx, mask), dtype=np.uint8).tobytes())
+        enc.stdin.close()
+        enc.wait()
+    finally:
+        if seg:
+            seg.close()
+    if not tmp.exists():
+        raise UserError("The live preview could not be created.")
+    tmp.replace(out)
+    return FileResponse(out, media_type="video/mp4", headers={"Cache-Control": "max-age=3600"})
+
+
 class ClipEffectsBody(BaseModel):
     items: list[dict]
 
