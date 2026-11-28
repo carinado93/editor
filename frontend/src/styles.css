@@ -2284,5 +2284,5 @@ a.chip { text-decoration: none; color: inherit; }
 .cc-panel .fx-row.open { display: flex; flex-direction: column; gap: 8px; padding-top: 30px; }
 .cc-panel .fx-row.open .fx-preview-box { max-width: 320px; }
 .cc-panel .fx-row.open .fx-row-head { flex-wrap: wrap; }
-.cc-panel .fx-row.open .fx-preview-box { min-height: 0; height: auto; width: 100%; }
+.cc-panel .fx-row.open .fx-preview-box { flex: none; min-height: 0; height: auto; width: 100%; max-width: 360px; }
 .cc-panel .fx-row.open .fx-preview-box .fx-preview { width: 100%; height: auto; }
